@@ -1,0 +1,14 @@
+[project]
+name = "epistemic-factkg"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "ai2thor>=5.0.0",
+    "owlrl>=7.1.4",
+    "pyvis>=0.3.2",
+    "pyyaml>=6.0.3",
+    "rdflib>=7.5.0",
+    "sentence-transformers>=5.2.2",
+]

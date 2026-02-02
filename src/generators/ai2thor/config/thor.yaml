@@ -1,0 +1,26 @@
+# AI2-THOR Knowledge Graph Generation Configuration
+
+# AI2-THOR Controller Settings
+controller:
+  width: 600
+  height: 600
+  fieldOfView: 90
+    
+
+# Knowledge Graph Generation Policies
+knowledge_graph_policy:
+  include_position: true
+  include_rotation: false
+
+# Scene and Environment Configuration
+environment:
+  units:
+    unit1:
+      living_room:
+        - "FloorPlan203"
+      kitchen:
+        - "FloorPlan3"
+      bedroom:
+        - "FloorPlan303"
+      bathroom:
+        - "FloorPlan403"
