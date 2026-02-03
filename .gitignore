@@ -197,6 +197,7 @@ Temporary Items
 # AI2Thor specific
 thor_builds/
 thor_data/
+output/
 
 # Visualization outputs
 visualizations/

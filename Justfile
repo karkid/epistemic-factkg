@@ -57,15 +57,16 @@ lint:
 # Knowledge Graph Generation Commands
 
 [doc("Generate knowledge graph (optional: scene, config, output)")]
-kg-build generator="ai2thor" scene="" config="" output="knowledge_graph.ttl":
+kg-build generator="ai2thor" scene="" config="" output="output/knowledge_graph.ttl":
     uv run python -m src.generators.cli {{generator}} --output {{output}} {{ if scene != "" { "--scenes " + scene } else { "" } }} {{ if config != "" { "--config " + config } else { "" } }}
 
 # Visualization Commands
 
 [doc("Visualize knowledge graph file")]
-kg-viz file="knowledge_graph.ttl" title="Knowledge Graph":
-    uv run python -m src.visualization.kg_visualizer --input {{file}} --title "{{title}}" --output out/kg_visualization.html
+kg-viz file="output/knowledge_graph.ttl" output="output/visualizer/knowledge_graph.html":
+    rm -rf output/visualizer
+    uv run python -m src.visualizer.cli --input {{file}} --output {{output}}
 
 [doc("Open the knowledge graph visualization in browser")]
 kg-open:
-    open out/kg_visualization.html
+    open output/visualizer/knowledge_graph.html
