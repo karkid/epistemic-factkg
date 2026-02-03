@@ -202,6 +202,7 @@ output/
 # Visualization outputs
 visualizations/
 *.html
+!src/visualizer/templates/*.html
 *.png
 *.jpg
 *.jpeg
