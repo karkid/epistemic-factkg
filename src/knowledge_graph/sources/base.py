@@ -51,3 +51,13 @@ class DataSource(ABC):
     def get_scene_by_id(self, scene_id: str) -> SceneData:
         """Get specific scene by ID."""
         pass
+
+    @abstractmethod
+    def get_available_scenes(self) -> List[str]:
+        """List all available scene IDs."""
+        pass
+
+    @abstractmethod
+    def cleanup(self) -> None:
+        """Clean up any resources held by the data source."""
+        pass

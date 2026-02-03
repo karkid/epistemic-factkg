@@ -53,30 +53,46 @@ class AI2THORDataSource(DataSource):
         return Controller(**filtered_settings)
     
     def _should_include_object(self, thor_obj: Dict[str, Any]) -> bool:
-        """Check if object should be included based on config policies."""
-        kg_policy = self.config.get('knowledge_graph_policy', {})
-        
-        # Skip excluded object types (noise reduction)
-        object_type = thor_obj.get("objectType", "Unknown")
-        exclude_types = kg_policy.get('exclude_object_types', [])
-        if object_type in exclude_types:
-            return False
-        
-        # Skip hidden objects if configured
-        if kg_policy.get('ignore_hidden_objects', True) and not thor_obj.get('visible', True):
-            return False
-            
+        """Check if object should be included based on config policies.""" 
         return True
     
+    def _get_environment_ref(self, scene_id) -> str:
+        """Get environment reference for a given scene ID."""
+
+        for scene in self.config.get("scenes", []):
+            if scene.get("scene_id") == scene_id:
+                return scene.get("environment_ref")
+
+        return None  # Not found
+
+    def _get_environment_layout(self, environment_ref):
+        """Get all layouts (rooms) for a given environment reference."""
+
+        layouts = self.config.get("environment", {}).get("layouts", {})
+
+        return layouts.get(environment_ref, {})
+    
+    def _get_scene_layout(self, scene_id):
+        """Get layout (rooms) for a specific scene ID."""
+        env = self._get_environment_ref(scene_id)
+        return self._get_environment_layout(env)
+
     def get_available_scenes(self) -> List[str]:
         """Get all scene IDs from config."""
         scenes = []
-        environment = self.config.get('environment', {})
-        units = environment.get('units', {})
+        scenes_ = self.config.get('scenes', [])
+
+        for scene in scenes_: 
+            scenes.append(scene.get("scene_id"))
+
+        # layouts = self.config.get('environment', {}).get('layouts', {})
         
-        for unit_name, unit_config in units.items():
-            for room_type, room_scenes in unit_config.items():
-                scenes.extend(room_scenes)
+        # for layout_name, layout_config in layouts.items():
+        #     # scenes.extend([layout_name])
+        #     print(f"Layout: {layout_name}")
+        #     print(f"Config: {layout_config}")
+        #     for room_type, room_scenes in layout_config.items():
+        #         scenes.extend(room_scenes)
         
         return scenes
     
@@ -89,15 +105,17 @@ class AI2THORDataSource(DataSource):
     def get_scene_by_id(self, scene_id: str) -> SceneData:
         """Load specific AI2-THOR scene and extract relationships."""
         kg_policy = self.config.get('knowledge_graph_policy', {})
-        
-        # Get AI2-THOR metadata
-        metadata = self._get_thor_metadata(scene_id)
-        objects = metadata.get("objects", [])
-        
+
+        environment_ref = self._get_environment_ref(scene_id)
+
         # Convert to base format with filtering
         object_list = []
         relationships = []
         
+        # Get AI2-THOR metadata
+        metadata = self._get_thor_metadata(scene_id)
+        objects = metadata.get("objects", [])
+                
         # Build lookup for parent type resolution
         objects_by_id = {obj.get("objectId"): obj for obj in objects if obj.get("objectId")}
         
@@ -125,7 +143,7 @@ class AI2THORDataSource(DataSource):
             relationships=relationships
         )
     
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Clean up AI2-THOR controller with performance settings."""
         performance_config = self.config.get('performance', {})
         
@@ -215,13 +233,13 @@ class AI2THORDataSource(DataSource):
         states = {}
         
         # Check boolean attributes that correspond to capabilities
-        attribute_fields = ['openable', 'togglable', 'pickupable', 'moveable', 'receptacle', 
-                           'cookable', 'sliceable', 'breakable', 'dirtyable', 'canFillWithLiquid', 
-                           'canBeUsedUp']
+        # attribute_fields = ['openable', 'togglable', 'pickupable', 'moveable', 'receptacle', 
+        #                    'cookable', 'sliceable', 'breakable', 'dirtyable', 'canFillWithLiquid', 
+        #                    'canBeUsedUp']
         
-        for field in attribute_fields:
-            if field in thor_obj and thor_obj.get(field, False):
-                states[field] = True
+        # for field in attribute_fields:
+        #     if field in thor_obj and thor_obj.get(field, False):
+        #         states[field] = True
         
         # Check state properties  
         state_fields = ['isOpen', 'isToggled', 'isMoving', 'isPickedUp', 'isFilledWithLiquid',

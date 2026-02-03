@@ -9,18 +9,31 @@ controller:
 
 # Knowledge Graph Generation Policies
 knowledge_graph_policy:
-  include_position: true
+  include_position: false
   include_rotation: false
 
 # Scene and Environment Configuration
+scenes:
+  - scene_id: "Scene_001"
+    environment_ref: "MyHouse"
+
 environment:
-  units:
-    unit1:
+  layouts:
+    MyHouse:
       living_room:
-        - "FloorPlan203"
+        id: "FloorPlan203"
+        type: "LivingRoom"
+        superclass: "Room"
       kitchen:
-        - "FloorPlan3"
+        id: "FloorPlan3"
+        type: "Kitchen"
+        superclass: "Room"
       bedroom:
-        - "FloorPlan303"
+        id: "FloorPlan303"
+        type: "Bedroom"
+        superclass: "Room"
       bathroom:
-        - "FloorPlan403"
+        id: "FloorPlan403"
+        type: "Bathroom"
+        superclass: "Room"
+
