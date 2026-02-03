@@ -26,6 +26,29 @@ class NetworkBuilder:
 
         self.show_instances = True
         self.show_classes = True
+        self.show_literals = True  # Show literal values as nodes
+
+        self.color_map = {
+            "True": "#22c55e",
+            "False": "#ef4444",
+            "Hot": "#ef4444",
+            "Cold": "#3b82f6",
+            "RoomTemp": "#23e0ea",
+            "Metal": "#9ca3af",
+            "Wood": "#9ca3af", 
+            "Plastic": "#9ca3af",
+            "Glass": "#9ca3af",
+            "Ceramic": "#9ca3af",
+            "Stone": "#9ca3af",
+            "Fabric": "#9ca3af",
+            "Rubber": "#9ca3af",
+            "Food": "#9ca3af", 
+            "Paper": "#9ca3af", 
+            "Wax": "#9ca3af", 
+            "Soap": "#9ca3af",
+            "Sponge": "#9ca3af", 
+            "Organic": "#9ca3af"
+        }
 
 
     # =================================================
@@ -57,11 +80,13 @@ class NetworkBuilder:
         self,
         show_instances: bool = True,
         show_classes: bool = True,
+        show_literals: bool = True,
         max_nodes: int = 500
     ):
 
         self.show_instances = show_instances
         self.show_classes = show_classes
+        self.show_literals = show_literals
         self.max_nodes = max_nodes
 
 
@@ -104,8 +129,8 @@ class NetworkBuilder:
             return False
 
 
-        # Skip literals
-        if isinstance(o, Literal):
+        # Skip literals unless show_literals is enabled
+        if isinstance(o, Literal) and not self.show_literals:
             return False
 
 
@@ -147,20 +172,6 @@ class NetworkBuilder:
             if count >= self.max_nodes:
                 break
 
-
-            # Skip literals
-            if isinstance(o, Literal):
-                continue
-
-
-            s = str(s)
-            p = str(p)
-            o = str(o)
-
-
-            self._add_node(net, s)
-            self._add_node(net, o)
-
             self._add_edge(net, s, o, p)
 
             count += 1
@@ -169,18 +180,43 @@ class NetworkBuilder:
     # Node Handling
     # =================================================
 
-    def _add_node(self, net: Network, uri: str):
+    def _add_literal_node(self, net: Network, p, literal: Literal):
+        """Add a literal value node to the network"""
 
-        if uri in self.nodes:
+        node_id = str(literal)
+
+        if node_id in self.nodes:
             return
 
+        label = str(literal)
+        display = label[:30]
 
-        if len(self.nodes) >= self.max_nodes:
+        # Special styling for literals
+        style = self._literal_style(literal)
+        value_label = self._short_name(p)
+
+        net.add_node(
+            node_id,
+            id=node_id,
+            label="",  # Empty label - only show on hover
+            title=f"{value_label}: {label}",
+            color=style["color"],
+            size=style["size"],
+            shape=style["shape"],
+            font=style["font"]
+        )
+
+        self.nodes.add(node_id)
+
+    def _add_node(self, net: Network, node):
+
+        node_id = str(node)
+        
+        if node_id in self.nodes:
             return
 
-
-        label = self._short_name(uri)
-
+        # Handle URI nodes (existing logic)
+        label = self._short_name(node_id)
 
         if label in self.hidden_nodes:
             return
@@ -201,10 +237,10 @@ class NetworkBuilder:
 
 
         net.add_node(
-            uri,
-            id=uri,
+            node_id,
+            id=node_id,
             label=display,
-            title=f"{label}\n{uri}",
+            title=f"{label}\n{node_id}",
 
             color=style["color"],
             size=style["size"],
@@ -214,35 +250,42 @@ class NetworkBuilder:
         )
 
 
-        self.nodes.add(uri)
+        self.nodes.add(node_id)
 
 
     # =================================================
     # Edge Handling
     # =================================================
 
-    def _add_edge(self, net: Network, s: str, o: str, p: str):
+    def _add_edge(self, net: Network, s, o, p):
 
-        if s not in self.nodes or o not in self.nodes:
+        # Add nodes first
+        self._add_node(net, s)
+
+        if isinstance(o, Literal):
+            if self.show_literals:
+                self._add_literal_node(net, p, o)
+        else:
+            self._add_node(net, o)
+        
+        # Check if both nodes were successfully added
+        s_str = str(s)
+        o_str = str(o)
+        
+        if s_str not in self.nodes or o_str not in self.nodes:
             return
-
-
-        rel = self._short_name(p)
-
+        
+        rel = self._short_name(str(p))
 
         if rel in self.hidden_relations:
             return
 
-
         style = self._edge_style(rel)
 
-
         net.add_edge(
-            s,
-            o,
-
+            s_str,
+            o_str,
             label=rel,
-
             color=style["color"],
             width=style["width"],
 
@@ -316,6 +359,52 @@ class NetworkBuilder:
             "font": {
                 "size": 10,
                 "color": "#eef2ff"
+            }
+        }
+
+    def _literal_style(self, literal: Literal) -> dict:
+        """Style for literal value nodes"""
+        
+        value_str = str(literal).lower()
+        
+        # Boolean values (states)
+        if value_str in ["true", "false"]:
+            color = "#22c55e" if value_str == "true" else "#ef4444"
+            return {
+                "color": color,
+                "size": 15,
+                "shape": "square",
+                "font": {
+                    "size": 9,
+                    "color": "#ffffff"
+                }
+            }
+        
+        # Numeric values 
+        try:
+            float(value_str)
+            return {
+                "color": "#f59e0b",
+                "size": 16,
+                "shape": "triangle",
+                "font": {
+                    "size": 9,
+                    "color": "#fffbeb"
+                }
+            }
+        except ValueError:
+            pass
+        
+        # String values (like "RoomTemp")
+        color = self.color_map.get(literal, "#6b7280")
+
+        return {
+            "color": color,
+            "size": 14,
+            "shape": "ellipse",
+            "font": {
+                "size": 9,
+                "color": "#faf5ff"
             }
         }
 

@@ -10,9 +10,9 @@
     {{ head }}
 
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="static/style.css">
-    <link rel="stylesheet" href="static/dark.css">
-    <link rel="stylesheet" href="static/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="static/style.css?v={{ cache_buster }}">
+    <link rel="stylesheet" href="static/dark.css?v={{ cache_buster }}">
+    <link rel="stylesheet" href="static/fontawesome/css/all.min.css?v={{ cache_buster }}">
 
 
 </head>
@@ -115,7 +115,7 @@
 
 <!-- ================= Scripts ================= -->
 
-<script src="static/script.js"></script>
+<script src="static/script.js?v={{ cache_buster }}"></script>
 <script>
   window.network = network;
 </script>

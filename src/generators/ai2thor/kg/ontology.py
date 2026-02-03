@@ -6,7 +6,8 @@ Configures the base BaseOntology with AI2-THOR property mappings.
 
 from knowledge_graph.ontology.base import BaseOntology, RelationType
 from .object_types import AI2THOR_MATERIAL_TYPES, AI2THOR_OBJECT_TYPES
-from .relation_types import AI2THOR_STATE_RELATION_TYPES, AI2THOR_VALUE_RELATION_TYPES, AI2THOR_SPATIAL_RELATION_TYPES
+from .relation_types import AI2THOR_ATTRIBUTE_TYPES, AI2THOR_STATE_RELATION_TYPES, AI2THOR_VALUE_RELATION_CUSTOM_MAPPING, AI2THOR_VALUE_RELATION_TYPES, AI2THOR_SPATIAL_RELATION_TYPES
+from utils import to_namespace
 
 def create_ai2thor_ontology() -> BaseOntology:
     """
@@ -18,7 +19,7 @@ def create_ai2thor_ontology() -> BaseOntology:
     ontology = BaseOntology()  # Gets core relations (hasObject, inScene, position, rotation)
     
     # Register AI2-THOR spatial relations (from parentReceptacles)
-    spatial_relations = ['inside', 'onTopOf', 'hanging', 'near']
+    spatial_relations = to_namespace(AI2THOR_SPATIAL_RELATION_TYPES)
     
     for relation in spatial_relations:
         ontology.register_predicate(
@@ -29,9 +30,7 @@ def create_ai2thor_ontology() -> BaseOntology:
     
     # Register AI2-THOR state predicates (both attributes and state values)
     # Capabilities/attributes (openable, pickupable, etc.)
-    capability_fields = ['openable', 'togglable', 'pickupable', 'moveable', 'receptacle', 
-                        'cookable', 'sliceable', 'breakable', 'dirtyable', 'canFillWithLiquid', 
-                        'canBeUsedUp']
+    capability_fields = to_namespace(AI2THOR_ATTRIBUTE_TYPES)
     
     for field in capability_fields:
         ontology.register_predicate(
@@ -41,8 +40,7 @@ def create_ai2thor_ontology() -> BaseOntology:
         )
     
     # States (isOpen, isMoving, etc.)
-    state_fields = ['isOpen', 'isToggled', 'isMoving', 'isPickedUp', 'isFilledWithLiquid',
-                   'isCooked', 'isSliced', 'isBroken', 'isDirty', 'isUsedUp']
+    state_fields = to_namespace(AI2THOR_STATE_RELATION_TYPES)
     
     for field in state_fields:
         ontology.register_predicate(
@@ -52,30 +50,21 @@ def create_ai2thor_ontology() -> BaseOntology:
         )
         
     # Register AI2-THOR value relation properties with custom mappings
-    # Temperature: source_field="temperature" -> predicate="hasTemperature" 
-    ontology.register_predicate(
-        source_field="temperature",
-        predicate_uri="hasTemperature", 
-        relation_type=RelationType.DATA_RELATION,
-    )
-    
-    # Mass: source_field="mass" -> predicate="hasMass"
-    ontology.register_predicate(
-        source_field="mass",
-        predicate_uri="hasMass",
-        relation_type=RelationType.DATA_RELATION,
-        transform_func=lambda mass: round(float(mass), 3) if mass is not None else None
-    )
-    
-    # SalientMaterials: source_field="salientMaterials" -> predicate="hasMaterial"
-    ontology.register_predicate(
-        source_field="salientMaterials", 
-        predicate_uri="hasMaterial",
-        relation_type=RelationType.DATA_RELATION,
-    )
+    for source, predicate in AI2THOR_VALUE_RELATION_CUSTOM_MAPPING.items():
+        ontology.register_predicate(
+            source_field=source,
+            predicate_uri=predicate,
+            relation_type=RelationType.DATA_RELATION,
+        )
     
     # Register object types
-    for obj_type in AI2THOR_OBJECT_TYPES:
+    objects_types = to_namespace(AI2THOR_OBJECT_TYPES)
+    for obj_type in objects_types:
         ontology.register_object_type(obj_type, obj_type)
+
+    # Register material types
+    material_types = to_namespace(AI2THOR_MATERIAL_TYPES)
+    for material_type in material_types:
+        ontology.register_object_type(material_type, material_type)
 
     return ontology

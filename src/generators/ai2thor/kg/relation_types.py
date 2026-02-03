@@ -90,10 +90,16 @@ AI2THOR_VALUE_RELATION_TYPES: FrozenSet[RelationType] = frozenset([
     RelationType.material,
 ])
 
+AI2THOR_VALUE_RELATION_CUSTOM_MAPPING = {
+    "temperature": RelationType.temperature.value,
+    "mass": RelationType.mass.value,
+    "salientMaterials": RelationType.material.value,
+}
+
 # AI2-THOR specific spatial relation names
 AI2THOR_SPATIAL_RELATION_TYPES: FrozenSet[RelationType] = frozenset([
     RelationType.inside,
     RelationType.onTopOf,
-    RelationType.hanging,
-    RelationType.near,
+    #RelationType.hanging,
+    #RelationType.near,
 ])

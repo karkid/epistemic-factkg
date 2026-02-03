@@ -386,9 +386,6 @@ function setLayout(layoutType) {
         btn.classList.remove("active");
     });
     
-    // Add active class to clicked button
-    event.target.classList.add("active");
-    
     let layoutOptions = {};
     
     switch(layoutType) {

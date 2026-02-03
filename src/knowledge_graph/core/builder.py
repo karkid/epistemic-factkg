@@ -68,6 +68,7 @@ class KnowledgeGraphBuilder:
     def _add_scene(self, scene_data: SceneData):
         """Add a scene and all its objects to the graph."""
         scene_uri = create_scene_uri(scene_data.scene_id)
+        print("****************** Adding scene:", scene_data.scene_id)
         
         # Add scene metadata if present
         if scene_data.metadata:

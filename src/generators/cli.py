@@ -7,6 +7,7 @@ Each generator implements the DataSource interface and manages its own config.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -32,7 +33,8 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="knowledge_graph.ttl",
+        type=Path,
+        default=Path("knowledge_graph.ttl"),
         help="Output file path"
     )
     parser.add_argument(
@@ -94,6 +96,11 @@ def main():
         
         # 4. Save graph
         graph = result.graph
+
+        # Create output folder
+        folder = args.output.parent
+        if folder and not folder.exists():
+            os.makedirs(folder, exist_ok=True)
         
         output_format = "turtle" if args.format == "turtle" else "json-ld"
         graph.serialize(destination=args.output, format=output_format)

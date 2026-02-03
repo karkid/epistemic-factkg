@@ -4,13 +4,14 @@ AI2-THOR specific data source implementation.
 Integrates with base knowledge_graph architecture.
 """
 
-from typing import Iterator, Dict, List, Any
+from typing import Iterator, Dict, List, Any, Tuple
 from pathlib import Path
 import yaml
 from ai2thor.controller import Controller
 from knowledge_graph.sources.base import DataSource, SceneData, ObjectMetadata, Relationship
+from utils.dot_namespace import to_namespace
 from .object_types import AI2THOR_CONTAINER_OBJECT_TYPES, AI2THOR_SURFACE_OBJECT_TYPES, AI2THOR_HANGING_OBJECT_TYPES
-from .relation_types import AI2THOR_ATTRIBUTE_STATE_MAPPING, AI2THOR_ATTRIBUTE_TYPES, AI2THOR_SPATIAL_RELATION_TYPES, RelationType
+from .relation_types import AI2THOR_ATTRIBUTE_STATE_MAPPING, AI2THOR_ATTRIBUTE_TYPES, AI2THOR_SPATIAL_RELATION_TYPES, AI2THOR_STATE_RELATION_TYPES, AI2THOR_VALUE_RELATION_TYPES, RelationType
 
 class AI2THORDataSource(DataSource):
     """
@@ -18,6 +19,12 @@ class AI2THORDataSource(DataSource):
     
     Self-contained - reads config and manages AI2-THOR controller internally.
     """
+    
+    # Cache namespace conversions for better performance
+    _cached_container_types = None
+    _cached_surface_types = None
+    _cached_hanging_types = None
+    _cached_attribute_types = None
     
     def __init__(self, config_path: str = None):
         """
@@ -29,10 +36,16 @@ class AI2THORDataSource(DataSource):
         """
         if config_path is None:
             # Default to generator's config folder
-            config_path = Path(__file__).parent.parent / "config" / "thor.yaml"
+            config_path = Path(__file__).parent.parent / "config.yaml"
         
         self.config_path = Path(config_path)
         self.config = self._load_config()
+        self.kg_policy = self.config.get("knowledge_graph_policy", {})
+        
+        # Initialize cached namespace conversions
+        self._init_cached_types()
+        
+        # Initialize controller after caching is set up
         self.controller = self._create_controller()
     
     def _load_config(self) -> Dict[str, Any]:
@@ -50,98 +63,79 @@ class AI2THORDataSource(DataSource):
             if v is not None and not k.startswith('#')
         }
         
-        return Controller(**filtered_settings)
+        return Controller(**filtered_settings,
+                            renderDepthImage=False,
+                            renderInstanceSegmentation=False,
+                            renderSemanticSegmentation=False,
+                            renderImage=False,
+                            visibilityDistance=1.5)
+        
+    
+    def _init_cached_types(self) -> None:
+        """Initialize cached namespace conversions for better performance."""
+        if AI2THORDataSource._cached_container_types is None:
+            AI2THORDataSource._cached_container_types = to_namespace(AI2THOR_CONTAINER_OBJECT_TYPES)
+            AI2THORDataSource._cached_surface_types = to_namespace(AI2THOR_SURFACE_OBJECT_TYPES)
+            AI2THORDataSource._cached_hanging_types = to_namespace(AI2THOR_HANGING_OBJECT_TYPES)
+            AI2THORDataSource._cached_attribute_types = to_namespace(AI2THOR_ATTRIBUTE_TYPES)
     
     def _should_include_object(self, thor_obj: Dict[str, Any]) -> bool:
         """Check if object should be included based on config policies.""" 
         return True
     
-    def _get_environment_ref(self, scene_id) -> str:
-        """Get environment reference for a given scene ID."""
+    def get_scene_by_id(self, scene_id: str) -> SceneData:
+        """Get SceneData for a specific scene ID."""
+        # layout = self._get_scene_layout(scene_id)
+        # objects, relationships = self._build_scene_environment_graph(scene_id, layout)\
 
-        for scene in self.config.get("scenes", []):
-            if scene.get("scene_id") == scene_id:
-                return scene.get("environment_ref")
+        objects = []
+        relationships = []
+        thor_metadata = self._load_thor_room_metadata(scene_id)
 
-        return None  # Not found
+        objects_metadata = thor_metadata.get("objects", [])
+        # Build lookup for parent type resolution
+        objects_by_id = {obj.get("objectId"): obj for obj in objects_metadata if obj.get("objectId")}
+        for obj_data in objects_metadata:
 
-    def _get_environment_layout(self, environment_ref):
-        """Get all layouts (rooms) for a given environment reference."""
+            if not obj_data.get("objectId") or not self._should_include_object(obj_data):
+                continue
 
-        layouts = self.config.get("environment", {}).get("layouts", {})
+            oid = obj_data.get("objectId")
 
-        return layouts.get(environment_ref, {})
+            # Convert to ObjectMetadata with enhanced property extraction
+            object_metadata = ObjectMetadata(
+                object_id=oid,
+                object_type=obj_data.get("objectType", "Unknown"),
+                properties=self._extract_states_values(obj_data),
+                position=self._extract_position(obj_data) if self.kg_policy.get('include_position', True) else None,
+                rotation=self._extract_rotation(obj_data) if self.kg_policy.get('include_rotation', True) else None
+            )
+
+            objects.append(object_metadata)
+
+            # Room → Object
+            relationships.append(Relationship(subject_id=scene_id, predicate="hasObject", object_id=oid))
+            relationships.append(Relationship(subject_id=oid, predicate="locatedIn", object_id=scene_id))
+            # Extract relationships based on parent receptacles
+            parent_relationships = self._extract_parent_relationships(obj_data, objects_by_id)
+            relationships.extend(parent_relationships)
+
+        return SceneData(
+            scene_id=scene_id,
+            objects=objects,
+            relationships=relationships
+        )
     
-    def _get_scene_layout(self, scene_id):
-        """Get layout (rooms) for a specific scene ID."""
-        env = self._get_environment_ref(scene_id)
-        return self._get_environment_layout(env)
-
     def get_available_scenes(self) -> List[str]:
         """Get all scene IDs from config."""
-        scenes = []
-        scenes_ = self.config.get('scenes', [])
-
-        for scene in scenes_: 
-            scenes.append(scene.get("scene_id"))
-
-        # layouts = self.config.get('environment', {}).get('layouts', {})
-        
-        # for layout_name, layout_config in layouts.items():
-        #     # scenes.extend([layout_name])
-        #     print(f"Layout: {layout_name}")
-        #     print(f"Config: {layout_config}")
-        #     for room_type, room_scenes in layout_config.items():
-        #         scenes.extend(room_scenes)
-        
-        return scenes
+        return self.config.get('scenes', [])
     
     def get_scenes(self) -> Iterator[SceneData]:
         """Yield SceneData for all scenes from config."""
         scene_ids = self.get_available_scenes()
         for scene_id in scene_ids:
             yield self.get_scene_by_id(scene_id)
-    
-    def get_scene_by_id(self, scene_id: str) -> SceneData:
-        """Load specific AI2-THOR scene and extract relationships."""
-        kg_policy = self.config.get('knowledge_graph_policy', {})
 
-        environment_ref = self._get_environment_ref(scene_id)
-
-        # Convert to base format with filtering
-        object_list = []
-        relationships = []
-        
-        # Get AI2-THOR metadata
-        metadata = self._get_thor_metadata(scene_id)
-        objects = metadata.get("objects", [])
-                
-        # Build lookup for parent type resolution
-        objects_by_id = {obj.get("objectId"): obj for obj in objects if obj.get("objectId")}
-        
-        for thor_obj in objects:
-            if not thor_obj.get("objectId") or not self._should_include_object(thor_obj):
-                continue
-                
-            # Convert to ObjectMetadata with enhanced property extraction
-            object_metadata = ObjectMetadata(
-                object_id=thor_obj["objectId"],
-                object_type=thor_obj.get("objectType", "Unknown"),
-                properties=self._extract_states_values(thor_obj, kg_policy),
-                position=self._extract_position(thor_obj) if kg_policy.get('include_position', True) else None,
-                rotation=self._extract_rotation(thor_obj) if kg_policy.get('include_rotation', True) else None
-            )
-            object_list.append(object_metadata)
-
-            # Extract relationships based on parent receptacles
-            parent_relationships = self._extract_parent_relationships(thor_obj, objects_by_id)
-            relationships.extend(parent_relationships)
-        
-        return SceneData(
-            scene_id=scene_id,
-            objects=object_list,
-            relationships=relationships
-        )
     
     def cleanup(self) -> None:
         """Clean up AI2-THOR controller with performance settings."""
@@ -193,74 +187,57 @@ class AI2THORDataSource(DataSource):
         
         This encapsulates spatial relation logic based on parent object types.
         """
-        # Container-like objects (things you put stuff inside)
-        container_types = {'Box', 'Drawer', 'Cabinet', 'Fridge', 'Microwave', 'Pot', 'Pan', 
-                          'Bowl', 'Cup', 'Mug', 'Sink', 'Bathtub', 'Toilet', 'GarbageCan', 
-                          'LaundryHamper', 'Safe', 'Dresser'}
         
-        # Surface-like objects (things you put stuff on top of)
-        surface_types = {'CounterTop', 'Table', 'Desk', 'Shelf', 'Floor', 'Bed', 'Sofa', 
-                        'Chair', 'Ottoman', 'Stool', 'DiningTable', 'CoffeeTable', 'SideTable',
-                        'TVStand', 'Dresser'}
-        
-        # Hanging objects (things you hang stuff on/from)  
-        hanging_types = {'TowelHolder', 'Hook', 'Hanger', 'Rod'}
-        
-        if parent_type in container_types:
+        if parent_type in self._cached_container_types:
             return RelationType.inside.value
-        elif parent_type in surface_types:
+        elif parent_type in self._cached_surface_types:
             return RelationType.onTopOf.value 
-        elif parent_type in hanging_types:
+        elif parent_type in self._cached_hanging_types:
             return RelationType.hanging.value
         else:
             return RelationType.near.value  # Default fallback relation
     
-    def _get_thor_metadata(self, scene_id: str) -> Dict[str, Any]:
+    def _load_thor_room_metadata(self, scene_id: str) -> Dict[str, Any]:
         """Get AI2-THOR scene metadata with agent configuration."""
         # Reset to scene
         reset_params = {'scene': scene_id}
         # Reset with configuration
-        self.controller.reset(**reset_params)
+        try:
+            self.controller.reset(**reset_params)
+        except Exception as e:
+            self.controller.stop()
+            raise Exception(f"Failed to reset AI2-THOR controller for scene {scene_id}")
         
         # Get scene metadata
         metadata = self.controller.last_event.metadata
-        
         return metadata
     
+    def _is_property_allowed(self, prop: str, kg_policy: dict) -> bool:
+        policy_key = f"include_{prop}"
+        return kg_policy.get(policy_key, False)
+
     
-    def _extract_states_values(self, thor_obj: Dict[str, Any], kg_policy: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_states_values(self, thor_obj: Dict[str, Any]) -> Dict[str, Any]:
         """Extract object state based on config policies."""
         states = {}
         
-        # Check boolean attributes that correspond to capabilities
-        # attribute_fields = ['openable', 'togglable', 'pickupable', 'moveable', 'receptacle', 
-        #                    'cookable', 'sliceable', 'breakable', 'dirtyable', 'canFillWithLiquid', 
-        #                    'canBeUsedUp']
-        
-        # for field in attribute_fields:
-        #     if field in thor_obj and thor_obj.get(field, False):
-        #         states[field] = True
-        
-        # Check state properties  
-        state_fields = ['isOpen', 'isToggled', 'isMoving', 'isPickedUp', 'isFilledWithLiquid',
-                       'isCooked', 'isSliced', 'isBroken', 'isDirty', 'isUsedUp']
-        
-        for field in state_fields:
-            if field in thor_obj and thor_obj.get(field, False):
+        for field in self._cached_attribute_types:
+            isField = AI2THOR_ATTRIBUTE_STATE_MAPPING.get(field)
+            if self._is_property_allowed(isField, self.kg_policy) and field in thor_obj and thor_obj.get(field, False):
                 states[field] = True
                 
-        # Extract value properties like temperature, mass, material
-        if 'temperature' in thor_obj and thor_obj.get('temperature') is not None:
-            states['temperature'] = thor_obj['temperature']
+        # ToDo: Extract value properties
+        # if 'temperature' in thor_obj and thor_obj.get('temperature') is not None:
+        #     states['temperature'] = thor_obj['temperature']
             
-        if 'mass' in thor_obj and thor_obj.get('mass') is not None:
-            states['mass'] = thor_obj['mass']
+        # if 'mass' in thor_obj and thor_obj.get('mass') is not None:
+        #     states['mass'] = thor_obj['mass']
             
-        if 'salientMaterials' in thor_obj:
-            materials = thor_obj.get('salientMaterials', [])
-            if materials:
-                # Join materials into a single string for now
-                states['material'] = ', '.join(materials)
+        # if 'salientMaterials' in thor_obj:
+        #     materials = thor_obj.get('salientMaterials', [])
+        #     if materials:
+        #         # Join materials into a single string for now
+        #         states['material'] = ', '.join(materials)
         
         return states
     

@@ -2,6 +2,7 @@ from rdflib import Graph, Literal
 from pyvis.network import Network
 import os
 import shutil
+import time
 from pathlib import Path
 from src.visualizer.network_builder import NetworkBuilder
 
@@ -25,12 +26,18 @@ def split_html(html):
 
 def build_rdf_graph(ttl_file:Path, output_html:Path=Path("output/rdf_graph.html")) -> None:
 
+    # Force clean rebuild - remove output folder first
+    if output_html.parent.exists():
+        shutil.rmtree(output_html.parent)
+    output_html.parent.mkdir(parents=True, exist_ok=True)
+    
     node_builder = NetworkBuilder()
     
     # Configure filtering to reduce noise
     node_builder.set_filters(
         show_instances=True,
         show_classes=True,
+        show_literals=True,
         max_nodes=300  # Limit to prevent overwhelming display
     )
     
@@ -58,10 +65,14 @@ def build_rdf_graph(ttl_file:Path, output_html:Path=Path("output/rdf_graph.html"
     # Split PyVis html
     head, body = split_html(pyvis_html)
 
+    # Add cache buster timestamp
+    cache_buster = str(int(time.time()))
+    
     # Inject into template
     final_html = template \
         .replace("{{ head }}", head) \
-        .replace("{{ body }}", body)
+        .replace("{{ body }}", body) \
+        .replace("{{ cache_buster }}", cache_buster)
 
     with open(output_html, "w", encoding="utf-8") as f:
         f.write(final_html)
@@ -72,9 +83,9 @@ def build_rdf_graph(ttl_file:Path, output_html:Path=Path("output/rdf_graph.html"
         shutil.rmtree(output_html.parent/"static")
     shutil.copytree(static_folder, output_html.parent/"static")
 
-    lib_folder = os.path.join(BASE_DIR, "lib")
-    if (output_html.parent/"lib").exists():
-        shutil.rmtree(output_html.parent/"lib")
-    shutil.copytree(lib_folder, output_html.parent/"lib")
+    # lib_folder = os.path.join(BASE_DIR, "lib")
+    # if (output_html.parent/"lib").exists():
+    #     shutil.rmtree(output_html.parent/"lib")
+    # shutil.copytree(lib_folder, output_html.parent/"lib")
     
     print("Saved:", output_html)

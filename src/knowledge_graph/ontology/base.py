@@ -50,6 +50,9 @@ class BaseOntology:
             ("inScene", "inScene", RelationType.OBJECT_RELATION),        # Object is in scene
             ("position", "position", RelationType.SPATIAL),              # Object position
             ("rotation", "rotation", RelationType.SPATIAL),              # Object rotation
+            ("objectType", "rdf:type", RelationType.DATA_RELATION),     # Object type
+            ("objectID", "hasID", RelationType.DATA_RELATION),          # Object ID
+            #("usesEnvironmentalData", "usesEnvironmentalData", RelationType.DATA_RELATION),  # Example additional field
         ]
         
         for source_field, predicate_uri, relation_type in core_predicates:

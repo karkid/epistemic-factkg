@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Iterator, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class Relationship:
     """Relationship between two objects."""
     subject_id: str      # Object that has the relationship
@@ -16,7 +16,7 @@ class Relationship:
     confidence: float = 1.0  # Optional confidence score
 
 
-@dataclass
+@dataclass(frozen=True)
 class ObjectMetadata:
     """Metadata for a single object in a scene."""
     object_id: str

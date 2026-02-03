@@ -1,0 +1,70 @@
+# AI2-THOR Knowledge Graph Generation Configuration
+
+# AI2-THOR Controller Settings
+controller:
+  width: 600
+  height: 600
+  fieldOfView: 90
+
+    
+
+# Knowledge Graph Generation Policies
+knowledge_graph_policy:
+  include_position: false
+  include_rotation: false
+  include_isOpen: true
+  include_isToggled: true
+  include_isMoving: false
+  include_isPickedUp: false
+  include_isFilledWithLiquid: false
+  include_isCooked: false
+  include_isSliced: false
+  include_isBroken: true
+  include_isDirty: true
+  include_isUsedUp: false
+  include_temperature: true
+  include_mass: true
+  include_silentmaterial: true
+# Scene and Environment Configuration
+# scenes:
+#   - scene_id: "Scene_001"
+#     environment_ref: "MyHouse"
+
+scenes:
+  # - "FloorPlan203"
+  - "FloorPlan3"
+  - "FloorPlan303"
+  # - "FloorPlan403"
+
+# environment:
+#   layouts:
+#     MyHouse:
+#       id: "House_001"
+#       type: "House"
+#       superclass: "Building"
+      
+#       rooms:
+#         # living_room:
+#         #   id: "FloorPlan203"
+#         #   type: "LivingRoom"
+#         #   superclass: "Room"
+
+#         # kitchen:
+#         #   id: "FloorPlan3"
+#         #   type: "Kitchen"
+#         #   superclass: "Room"
+
+#         bedroom:
+#           id: "FloorPlan303"
+#           type: "Bedroom"
+#           superclass: "Room"
+
+#         # bathroom:
+#         #   id: "FloorPlan403"
+#         #   type: "Bathroom"
+#         #   superclass: "Room"
+# environment:
+#   - "FloorPlan203"
+#   - "FloorPlan3"
+#   - "FloorPlan303"
+#   - "FloorPlan403"

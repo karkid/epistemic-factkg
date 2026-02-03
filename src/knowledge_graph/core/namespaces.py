@@ -39,7 +39,10 @@ def safe_fragment(text: str) -> str:
     """
     Convert arbitrary strings to URI-safe fragments by URL encoding.
     """
-    return quote(text, safe='-_.~')
+    if hasattr(text, "value"):   # Enum
+        print(text)
+        text = text.value
+    return quote(str(text), safe='-_.~')
 
 def create_uri(identifier: str, namespace: Namespace) -> URIRef:
     """Create a URIRef in the given namespace with a safe fragment."""
