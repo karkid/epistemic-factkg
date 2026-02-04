@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import FrozenSet
 
+
 class RelationType(Enum):
     # Attribute relation types
     openable = "openable"
@@ -14,7 +15,6 @@ class RelationType(Enum):
     dirtyable = "dirtyable"
     canFillWithLiquid = "canFillWithLiquid"
     canBeUsedUp = "canBeUsedUp"
-
 
     # State relation types specific to AI2-THOR
     isOpen = "isOpen"
@@ -39,36 +39,40 @@ class RelationType(Enum):
     hanging = "hanging"
     near = "near"
 
-# AI2-THOR specific attribute type sets
-AI2THOR_ATTRIBUTE_TYPES: FrozenSet[RelationType] = frozenset([
-    RelationType.openable,
-    RelationType.togglable,
-    RelationType.pickable,
-    RelationType.movable,
-    RelationType.receptacle,
-    RelationType.cookable,
-    RelationType.sliceable,
-    RelationType.breakable,
-    RelationType.dirtyable,
-    RelationType.canFillWithLiquid,
-    RelationType.canBeUsedUp,
-])
 
+# AI2-THOR specific attribute type sets
+AI2THOR_ATTRIBUTE_TYPES: FrozenSet[RelationType] = frozenset(
+    [
+        RelationType.openable,
+        RelationType.togglable,
+        RelationType.pickable,
+        RelationType.movable,
+        RelationType.receptacle,
+        RelationType.cookable,
+        RelationType.sliceable,
+        RelationType.breakable,
+        RelationType.dirtyable,
+        RelationType.canFillWithLiquid,
+        RelationType.canBeUsedUp,
+    ]
+)
 
 
 # AI2-THOR specific state relation names
-AI2THOR_STATE_RELATION_TYPES: FrozenSet[RelationType] = frozenset([
-    RelationType.isOpen,
-    RelationType.isToggled,
-    RelationType.isMoving,
-    RelationType.isPickedUp,
-    RelationType.isFilledWithLiquid,
-    RelationType.isCooked,
-    RelationType.isSliced,
-    RelationType.isBroken,
-    RelationType.isDirty,
-    RelationType.isUsedUp,
-])
+AI2THOR_STATE_RELATION_TYPES: FrozenSet[RelationType] = frozenset(
+    [
+        RelationType.isOpen,
+        RelationType.isToggled,
+        RelationType.isMoving,
+        RelationType.isPickedUp,
+        RelationType.isFilledWithLiquid,
+        RelationType.isCooked,
+        RelationType.isSliced,
+        RelationType.isBroken,
+        RelationType.isDirty,
+        RelationType.isUsedUp,
+    ]
+)
 
 AI2THOR_ATTRIBUTE_STATE_MAPPING = {
     RelationType.openable: RelationType.isOpen,
@@ -84,22 +88,26 @@ AI2THOR_ATTRIBUTE_STATE_MAPPING = {
 }
 
 # AI2-THOR specific value relation names
-AI2THOR_VALUE_RELATION_TYPES: FrozenSet[RelationType] = frozenset([
-    RelationType.temperature,
-    RelationType.mass,
-    RelationType.material,
-])
+AI2THOR_VALUE_RELATION_TYPES: FrozenSet[RelationType] = frozenset(
+    [
+        RelationType.temperature,
+        RelationType.mass,
+        RelationType.material,
+    ]
+)
 
-AI2THOR_VALUE_RELATION_CUSTOM_MAPPING = {
+AI2THOR_LITERAL_RELATION_MAPPING = {
     "temperature": RelationType.temperature.value,
     "mass": RelationType.mass.value,
     "salientMaterials": RelationType.material.value,
 }
 
 # AI2-THOR specific spatial relation names
-AI2THOR_SPATIAL_RELATION_TYPES: FrozenSet[RelationType] = frozenset([
-    RelationType.inside,
-    RelationType.onTopOf,
-    #RelationType.hanging,
-    #RelationType.near,
-])
+AI2THOR_SPATIAL_RELATION_TYPES: FrozenSet[RelationType] = frozenset(
+    [
+        RelationType.inside,
+        RelationType.onTopOf,
+        RelationType.hanging,
+        RelationType.near,
+    ]
+)

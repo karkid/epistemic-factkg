@@ -12,3 +12,11 @@ dependencies = [
     "rdflib>=7.5.0",
     "sentence-transformers>=5.2.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.11.0",
+]

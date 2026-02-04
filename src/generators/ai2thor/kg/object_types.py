@@ -1,6 +1,7 @@
 from enum import StrEnum
 from typing import FrozenSet
 
+
 class ObjectType(StrEnum):
     AlarmClock = "AlarmClock"
     AluminumFoil = "AluminumFoil"
@@ -128,6 +129,7 @@ class ObjectType(StrEnum):
     Window = "Window"
     WineBottle = "WineBottle"
 
+
 class MaterialType(StrEnum):
     Wood = "Wood"
     Metal = "Metal"
@@ -148,39 +150,45 @@ class MaterialType(StrEnum):
 
 AI2THOR_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset(ObjectType)
 
-AI2THOR_CONTAINER_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset([
-    ObjectType.Fridge,
-    ObjectType.Microwave,
-    ObjectType.Cabinet,
-    ObjectType.Drawer,
-    ObjectType.Safe,
-    ObjectType.Toilet,
-    ObjectType.Box,
-    ObjectType.SinkBasin,
-    ObjectType.BathtubBasin,
-])
+AI2THOR_CONTAINER_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset(
+    [
+        ObjectType.Fridge,
+        ObjectType.Microwave,
+        ObjectType.Cabinet,
+        ObjectType.Drawer,
+        ObjectType.Safe,
+        ObjectType.Toilet,
+        ObjectType.Box,
+        ObjectType.SinkBasin,
+        ObjectType.BathtubBasin,
+    ]
+)
 
 
-AI2THOR_SURFACE_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset([
-    ObjectType.StoveBurner,
-    ObjectType.CounterTop,
-    ObjectType.DiningTable,
-    ObjectType.CoffeeTable,
-    ObjectType.SideTable,
-    ObjectType.Desk,
-    ObjectType.Dresser,
-    ObjectType.TVStand,
-    ObjectType.Shelf,
-    ObjectType.Sofa,
-    ObjectType.ArmChair,
-    ObjectType.Ottoman,
-    ObjectType.Bed,
-])
+AI2THOR_SURFACE_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset(
+    [
+        ObjectType.StoveBurner,
+        ObjectType.CounterTop,
+        ObjectType.DiningTable,
+        ObjectType.CoffeeTable,
+        ObjectType.SideTable,
+        ObjectType.Desk,
+        ObjectType.Dresser,
+        ObjectType.TVStand,
+        ObjectType.Shelf,
+        ObjectType.Sofa,
+        ObjectType.ArmChair,
+        ObjectType.Ottoman,
+        ObjectType.Bed,
+    ]
+)
 
-AI2THOR_HANGING_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset([
-    ObjectType.TowelHolder,
-    ObjectType.HandTowelHolder,
-    ObjectType.ToiletPaperHanger,
-])
+AI2THOR_HANGING_OBJECT_TYPES: FrozenSet[ObjectType] = frozenset(
+    [
+        ObjectType.TowelHolder,
+        ObjectType.HandTowelHolder,
+        ObjectType.ToiletPaperHanger,
+    ]
+)
 
 AI2THOR_MATERIAL_TYPES: FrozenSet[MaterialType] = frozenset(MaterialType)
