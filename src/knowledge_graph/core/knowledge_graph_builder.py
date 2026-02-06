@@ -6,7 +6,7 @@ from typing import Any, Optional, Set, List
 from rdflib import Graph, URIRef, Literal
 from dataclasses import dataclass
 
-from ..core.namespaces import (
+from .namespace_manager import (
     NamespaceManager,
     DEFAULT_NAMESPACE_MANAGER,
 )

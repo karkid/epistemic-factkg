@@ -16,12 +16,12 @@ from knowledge_graph.sources.base import (
     Relationship,
 )
 from utils.dot_namespace import to_namespace
-from .object_types import (
+from .object_type import (
     AI2THOR_CONTAINER_OBJECT_TYPES,
     AI2THOR_SURFACE_OBJECT_TYPES,
     AI2THOR_HANGING_OBJECT_TYPES,
 )
-from .relation_types import (
+from .relation_type import (
     AI2THOR_ATTRIBUTE_STATE_MAPPING,
     AI2THOR_ATTRIBUTE_TYPES,
     AI2THOR_LITERAL_RELATION_MAPPING,

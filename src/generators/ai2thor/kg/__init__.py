@@ -2,7 +2,7 @@
 AI2-THOR knowledge graph integration package.
 """
 
-from .data_source import AI2THORDataSource
-from .ontology import create_ai2thor_ontology
+from .ai2thor_data_source import AI2THORDataSource
+from .ai2thor_ontology import AI2THOROntology
 
-__all__ = ["AI2THORDataSource", "create_ai2thor_ontology"]
+__all__ = ["AI2THORDataSource", "AI2THOROntology"]

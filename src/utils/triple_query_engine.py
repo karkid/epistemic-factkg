@@ -10,8 +10,8 @@ from collections import defaultdict
 from rdflib import Graph, URIRef, Literal
 import re
 from urllib.parse import unquote
+from utils.typing import Triple, TripleSet, TripleList
 
-Triple = Tuple[str, str, str]
 Pattern = Union[str, Pattern]
 
 
@@ -31,7 +31,7 @@ class TripleQueryEngine:
         results = engine.query(predicate='hasObject')
     """
 
-    def __init__(self, data_source: List[Triple] | None = None):
+    def __init__(self, data_source: TripleList | None = None):
         """
         Initialize engine with triples.
         """
@@ -53,7 +53,7 @@ class TripleQueryEngine:
         return x
 
     @staticmethod
-    def filter_duplicates(triples: List[Triple]) -> List[Triple]:
+    def filter_duplicates(triples: TripleList) -> TripleList:
         """Remove duplicate triples."""
         seen = set()
         out = []
@@ -104,13 +104,13 @@ class TripleQueryEngine:
         engine.load_from_ttl(ttl_path)
         return engine
 
-    def set_data_source(self, triples: List[Triple]) -> None:
+    def set_data_source(self, triples: TripleList) -> None:
         """Set data source triples."""
         self.data_source = self.filter_duplicates(triples)
 
     # ------------------ Basic Queries ------------------
 
-    def query(self, subject=None, predicate=None, obj=None) -> List[Triple]:
+    def query(self, subject=None, predicate=None, obj=None) -> TripleList:
 
         results = []
 
@@ -124,7 +124,7 @@ class TripleQueryEngine:
 
         return results
 
-    def group_by(self, field: str) -> Dict[str, List[Triple]]:
+    def group_by(self, field: str) -> Dict[str, TripleList]:
         """
         Group by: subject | predicate | object
         """

@@ -12,7 +12,7 @@ class SemanticBuildResult:
     num_supported_claims: int
 
 
-class SemanticGraphBuilder:
+class SemanticBuilder:
     def __init__(self):
         self.claims_corpus = ClaimCorpus()
         self.stats = {"claims": 0, "refuted": 0, "supported": 0}

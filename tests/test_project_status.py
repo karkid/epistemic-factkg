@@ -47,7 +47,7 @@ class TestWorkingAPIs:
         # This test documents that imports need to be fixed
         # All relative imports in source files need correction
         try:
-            from src.knowledge_graph.core.builder import KnowledgeGraphBuilder
+            from knowledge_graph.core.knowledge_graph_builder import KnowledgeGraphBuilder
             pytest.skip("Import system needs fixing - this will fail until relative imports are corrected")
         except ImportError:
             pytest.skip("Expected - import system needs relative path fixes")

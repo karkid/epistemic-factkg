@@ -12,8 +12,8 @@ from pathlib import Path
 # Add src to Python path
 sys.path.insert(0, str(Path(__file__).parent / "../src"))
 
-from generators.ai2thor.kg.ontology import create_ai2thor_ontology
-from knowledge_graph.core.builder import KnowledgeGraphBuilder
+from generators.ai2thor.kg.ai2thor_ontology import AI2THOROntology
+from knowledge_graph.core.knowledge_graph_builder import KnowledgeGraphBuilder
 from utils.exceptions import DataSourceError, ConfigurationError, BuildError
 
 
@@ -53,7 +53,7 @@ def main():
         print(f"🔄 Initializing {args.generator} generator...")
 
         if args.generator == "ai2thor":
-            from generators.ai2thor.kg.data_source import AI2THORDataSource
+            from generators.ai2thor.kg.ai2thor_data_source import AI2THORDataSource
 
             # Create data source
             if args.config:
@@ -64,7 +64,7 @@ def main():
                 print("   Using default config")
 
             # Create ontology and builder
-            ontology = create_ai2thor_ontology()
+            ontology = AI2THOROntology()
             builder = KnowledgeGraphBuilder(ontology=ontology)
 
             print("🏗️ Building knowledge graph...")

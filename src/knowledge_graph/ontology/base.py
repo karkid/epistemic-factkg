@@ -112,3 +112,98 @@ class BaseOntology:
     def get_all_mapped_fields(self) -> Set[str]:
         """Get all fields that have mappings."""
         return set(self.predicate_mappings.keys())
+    
+    def get_state_predicates(self) -> Set[str]:
+        """Get all predicates that are of type STATE."""
+        return {
+            mapping.source_field
+            for mapping in self.predicate_mappings.values()
+            if mapping.relation_type == RelationType.STATE
+        }
+    
+    def get_spatial_predicates(self) -> Set[str]:
+        """Get all predicates that are of type SPATIAL."""
+        return {
+            mapping.source_field
+            for mapping in self.predicate_mappings.values()
+            if mapping.relation_type == RelationType.SPATIAL
+        }
+    
+    def get_data_predicates(self) -> Set[str]:
+        """Get all predicates that are of type DATA_RELATION."""
+        return {
+            mapping.source_field
+            for mapping in self.predicate_mappings.values()
+            if mapping.relation_type == RelationType.DATA_RELATION
+        }
+    
+    def get_object_relation_predicates(self) -> Set[str]:
+        """Get all predicates that are of type OBJECT_RELATION."""
+        return {
+            mapping.source_field
+            for mapping in self.predicate_mappings.values()
+            if mapping.relation_type == RelationType.OBJECT_RELATION
+        }
+    
+    def get_all_predicates(self) -> Set[str]:
+        """Get all predicate URIs."""
+        return {mapping.predicate_uri for mapping in self.predicate_mappings.values()}
+    
+    def is_state_predicate(self, predicate_uri: str) -> bool:
+        """Check if a predicate URI is of type STATE."""
+        mapping = next(
+            (m for m in self.predicate_mappings.values() if m.predicate_uri == predicate_uri),
+            None,
+        )
+        return mapping is not None and mapping.relation_type == RelationType.STATE
+    
+    def is_spatial_predicate(self, predicate_uri: str) -> bool:
+        """Check if a predicate URI is of type SPATIAL."""
+        mapping = next(
+            (m for m in self.predicate_mappings.values() if m.predicate_uri == predicate_uri),
+            None,
+        )
+        return mapping is not None and mapping.relation_type == RelationType.SPATIAL
+    
+    def is_data_predicate(self, predicate_uri: str) -> bool:
+        """Check if a predicate URI is of type DATA_RELATION."""
+        mapping = next(
+            (m for m in self.predicate_mappings.values() if m.predicate_uri == predicate_uri),
+            None,
+        )
+        return mapping is not None and mapping.relation_type == RelationType.DATA_RELATION
+    
+    def is_object_relation_predicate(self, predicate_uri: str) -> bool:
+        """Check if a predicate URI is of type OBJECT_RELATION."""
+        mapping = next(
+            (m for m in self.predicate_mappings.values() if m.predicate_uri == predicate_uri),
+            None,
+        )
+        return mapping is not None and mapping.relation_type == RelationType.OBJECT_RELATION
+    
+    def get_predicates_by_type(self, relation_type: RelationType) -> Set[str]:
+        """Get all predicate URIs of a specific relation type."""
+        return {
+            mapping.predicate_uri
+            for mapping in self.predicate_mappings.values()
+            if mapping.relation_type == relation_type
+        }
+    
+    def has_predicate(self, predicate_uri: str) -> bool:
+        """Check if a predicate URI is registered."""
+        return any(
+            mapping.predicate_uri == predicate_uri
+            for mapping in self.predicate_mappings.values()
+        )
+    
+    def has_object_type(self, source_type: str) -> bool:
+        """Check if an object type is registered."""
+        return source_type in self.object_type_mappings
+    
+    def get_all_object_types(self) -> Set[str]:
+        """Get all registered object types."""
+        return set(self.object_type_mappings.keys())
+    
+    def get_all_rdf_classes(self) -> Set[str]:
+        """Get all registered RDF classes."""
+        return set(self.object_type_mappings.values())

@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Any, List, Iterator, Optional, Sequence, Tuple
-
-Triple = Tuple[str, str, str]
-
+from utils.typing import Triple, TripleList, TripleSet
 
 @dataclass
 class Evidence:
@@ -42,7 +40,7 @@ class Reasoning:
 @dataclass
 class Claim:
     text: str
-    claim_triples: List[Triple]
+    claim_triples: TripleList
 
 
 @dataclass
@@ -74,7 +72,7 @@ class ClaimInstance:
     def make_instance(
         *,
         rec_id: str,
-        text: str,
+        claim: str,
         label: str,
         claim_triples: Sequence[Triple],
         structural_reasoning: str,
@@ -98,10 +96,10 @@ class ClaimInstance:
 
             created_utc = utc_now_iso()
 
-        claim = Claim(text=text, claim_triples=list(claim_triples))
+        claim = Claim(claim=claim, claim_triples=list(claim_triples))
         reasoning = Reasoning(structural=structural_reasoning)
         evidence = Evidence(
-            evidence_triples=evidence_triples,
+            evidence_triples=list(evidence_triples),
             evidence_source=evidence_source,
             evidence_source_type=evidence_source_type,
             evidence_urls=evidence_urls,

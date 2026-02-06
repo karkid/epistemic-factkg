@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 import re
 
+from generators.ai2thor.kg.ai2thor_ontology import AI2THOROntology
 from knowledge_graph.semantics.source.base import ClaimInstance, SemanticDataSource
 from utils.triple_query_engine import TripleQueryEngine
 

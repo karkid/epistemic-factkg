@@ -10,8 +10,8 @@ Core Components:
 
 from .sources.base import DataSource, SceneData, ObjectMetadata, Relationship
 from .ontology.base import BaseOntology, PredicateMapping, RelationType
-from .core.builder import KnowledgeGraphBuilder, BuildResult
-from .core.namespaces import (
+from .core.knowledge_graph_builder import KnowledgeGraphBuilder, BuildResult
+from .core.namespace_manager import (
     NamespaceManager,
     NamespaceConfig,
     create_entity_uri,

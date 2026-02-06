@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from email.utils import unquote
+from knowledge_graph.ontology.base import BaseOntology
 from knowledge_graph.semantics.claims.base import BaseClaimGenerator
-from knowledge_graph.semantics.source.base import Triple
+
+from utils.typing import Triple
 
 
 class AI2ThorSemanticClaimGenerator(BaseClaimGenerator):
     """
     Generate textual claims specific to AI2Thor semantic data.
     """
+
+    def __init__(self, *, ontology: BaseOntology):
+        super().__init__()
+        self.ontology = ontology
 
     def _short(self, x: str) -> str:
         """
