@@ -11,6 +11,10 @@ from src.utils.exceptions import ConfigurationError, DataSourceError
 
 from src.adapters.ai2thor.config import AI2ThorDataSourceConfig
 from src.adapters.ai2thor.registry.entities import CONTAINER_ROLES, SURFACE_ROLES, HANGING_ROLES
+from src.adapters.ai2thor.semantic_rules import build_semantic_map
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---- canonical predicate ids (ontology will map later) ----
@@ -134,8 +138,17 @@ class AI2THORDataSource(GraphDataSource):
                             use_semantic_rules=True,
                         )
             
+
+            logger.info("-----"*20)
+            logger.info(f"Scene {graph_id}")
+            logger.info("Initial semantic map:")
+            logger.info(build_semantic_map(controller=self.controller))
+            logger.info("-----"*20)
             result = randomizer.randomize()
+            logger.info("Final semantic map after randomization:")
             SceneRandomizerSummary(results=[result]).print_summary()
+            logger.info(build_semantic_map(controller=self.controller))
+            logger.info("-----"*20)
 
             return self.controller.last_event.metadata
         except Exception as e:

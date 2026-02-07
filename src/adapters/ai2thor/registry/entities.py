@@ -132,6 +132,8 @@ class ObjectType(StrEnum):
     WateringCan = "WateringCan"
     Window = "Window"
     WineBottle = "WineBottle"
+    Wall = "Wall"
+    Ceiling = "Ceiling"
 
 
 CONTAINER_ROLES: FrozenSet[ObjectType] = frozenset(
@@ -163,12 +165,16 @@ SURFACE_ROLES: FrozenSet[ObjectType] = frozenset(
         ObjectType.ArmChair,
         ObjectType.Ottoman,
         ObjectType.Bed,
+        ObjectType.Floor,
     ]
 )
 
 HANGING_ROLES: FrozenSet[ObjectType] = frozenset(
     [
-        ObjectType.ToiletPaperHanger
+        ObjectType.ToiletPaperHanger,
+        ObjectType.TowelHolder,
+        ObjectType.ShowerCurtain,
+        ObjectType.Wall
     ]
 )
 
