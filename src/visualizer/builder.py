@@ -2,8 +2,8 @@ import os
 import shutil
 import time
 from pathlib import Path
-from visualizer.network_builder import NetworkBuilder
-from utils.exceptions import BuildError, DataSourceError
+from src.visualizer.network_builder import NetworkBuilder
+from src.utils.exceptions import BuildError, DataSourceError
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

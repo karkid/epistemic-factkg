@@ -1,0 +1,95 @@
+/* ================= Dark Mode ================= */
+
+body.dark-mode {
+    background-color: #0f172a;
+    color: #e5e7eb;
+}
+
+
+/* ================= Header ================= */
+
+body.dark-mode #header {
+    background: #020617;
+    border-bottom: 1px solid #020617;
+}
+
+
+body.dark-mode #header button {
+    background: #334155;
+    color: #f8fafc;
+}
+
+body.dark-mode #header button:hover {
+    background: #475569;
+}
+
+
+body.dark-mode #header input {
+    background: #020617;
+    color: #f8fafc;
+    border: 1px solid #334155;
+}
+
+
+/* ================= Sidebar ================= */
+
+body.dark-mode #sidebar {
+    background: #020617;
+    border-right: 1px solid #1e293b;
+}
+
+
+body.dark-mode #sidebar h3 {
+    color: #f8fafc;
+}
+
+
+body.dark-mode .filter-group label {
+    color: #cbd5e1;
+}
+
+
+body.dark-mode .filter-group select {
+    background: #020617;
+    color: #f8fafc;
+    border: 1px solid #334155;
+}
+
+
+/* ================= Graph Area ================= */
+
+body.dark-mode #graph-area {
+    background: #020617;
+}
+
+body.dark-mode #mynetwork {
+    background: #020617 !important;
+}
+
+/* ================= Floating Toolbar ================= */
+
+body.dark-mode #floatingToolbar {
+    background: rgba(20, 25, 35, 0.8);
+}
+
+body.dark-mode #floatingToolbar button {
+    background: rgba(30, 40, 55, 0.9);
+    color: #e5e7eb;
+}
+
+/* ================= Footer ================= */
+
+body.dark-mode #footer {
+    background: #020617;
+    border-top: 1px solid #1e293b;
+    color: #cbd5e1;
+}
+
+
+/* ================= Scrollbar ================= */
+
+body.dark-mode #sidebar::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+

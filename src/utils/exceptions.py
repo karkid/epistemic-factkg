@@ -6,23 +6,16 @@ and debugging capabilities throughout the system.
 """
 
 
-class EpistemicFactKGError(Exception):
+class FactKGError(Exception):
     """Base exception for all epistemic-factkg related errors."""
 
     pass
 
 
-class DataSourceError(EpistemicFactKGError):
+class DataSourceError(FactKGError):
     """Base exception for data source operations."""
 
     pass
-
-
-class ConfigurationError(DataSourceError):
-    """Configuration-related errors (missing files, invalid config, etc.)."""
-
-    pass
-
 
 class DataLoadError(DataSourceError):
     """Errors during data loading operations (TTL parsing, scene loading, etc.)."""
@@ -35,20 +28,24 @@ class ValidationError(DataSourceError):
 
     pass
 
+class ConfigurationError(FactKGError):
+    """Configuration-related errors (missing files, invalid config, etc.)."""
 
-class OntologyError(EpistemicFactKGError):
+    pass
+
+class OntologyError(FactKGError):
     """Ontology and predicate mapping related errors."""
 
     pass
 
 
-class BuildError(EpistemicFactKGError):
+class BuildError(FactKGError):
     """Knowledge graph building errors."""
 
     pass
 
 
-class SemanticError(EpistemicFactKGError):
+class SemanticError(FactKGError):
     """Semantic claim processing errors."""
 
     pass

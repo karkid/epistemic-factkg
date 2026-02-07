@@ -15,8 +15,8 @@ init:
 
 # Core Commands
 [doc("Build knowledge graph")]
-build scene="" config="":
-    uv run python scripts/kg_generate.py --output output/knowledge_graph.ttl {{ if scene != "" { "--scenes " + scene } else { "" } }} {{ if config != "" { "--config " + config } else { "" } }}
+build:
+    uv run python -m src.cli.build_rdf --config configs/ai2thor_default.yaml --out out/knowledge_graph.ttl --verbose
 
 [doc("Build semantic claims (WIP)")]
 build-semantic config="":
@@ -24,14 +24,14 @@ build-semantic config="":
     uv run python scripts/semantic_test.py {{ if config != "" { "--config " + config } else { "" } }}
 
 [doc("Visualize knowledge graph")]
-viz file="output/knowledge_graph.ttl":
+viz file="out/knowledge_graph.ttl":
     @echo "🎨 Creating visualization..."
-    rm -rf output/visualizer
-    uv run python scripts/kg_visualize.py {{file}} --output output/visualizer/knowledge_graph.html
+    rm -rf out/visualizer
+    uv run python -m src.cli.build_viz {{file}} --output out/visualizer/knowledge_graph.html
 
 [doc("Open visualization in browser")]
 open:
-    open output/visualizer/knowledge_graph.html
+    open out/visualizer/knowledge_graph.html
 
 [doc("Run test suite")]
 test:
