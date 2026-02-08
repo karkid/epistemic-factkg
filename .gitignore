@@ -198,6 +198,7 @@ Temporary Items
 thor_builds/
 thor_data/
 output/
+out/
 
 # Visualization outputs
 visualizations/
@@ -223,3 +224,8 @@ config.ini
 secrets.yaml
 .env.local
 .env.production
+
+
+# Temporary Added for testing
+rdf/
+schema/

@@ -1,72 +1,67 @@
+# Epistemic FactKG - Essential Commands
+
 [default]
-[doc("List all available recipes")]
+[doc("List available commands")]
 default:
-	@just --list
+    @just --list
 
-[private]
-[doc("Check if uv is installed")]
-check-uv:
-   @uv --version >/dev/null 2>&1 || (echo "Error: uv is not installed" && exit 1)
-
-[doc("Create a virtual environment and synchronize dependencies")]
-init: check-uv
-    @echo "Creating virtual environment and syncing dependencies..."
+# Setup
+[doc("Initialize environment")]
+init:
+    @echo "🏗️ Setting up environment..."
     uv venv
     uv sync
-    @echo "Installing dependencies..."
     uv pip install -e ".[dev,notebook]"
 
-[confirm("This will delete your virtual environment and reinstall all dependencies. Continue?")]
-[doc("Reinstall all dependencies from scratch")]
-reinstall:
-	@echo "Deleting old virtual environment..."
-	@rm -rf .venv
-	just init
+# Core Commands
+[doc("Build knowledge graph")]
+build:
+    uv run python -m src.cli.build_rdf --config configs/ai2thor_default.yaml --out out/knowledge_graph.ttl --verbose
 
-[doc("Install all dependencies in the environment")]
-install:
-    uv sync
+[doc("Build semantic claims (WIP)")]
+build-semantic config="":
+    @echo "🧠 Building semantic claims..."
+    uv run python scripts/semantic_test.py {{ if config != "" { "--config " + config } else { "" } }}
 
-[doc("Add a new package to the environment")]
-add pkg:
-    uv add {{pkg}}
+[doc("Visualize knowledge graph")]
+viz file="out/knowledge_graph.ttl":
+    @echo "🎨 Creating visualization..."
+    rm -rf out/visualizer
+    uv run python -m src.cli.build_viz {{file}} --output out/visualizer/knowledge_graph.html
 
-[doc("Remove a package from the environment")]
-remove pkg:
-    uv remove {{pkg}}
+[doc("Open visualization in browser")]
+open:
+    open out/visualizer/knowledge_graph.html
 
-[doc("Upgrade all dependencies to their latest versions")]
-upgrade-deps:
-    uv pip install -U pip
-    uv pip install --upgrade-deps
+[doc("Run test suite")]
+test:
+    @echo "🧪 Running all tests in tests/ folder..."
+    uv run python -m pytest tests/ -v --tb=short --cov-fail-under=10
 
-[doc("Show uv version and environment details")]
+[doc("Format and lint code")]
+dev:
+    @echo "🔧 Formatting code..."
+    uv run ruff format .
+    @echo "🔍 Linting code..."
+    uv run ruff check .
+
+[doc("Show environment info")]
 info:
-    @echo "📦 Environment Info:"
+    @echo "📦 Environment:"
     uv --version
     uv pip list
 
-[doc("Format code using ruff")]
-format:
-    uv run ruff format .
+[doc("build claims")]
+build-claims:
+    @echo "This is a temporary command for testing purposes."
+    uv run python -m src.cli.build_claims out/knowledge_graph.ttl \
+    --output-dir out \
+    --max-contexts 5 \
+    --n-claims 20 \
+    --verbose
 
-[doc("Lint code using ruff")]
-lint:
-    uv run ruff check .
-
-# Knowledge Graph Generation Commands
-
-[doc("Generate knowledge graph (optional: scene, config, output)")]
-kg-build generator="ai2thor" scene="" config="" output="output/knowledge_graph.ttl":
-    uv run python -m src.generators.cli {{generator}} --output {{output}} {{ if scene != "" { "--scenes " + scene } else { "" } }} {{ if config != "" { "--config " + config } else { "" } }}
-
-# Visualization Commands
-
-[doc("Visualize knowledge graph file")]
-kg-viz file="output/knowledge_graph.ttl" output="output/visualizer/knowledge_graph.html":
-    rm -rf output/visualizer
-    uv run python -m src.visualizer.cli --input {{file}} --output {{output}}
-
-[doc("Open the knowledge graph visualization in browser")]
-kg-open:
-    open output/visualizer/knowledge_graph.html
+[doc("validate claims")]
+validate-claims:
+    uv run python -m src.cli.validate_claims out/knowledge_graph.ttl \
+    --claims-file out/claims_all.jsonl \
+    --verbose

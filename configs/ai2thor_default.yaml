@@ -1,0 +1,33 @@
+# configs/ai2thor_default.yaml
+
+controller:
+  width: 600
+  height: 600
+  fieldOfView: 90
+  # you can add more ai2thor Controller kwargs here
+
+knowledge_graph_policy:
+  include_position: false
+  include_rotation: false
+
+  include_isOpen: true
+  include_isToggled: true
+  include_isMoving: false
+  include_isPickedUp: false
+  include_isFilledWithLiquid: false
+  include_isCooked: false
+  include_isSliced: false
+  include_isBroken: true
+  include_isDirty: true
+  include_isUsedUp: false
+
+  include_temperature: true
+  include_mass: true
+  include_material: true   # <-- fixed
+
+performance:
+  cleanup_between_scenes: true
+
+scenes:
+  - "FloorPlan3"
+  - "FloorPlan303"
