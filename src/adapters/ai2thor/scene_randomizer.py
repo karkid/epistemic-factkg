@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from src.adapters.ai2thor.semantic_rules import get_preferred_receptacles
+from src.adapters.ai2thor.semantics.semantic_rules import get_preferred_receptacles
 from src.adapters.ai2thor.result import SceneRandomizerResult, ObjectPlacement, ObjectStateChange
 from src.utils.logger import get_logger
 

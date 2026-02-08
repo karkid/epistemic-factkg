@@ -17,7 +17,6 @@ class EntityInfo:
     name: str
     type: str | None = None
     spatial_roles: Set[SpatialRole] | None = None
-    is_countable: bool = True
 
 class EntityRegistry:
 

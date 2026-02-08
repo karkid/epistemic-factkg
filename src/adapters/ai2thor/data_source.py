@@ -6,13 +6,16 @@ from ai2thor.controller import Controller
 from src.adapters.ai2thor.result import SceneRandomizerSummary
 from src.adapters.ai2thor.scene_randomizer import SceneRandomizer
 from src.core.graph.types import Graph as SceneGraph, Object, Relationship
-from src.ports.graph_data_source import GraphDataSource
+from src.core.ports.graph.graph_data_source import GraphDataSource
 from src.utils.exceptions import ConfigurationError, DataSourceError
 
 from src.adapters.ai2thor.config import AI2ThorDataSourceConfig
 from src.adapters.ai2thor.registry.entities import CONTAINER_ROLES, SURFACE_ROLES, HANGING_ROLES
-from src.adapters.ai2thor.semantic_rules import build_semantic_map
+from src.adapters.ai2thor.semantics.semantic_rules import build_semantic_map
 from src.utils.logger import get_logger
+
+from src.adapters.ai2thor.ids.predicates import ATTRIBUTE_STATE_MAP, PredicateId, STATE_RELATIONS, ATTRIBUTE_RELATIONS
+
 
 logger = get_logger(__name__)
 
@@ -142,12 +145,12 @@ class AI2THORDataSource(GraphDataSource):
             logger.info("-----"*20)
             logger.info(f"Scene {graph_id}")
             logger.info("Initial semantic map:")
-            logger.info(build_semantic_map(controller=self.controller))
+            #logger.info(build_semantic_map(controller=self.controller))
             logger.info("-----"*20)
             result = randomizer.randomize()
             logger.info("Final semantic map after randomization:")
             SceneRandomizerSummary(results=[result]).print_summary()
-            logger.info(build_semantic_map(controller=self.controller))
+            #logger.info(build_semantic_map(controller=self.controller))
             logger.info("-----"*20)
 
             return self.controller.last_event.metadata
@@ -187,9 +190,27 @@ class AI2THORDataSource(GraphDataSource):
 
     # ---------------- Property extraction ----------------
 
-    def _is_property_allowed(self, prop: str) -> bool:
+    def _is_property_allowed(self, prop: str, thor_obj: Dict[str, Any]) -> bool:
         if prop in NOT_CONSIDER_PROPERTY:
             return False
+        
+        # Convert string to PredicateId for proper comparison
+        try:
+            pred_id = PredicateId(prop)
+        except ValueError:
+            # If prop is not a valid PredicateId, use policy-based check
+            return bool(self.kg_policy.get(f"include_{prop}", False))
+        
+        if pred_id in STATE_RELATIONS:
+            return False
+        
+        if pred_id in ATTRIBUTE_RELATIONS:
+            # For attribute relations, only include if the object has the corresponding state
+            state_prop = ATTRIBUTE_STATE_MAP.get(pred_id)
+            if state_prop:
+                return bool(thor_obj.get(str(state_prop)))
+            return False
+        
         # policy keys like include_isOpen, include_mass, include_temperature...
         return bool(self.kg_policy.get(f"include_{prop}", False))
 
@@ -198,7 +219,7 @@ class AI2THORDataSource(GraphDataSource):
         props: Dict[str, Any] = {}
 
         for prop, value in thor_obj.items():
-            if not self._is_property_allowed(prop):
+            if not self._is_property_allowed(prop, thor_obj):
                 continue
             if value is None:
                 continue

@@ -5,7 +5,7 @@ import argparse
 import json
 
 from src.pipelines.build_rdf import build_ai2thor_rdf
-from src.pipelines.result import PipelineRunResult, PipelineSummary
+from src.pipelines.result import BuildRDFResult, BuildRDFResultSummary
 
 
 def main() -> None:
@@ -21,7 +21,7 @@ def main() -> None:
 
     args = ap.parse_args()
 
-    res:PipelineRunResult = build_ai2thor_rdf(
+    res:BuildRDFResult = build_ai2thor_rdf(
         config_path=args.config,
         out_path=args.out,
         base_iri=args.base_iri,
@@ -32,7 +32,7 @@ def main() -> None:
     if args.json:
         print(json.dumps(res, indent=2))
     else:
-        summary = PipelineSummary()
+        summary = BuildRDFResultSummary()
         summary.add_result(res)
         summary.print_summary(logger_func=print, show_lists=args.verbose)
 

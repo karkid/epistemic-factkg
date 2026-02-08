@@ -1,11 +1,18 @@
 # src/core/claims/types.py
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 
 from src.core.graph.types import Triple, TripleList
+from src.utils.io import write_jsonl
 
+def utc_now_iso() -> str:
+    """Return current UTC timestamp in ISO format."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 @dataclass(frozen=True, slots=True)
 class Evidence:
@@ -68,10 +75,10 @@ class ClaimInstance:
             "id": self.rec_id,
             "label": self.label,
             "claim": self.claim.text,
-            "claim_triples": self.claim.claim_triples,
+            "claim_triples": [(t.s, t.p, t.o) for t in self.claim.claim_triples],
             "reasoning": {"structural": self.reasoning.structural},
             "evidence": {
-                "evidence_triples": list(self.evidence.evidence_triples),
+                "evidence_triples": [(t.s, t.p, t.o) for t in self.evidence.evidence_triples],
                 "evidence_source": self.evidence.evidence_source,
                 "evidence_source_type": self.evidence.evidence_source_type,
                 "evidence_urls": list(self.evidence.evidence_urls),
@@ -84,6 +91,10 @@ class ClaimInstance:
             },
             "meta": {"created_utc": self.meta.created_utc, "notes": self.meta.notes},
         }
+    
+    def get_schema_layout_json(self) -> str:
+
+        return json.dumps(self.get_schema_layout(), indent=2)
 
     @staticmethod
     def make_instance(
@@ -109,8 +120,6 @@ class ClaimInstance:
             evidence_urls = []
 
         if created_utc is None:
-            # keep this dependency here so core types don't import schema at module import time
-            from schema.schema_defs import utc_now_iso
             created_utc = utc_now_iso()
 
         claim = Claim(text=claim_text, claim_triples=list(claim_triples))
@@ -196,10 +205,28 @@ class ClaimCorpus:
     def get_schema_layout(self) -> List[Dict[str, Any]]:
 
         return [ci.get_schema_layout() for ci in self.claims]
+    
+    def get_schema_layout_json(self) -> str:
+
+        return json.dumps(self.get_schema_layout(), indent=2)
 
     def clear(self) -> None:
 
         self.claims.clear()
+
+    def remove_duplicates(self) -> None:
+
+        seen = set()
+        unique_claims = []
+        for ci in self.claims:
+            layout_json = ci.get_schema_layout_json()
+            if layout_json not in seen:
+                seen.add(layout_json)
+                unique_claims.append(ci)
+        self.claims = unique_claims
+
+    def save_to_jsonl(self, file_path: str) -> None:
+        write_jsonl(file_path, [ci.get_schema_layout() for ci in self.claims])
 
     def __len__(self) -> int:
 

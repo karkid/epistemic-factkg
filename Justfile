@@ -50,3 +50,18 @@ info:
     @echo "📦 Environment:"
     uv --version
     uv pip list
+
+[doc("build claims")]
+build-claims:
+    @echo "This is a temporary command for testing purposes."
+    uv run python -m src.cli.build_claims out/knowledge_graph.ttl \
+    --output-dir out \
+    --max-contexts 5 \
+    --n-claims 20 \
+    --verbose
+
+[doc("validate claims")]
+validate-claims:
+    uv run python -m src.cli.validate_claims out/knowledge_graph.ttl \
+    --claims-file out/claims_all.jsonl \
+    --verbose
