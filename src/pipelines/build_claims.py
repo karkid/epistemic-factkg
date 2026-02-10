@@ -69,7 +69,7 @@ def build_claims(
         pred_lex = create_predicate_lexicon()
         ent_lex = create_ai2thor_object_type_lexicon()
         realizer = TripleRealizer(
-            template=Ai2ThorTemplate(), 
+            template=Ai2ThorTemplate(predicate_lexicon=pred_lex), 
             pred_lexicon=pred_lex, 
             ent_lexicon=ent_lex, 
             normallizer=ai2thor_object_type_from_entity_id

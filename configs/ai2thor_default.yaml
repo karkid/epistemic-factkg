@@ -29,5 +29,18 @@ performance:
   cleanup_between_scenes: true
 
 scenes:
+  # Kitchens
   - "FloorPlan3"
+  - "FloorPlan15"
+
+  # Living Rooms
+  - "FloorPlan203"
+  - "FloorPlan215"
+
+  # Bedrooms
   - "FloorPlan303"
+  - "FloorPlan320"
+
+  # Bathrooms
+  - "FloorPlan403"
+  - "FloorPlan420"

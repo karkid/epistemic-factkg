@@ -55,21 +55,24 @@ class ClaimGenerator:
         return bool(text and text.strip())
     
     def _is_boolean_object(self, o: Term) -> bool:
-        if isinstance(o, str):
-            ol = o.strip().lower()
+        object_type = self._object_type_from_entity_id(str(o))
+        if isinstance(object_type, str):
+            ol = object_type.strip().lower()
             return ol in {"true", "false", "yes", "no"}
         return False
     
     def _is_temperature_object(self, o: Term) -> bool:
         """Check if object is a temperature value that can be corrupted."""
-        if isinstance(o, str):
-            ol = o.strip()
+        object_type = self._object_type_from_entity_id(str(o))
+        if isinstance(object_type, str):
+            ol = object_type.strip()
             return ol in {"Cold", "Hot", "RoomTemp"}
         return False
     
     def _corrupt_temperature(self, o: Term) -> str:
         """Corrupt temperature value to a different temperature."""
-        ol = str(o).strip()
+        object_type = self._object_type_from_entity_id(str(o))
+        ol = object_type.strip()
         # Define temperature corruption mappings
         temperature_alternatives = {
             "Cold": ["Hot", "RoomTemp"],
@@ -83,7 +86,8 @@ class ClaimGenerator:
         return ol  # Return original if not a known temperature
     
     def _flip_bool(self, o: Term) -> str:
-        ol = str(o).strip().lower()
+        object_type = self._object_type_from_entity_id(str(o))
+        ol = object_type.strip().lower()
         if ol in {"true", "yes"}:
             return "False"
         if ol in {"false", "no"}:
@@ -218,6 +222,7 @@ class ClaimGenerator:
                         split: Optional[str] = None,
                         notes: Optional[str] = None,
                         created_utc: Optional[str] = None,
+                        source_type: Optional[SourceTypesLabels] = None
                        ):
         return ClaimInstance.make_instance(
             rec_id=rec_id,
@@ -227,7 +232,7 @@ class ClaimGenerator:
             structural_reasoning=structural_reasoning,
             evidence_triples=evidence_triples,
             evidence_source=self.source,
-            evidence_source_type=self.source_type,
+            evidence_source_type= source_type if source_type is not None else self.source_type,
             evidence_urls=evidence_urls,
             context_id=self.context_id,
             generator=self.generator,
@@ -294,7 +299,7 @@ class ClaimGenerator:
                 attempts += 1
                 continue
 
-            record_id = f"{self.seed_prefix}-{self.context_id}-onehop-sup-{supported_count:06d}"
+            record_id = f"{self.seed_prefix}-{self.context_id}-onehop-sup-{len(self.corpus.claims):06d}"
 
             instance = self._make_instance(
                         rec_id=record_id,
@@ -342,7 +347,7 @@ class ClaimGenerator:
                 attempts += 1
                 continue
             
-            record_id = f"{self.seed_prefix}-{self.context_id}-onehop-ref-{refuted_count:06d}"
+            record_id = f"{self.seed_prefix}-{self.context_id}-onehop-ref-{len(self.corpus.claims):06d}"
 
             instance = self._make_instance(
                         rec_id=record_id,
@@ -395,7 +400,7 @@ class ClaimGenerator:
                 attempts += 1
                 continue
 
-            record_id = f"{self.seed_prefix}-{self.context_id}-conjunction-sup-{supported_count:06d}"
+            record_id = f"{self.seed_prefix}-{self.context_id}-conjunction-sup-{len(self.corpus.claims):06d}"
 
             instance = self._make_instance(
                         rec_id=record_id,
@@ -407,6 +412,7 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "recorded",
+                        source_type=SourceTypesLabels.INFERENCE
             )
 
             if not self._is_new_claim(instance):
@@ -465,7 +471,7 @@ class ClaimGenerator:
                 attempts += 1
                 continue
 
-            record_id = f"{self.seed_prefix}-{self.context_id}-conjunction-ref-{refuted_count:06d}"
+            record_id = f"{self.seed_prefix}-{self.context_id}-conjunction-ref-{len(self.corpus.claims):06d}"
 
             instance = self._make_instance(
                         rec_id=record_id,
@@ -477,6 +483,7 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "corrupted",
+                        source_type=SourceTypesLabels.INFERENCE
             )
 
             if not self._is_new_claim(instance):
@@ -500,7 +507,7 @@ class ClaimGenerator:
         if not self._start_time:
             self.start_timing()
         
-        boolean_triples = [t for t in self.triples if self._is_boolean_object(t.o)]
+        boolean_triples = [t for t in self.triples if self._is_boolean_object(t.o) ]
 
         # ---------------- SUPPORTED ----------------
         supported_target = int(n_supported * n_claims) if add_corruption else n_claims
@@ -519,7 +526,7 @@ class ClaimGenerator:
                 attempts += 1
                 continue
 
-            record_id = f"{self.seed_prefix}-{self.context_id}-negation-sup-{supported_count:06d}"
+            record_id = f"{self.seed_prefix}-{self.context_id}-negation-sup-{len(self.corpus.claims):06d}"
 
             instance = self._make_instance(
                         rec_id=record_id,
@@ -563,7 +570,7 @@ class ClaimGenerator:
                 attempts += 1
                 continue
 
-            record_id = f"{self.seed_prefix}-{self.context_id}-negation-ref-{refuted_count:06d}"
+            record_id = f"{self.seed_prefix}-{self.context_id}-negation-ref-{len(self.corpus.claims):06d}"
 
             instance = self._make_instance(
                         rec_id=record_id,

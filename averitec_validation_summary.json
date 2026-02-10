@@ -1,0 +1,99 @@
+{
+  "generated_utc": "2026-02-09T18:01:44.834925Z",
+  "summaries": [
+    {
+      "file": "unified/averitec_train_unified.jsonl",
+      "generated_utc": "2026-02-09T18:01:44.591794Z",
+      "counts": {
+        "total_records": 3068,
+        "schema_valid": 3068,
+        "schema_invalid": 0,
+        "warnings_records": 0
+      },
+      "distributions": {
+        "verdict_label": {
+          "supported": 849,
+          "refuted": 1742,
+          "conflicting_evidence": 195,
+          "not_enough_evidence": 282
+        },
+        "epistemic_proof_type": {
+          "testimony": 1649,
+          "comparison_analogy": 982,
+          "inference": 155,
+          "non_apprehension": 282
+        },
+        "context_type": {
+          "averitec": 3068
+        },
+        "source_type": {
+          "web_text": 5788,
+          "web_table": 383,
+          "video": 105,
+          "pdf": 1004,
+          "other": 1018,
+          "image": 181
+        },
+        "answer_type": {
+          "boolean": 1297,
+          "abstractive": 2225,
+          "extractive": 4571,
+          "unanswerable": 386
+        }
+      },
+      "schema_errors_top": {},
+      "logic_warnings_top": {},
+      "examples": {
+        "schema_invalid": [],
+        "warnings": []
+      }
+    },
+    {
+      "file": "unified/averitec_dev_unified.jsonl",
+      "generated_utc": "2026-02-09T18:01:44.799668Z",
+      "counts": {
+        "total_records": 500,
+        "schema_valid": 500,
+        "schema_invalid": 0,
+        "warnings_records": 0
+      },
+      "distributions": {
+        "verdict_label": {
+          "refuted": 305,
+          "supported": 122,
+          "not_enough_evidence": 35,
+          "conflicting_evidence": 38
+        },
+        "epistemic_proof_type": {
+          "testimony": 326,
+          "comparison_analogy": 109,
+          "non_apprehension": 35,
+          "inference": 30
+        },
+        "context_type": {
+          "averitec": 500
+        },
+        "source_type": {
+          "web_text": 1054,
+          "other": 142,
+          "image": 38,
+          "web_table": 40,
+          "pdf": 108,
+          "video": 17
+        },
+        "answer_type": {
+          "abstractive": 361,
+          "extractive": 707,
+          "unanswerable": 39,
+          "boolean": 292
+        }
+      },
+      "schema_errors_top": {},
+      "logic_warnings_top": {},
+      "examples": {
+        "schema_invalid": [],
+        "warnings": []
+      }
+    }
+  ]
+}

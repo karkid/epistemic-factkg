@@ -35,9 +35,9 @@ def create_predicate_lexicon() -> PredicateLexicon:
     lex.register(PredicateId.isUsedUp.value, PredicateLexeme(kind=PredicateForm.ADJ, label="used up"))
 
     # ---------- value/data labels (ATTR) ----------
-    lex.register(PredicateId.temperature.value, PredicateLexeme(kind=PredicateForm.PROP, label="temperature"))
+    lex.register(PredicateId.temperature.value, PredicateLexeme(kind=PredicateForm.PROP, label="temperature", template_mode="value"))
     #lex.register(PredicateId.mass.value, PredicateLexeme(kind=PredicateForm.PROP, label="mass"))
-    lex.register(PredicateId.material.value, PredicateLexeme(kind=PredicateForm.PROP, label="material"))
+    lex.register(PredicateId.material.value, PredicateLexeme(kind=PredicateForm.PROP, label="material", template_mode="value"))
 
     # Optional (only if we verbalize them)
     #if hasattr(PredicateId, "position"):
@@ -48,17 +48,17 @@ def create_predicate_lexicon() -> PredicateLexicon:
     # ---------- capabilities / attributes (ATTR) ----------
     # these are nicer as adjective-ish labels; your realizer decides phrasing (“is openable”, “is pickable”)
     for pid, text in [
-        # (PredicateId.openable, "openable"),
-        # (PredicateId.toggleable, "toggleable"),
-        # (PredicateId.pickable, "pickable"),
-        # (PredicateId.movable, "movable"),
-        # (PredicateId.receptacle, "a receptacle"),
-        # (PredicateId.cookable, "cookable"),
-        # (PredicateId.sliceable, "sliceable"),
-        # (PredicateId.breakable, "breakable"),
-        # (PredicateId.dirtyable, "dirtyable"),
-        # (PredicateId.canFillWithLiquid, "fillable with liquid"),
-        # (PredicateId.canBeUsedUp, "usable up"),
+        (PredicateId.openable, "openable"),
+        (PredicateId.toggleable, "toggleable"),
+        (PredicateId.pickable, "pickable"),
+        (PredicateId.movable, "movable"),
+        (PredicateId.receptacle, "a receptacle"),
+        (PredicateId.cookable, "cookable"),
+        (PredicateId.sliceable, "sliceable"),
+        (PredicateId.breakable, "breakable"),
+        (PredicateId.dirtyable, "dirtyable"),
+        (PredicateId.canFillWithLiquid, "fillable with liquid"),
+        (PredicateId.canBeUsedUp, "usable up"),
     ]:
         lex.register(pid.value, PredicateLexeme(kind=PredicateForm.PROP, label=text))
 

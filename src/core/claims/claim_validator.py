@@ -455,10 +455,64 @@ class AdvancedClaimValidator:
                 if words[i] == words[i + 1] and len(words[i]) > 2:  # Skip short words like "a a"
                     result.add_issue("quality", "warning", f"Claim contains duplicated word: '{words[i]} {words[i+1]}'", "claim", suggestion="Remove duplicate word")
                     break  # Only report first occurrence
+
+            # Advanced NLG quality checks
+            self._validate_nlg_quality(claim_json, result, claim_text, words)
             
         except Exception as e:
             result.add_issue("quality", "error", f"Quality validation error: {str(e)}")
     
+    def _validate_nlg_quality(self, claim_json: dict, result: ClaimValidationResult, claim_text: str, words: List[str]):
+        """Validate Natural Language Generation quality."""
+        try:
+            claim_triples = claim_json.get("claim_triples", [])
+            
+            # Check for temperature-related NLG issues
+            if any("temperature" in str(triple).lower() for triple in claim_triples):
+                # Temperature claims should have proper formatting
+                if " is temperature" in claim_text.lower():
+                    result.add_issue("quality", "error", "Temperature claim has malformed NLG: should be 'is hot/cold/at room temperature' not 'is temperature'", "claim", 
+                                   suggestion="Use proper temperature values like 'is hot', 'is cold', or 'is at room temperature'")
+                elif not any(temp_phrase in claim_text.lower() for temp_phrase in ["at room temperature", "hot", "cold"]):
+                    result.add_issue("quality", "warning", "Temperature claim should specify actual temperature value", "claim")
+                    
+            # Check for boolean property NLG issues  
+            boolean_props = ["openable", "toggleable", "pickable", "movable", "cookable", "sliceable", "breakable", "dirtyable"]
+            for prop in boolean_props:
+                if any(prop in str(triple).lower() for triple in claim_triples):
+                    # Boolean properties should not show "true" or "false" in text
+                    if " is true" in claim_text.lower() or " is false" in claim_text.lower():
+                        result.add_issue("quality", "error", f"Boolean property claim shows raw boolean value instead of proper NLG", "claim",
+                                       suggestion=f"Use '{prop}' or 'not {prop}' instead of 'true' or 'false'")
+                    elif " true" in claim_text.lower() or " false" in claim_text.lower():
+                        result.add_issue("quality", "warning", f"Boolean claim may contain raw boolean values", "claim")
+                        
+            # Check for URI fragments in claim text (should be human-readable)
+            if "http://" in claim_text or "https://" in claim_text:
+                result.add_issue("quality", "error", "Claim text contains raw URIs instead of human-readable names", "claim",
+                               suggestion="Convert URIs to human-readable entity names")
+                               
+            # Check for entity ID patterns that weren't converted properly
+            if "|" in claim_text and "%" in claim_text:
+                result.add_issue("quality", "warning", "Claim may contain unconverted entity IDs", "claim")
+                
+            # Check for awkward phrasing patterns
+            awkward_patterns = [
+                ("is temperature", "should specify temperature value (hot/cold/room temperature)"),
+                ("temperature.", "should be more specific about temperature"),
+                ("is true.", "boolean properties should not show 'true'"),
+                ("is false.", "boolean properties should not show 'false'"),
+                ("the the ", "duplicate articles"),
+                ("a a ", "duplicate articles"),
+            ]
+            
+            for pattern, suggestion in awkward_patterns:
+                if pattern in claim_text.lower():
+                    result.add_issue("quality", "warning", f"Awkward phrasing detected: '{pattern}'", "claim", suggestion=suggestion)
+                    
+        except Exception as e:
+            result.add_issue("quality", "error", f"NLG quality validation error: {str(e)}")
+
     def _validate_consistency(self, claim_json: dict, result: ClaimValidationResult):
         """Validate internal consistency."""
         try:

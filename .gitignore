@@ -224,3 +224,6 @@ config.ini
 secrets.yaml
 .env.local
 .env.production
+
+# my ignore
+runs/

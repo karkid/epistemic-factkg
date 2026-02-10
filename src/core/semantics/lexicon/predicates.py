@@ -23,10 +23,15 @@ class PredicateLexeme:
       - "attr": data predicate realized as attribute label ("temperature")
       - "verb": object predicate realized as verb ("contains")
       - "prop": unary predicate realized as property phrase ("is a receptacle")
+    
+    template_mode:
+      - "predicate": Use predicate label in template (e.g., "The fridge is openable")
+      - "value": Use object value in template (e.g., "The cabinet is hot")
     """
 
     kind: PredicateForm
     label: str
+    template_mode: str = "predicate"  # "predicate" or "value"
 
 
 class PredicateLexicon:

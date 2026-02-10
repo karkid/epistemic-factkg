@@ -2,16 +2,18 @@ import inflect
 
 from src.core.graph.types import Triple
 from src.core.ports.nlg.template import BaseTemplate
-from src.core.semantics.lexicon.predicates import PredicateForm
+from src.core.semantics.lexicon.predicates import PredicateForm, PredicateLexicon
 from src.core.nlg.sentence_template import SentenceTemplate
+from typing import Optional
 
 
 class Ai2ThorTemplate(BaseTemplate):
 
-    def __init__(self):
+    def __init__(self, predicate_lexicon: Optional[PredicateLexicon] = None):
         super().__init__()
 
         self._inflect = inflect.engine()
+        self._predicate_lexicon = predicate_lexicon
 
         self._templates = {}
 
@@ -50,12 +52,20 @@ class Ai2ThorTemplate(BaseTemplate):
             normalize=True,
         )
 
-        # Property: The apple is a receptacle.
+        # Property: The apple is openable. The cabinet is hot.
         self._templates[PredicateForm.PROP] = SentenceTemplate(
-            template="The {s} is {o}.",
-            fields={"s", "o"},
+            template="The {s} is {p}.",
+            fields={"s", "p"},
             normalize=True,
         )
+
+        # Negated property: The apple is not openable. The fridge is not hot.
+        self._templates[PredicateForm.PROP + "_False"] = SentenceTemplate(
+            template="The {s} is not {p}.",
+            fields={"s", "p"},
+            normalize=True,
+        )
+
 
     # ------------------------
     # Grammar Helpers
@@ -80,6 +90,14 @@ class Ai2ThorTemplate(BaseTemplate):
 
         # Attribute / adjective values → no article
         if kind in {PredicateForm.ATTR, PredicateForm.ADJ, PredicateForm.PROP}:
+            # Special handling for temperature values
+            if obj in {"RoomTemp", "Hot", "Cold"}:
+                temperature_map = {
+                    "RoomTemp": "at room temperature",
+                    "Hot": "hot",
+                    "Cold": "cold"
+                }
+                return temperature_map.get(obj, obj.lower())
             return obj.lower()
 
         # Proper noun
@@ -151,12 +169,34 @@ class Ai2ThorTemplate(BaseTemplate):
         # ------------------------
         # Render Sentence
         # ------------------------
+        
+        # Check if predicate has special rendering requirements
+        lexicon = getattr(self, '_predicate_lexicon', None)
+        template_mode = "predicate"  # default
+        
+        if lexicon:
+            # Extract predicate name from URI
+            predicate_name = p.split("/")[-1] if "/" in p else p
+            lexeme = lexicon.get(predicate_name)
+            if lexeme and hasattr(lexeme, 'template_mode'):
+                template_mode = lexeme.template_mode
+        
+        if kind == PredicateForm.PROP and template_mode == "value":
+            # For value-based properties (like temperature), use object value instead of predicate
+            template_params = {
+                "s": s_norm,
+                "p": o_norm,  # Use the object value (hot/cold/room temp) instead of "temperature"
+                "o": o_norm,
+            }
+        else:
+            # Normal handling for predicate-based properties (like openable)
+            template_params = {
+                "s": s_norm,
+                "p": p,
+                "o": o_norm,
+            }
 
-        return self._normalize_sentence(template.verbalize(
-            s=s_norm,
-            p=p,
-            o=o_norm,
-        ))
+        return self._normalize_sentence(template.verbalize(**template_params))
     # ------------------------
     # Conjunction Render
     # ------------------------
@@ -197,7 +237,7 @@ class Ai2ThorTemplate(BaseTemplate):
     
     def render_negation(self, triple: Triple, kind: PredicateForm) -> str:
         
-        if kind in PredicateForm.ADJ:
+        if kind == PredicateForm.ADJ or kind == PredicateForm.PROP:
             neg_kind = kind + "_False"
             return self.render(triple, neg_kind)
         return ""
