@@ -11,7 +11,8 @@ class PredicateForm(StrEnum):
     ADJ = "adj"     # open, dirty, broken
     ATTR = "attr"   # temperature, mass
     VERB = "verb"   # contains, includes
-    PROP = "prop"   # for unary predicates (e.g. isReceptacle) that we want to verbalize as "is a receptacle"
+    PROP_STATE = "prop_state"   # for state predicates that we want to verbalize as "is a receptacle" instead of "is receptacle"
+    PROP_VALUE = "prop_value"   # for value predicates (e.g. temperature) that we want to verbalize as "is hot" instead of "has temperature hot"
 
 @dataclass(frozen=True)
 class PredicateLexeme:
@@ -22,7 +23,8 @@ class PredicateLexeme:
       - "adj":  state predicate realized as adjective phrase ("open", "switched on")
       - "attr": data predicate realized as attribute label ("temperature")
       - "verb": object predicate realized as verb ("contains")
-      - "prop": unary predicate realized as property phrase ("is a receptacle")
+      - "prop_state": unary predicate realized as property phrase ("is a receptacle")
+      - "prop_value": unary predicate realized as property phrase with value ("is hot")
     
     template_mode:
       - "predicate": Use predicate label in template (e.g., "The fridge is openable")

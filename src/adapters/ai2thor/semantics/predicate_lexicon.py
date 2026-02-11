@@ -35,9 +35,9 @@ def create_predicate_lexicon() -> PredicateLexicon:
     lex.register(PredicateId.isUsedUp.value, PredicateLexeme(kind=PredicateForm.ADJ, label="used up"))
 
     # ---------- value/data labels (ATTR) ----------
-    lex.register(PredicateId.temperature.value, PredicateLexeme(kind=PredicateForm.PROP, label="temperature", template_mode="value"))
-    #lex.register(PredicateId.mass.value, PredicateLexeme(kind=PredicateForm.PROP, label="mass"))
-    lex.register(PredicateId.material.value, PredicateLexeme(kind=PredicateForm.PROP, label="material", template_mode="value"))
+    lex.register(PredicateId.temperature.value, PredicateLexeme(kind=PredicateForm.PROP_VALUE, label="temperature", template_mode="value"))
+    lex.register(PredicateId.mass.value, PredicateLexeme(kind=PredicateForm.PROP_VALUE, label="mass", template_mode="value"))
+    lex.register(PredicateId.salientMaterials.value, PredicateLexeme(kind=PredicateForm.PROP_VALUE, label="material", template_mode="value"))
 
     # Optional (only if we verbalize them)
     #if hasattr(PredicateId, "position"):
@@ -60,7 +60,7 @@ def create_predicate_lexicon() -> PredicateLexicon:
         (PredicateId.canFillWithLiquid, "fillable with liquid"),
         (PredicateId.canBeUsedUp, "usable up"),
     ]:
-        lex.register(pid.value, PredicateLexeme(kind=PredicateForm.PROP, label=text))
+        lex.register(pid.value, PredicateLexeme(kind=PredicateForm.PROP_STATE, label=text))
 
     # attribute relations (VERB)
 

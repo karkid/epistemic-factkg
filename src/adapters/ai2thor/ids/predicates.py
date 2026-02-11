@@ -30,7 +30,7 @@ class PredicateId(StrEnum):
     # values
     temperature = "temperature"
     mass = "mass"
-    material = "material"
+    salientMaterials = "salientMaterials"
 
     # spatial
     inside = "inside"
@@ -53,7 +53,7 @@ DATA_RELATIONS: FrozenSet[PredicateId] = frozenset(
     [
         PredicateId.temperature,
         PredicateId.mass,
-        PredicateId.material,
+        PredicateId.salientMaterials,
         PredicateId.type,
         PredicateId.hasID,
     ]

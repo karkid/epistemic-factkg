@@ -64,7 +64,8 @@ CLAIM_SCHEMA = {
                 "evidence_triples",
                 "evidence_source",
                 "evidence_source_type",
-                "evidence_urls"
+                "evidence_urls",
+                "extract",
             ],
 
             "properties": {
@@ -95,7 +96,10 @@ CLAIM_SCHEMA = {
                         "type": "string",
                         "format": "uri"
                     }
-                }
+                },
+                "extract": {
+                    "type": ["string", "null"]
+                },
             }
         },
 

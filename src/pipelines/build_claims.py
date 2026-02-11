@@ -89,8 +89,8 @@ def build_claims(
                 context_id=context, 
                 triples=context_triples, 
                 context_type="floorplan", 
-                generator="ai2thor-claim-generator",
-                source="simulation",
+                generator="ai2thor-scene-simulator",
+                source="sensor",
                 source_type=SourceTypesLabels.PERCEPTION,
                 receptacle_mapper=get_preferred_receptacles
             )

@@ -143,33 +143,33 @@ def make_justification(label: str, predicate: str, claim_triples: List[List[str]
         observed = evidence_triples[0][2] if evidence_triples and len(evidence_triples[0]) == 3 else "unknown"
         claimed = claim_triples[0][2] if claim_triples and len(claim_triples[0]) == 3 else "unknown"
         if label == "supported":
-            return f"The simulator observation shows temperature = {observed}, matching the claim."
+            return f"The sensor observation shows temperature = {observed}, matching the claim."
         else:
-            return f"The simulator observation shows temperature = {observed}, which contradicts the claimed value ({claimed})."
+            return f"The sensor observation shows temperature = {observed}, which contradicts the claimed value ({claimed})."
 
     if pred in {"ontopof", "inside", "near"}:
         # spatial relation
         if label == "supported":
-            return f"The simulator observation confirms the stated spatial relation ({predicate})."
+            return f"The sensor observation confirms the stated spatial relation ({predicate})."
         else:
-            return f"The simulator observation contradicts the stated spatial relation ({predicate})."
+            return f"The sensor observation contradicts the stated spatial relation ({predicate})."
 
     # generic fallback
     if label == "supported":
-        return "The simulator observation matches the claim's stated relation/value."
-    return "The simulator observation contradicts the claim's stated relation/value."
+        return "The sensor observation matches the claim's stated relation/value."
+    return "The sensor observation contradicts the claim's stated relation/value."
 
 def make_proof_rationale(evidence_source: str, evidence_source_type: str, predicate: str) -> str:
     pred = predicate.lower()
-    if evidence_source == "simulation" and evidence_source_type == "perception":
+    if evidence_source == "sensor" and evidence_source_type == "perception":
         if pred in {"ontopof", "inside", "near"}:
-            return "Evidence comes from simulator perception and is checked via spatial state relations."
-        return "Evidence comes from simulator perception with direct state verification."
-    return "Evidence derived from simulator metadata."
+            return "Evidence comes from sensor perception and is checked via spatial state relations."
+        return "Evidence comes from sensor perception with direct state verification."
+    return "Evidence derived from sensor metadata."
 
 def make_proof_confidence(evidence_source: str, evidence_source_type: str, predicate: str) -> float:
     pred = predicate.lower()
-    if evidence_source == "simulation" and evidence_source_type == "perception":
+    if evidence_source == "sensor" and evidence_source_type == "perception":
         # You can tune this; simple heuristic:
         if pred in {"ontopof", "inside", "near"}:
             return 0.95
@@ -194,6 +194,7 @@ def convert_one(ai2: Dict[str, Any], split: Optional[str] = None) -> Dict[str, A
     evidence_source = (evidence.get("evidence_source") or "simulation").lower()
     evidence_source_type = (evidence.get("evidence_source_type") or "perception").lower()
     evidence_urls = evidence.get("evidence_urls") or []
+    evidence_extract = evidence.get("extract") or ""
 
     # derive predicate and object value from first claim triple (works for one-hop/conjunction too)
     first_triple = claim_triples[0] if claim_triples else ["", "", ""]
@@ -221,8 +222,8 @@ def convert_one(ai2: Dict[str, Any], split: Optional[str] = None) -> Dict[str, A
             "annotator_confidence": None
         },
         "epistemic": {
-            "proof_types": ["perception"],          # multi-label (list)
-            "primary_proof_type": "perception",     # single label for training/plots
+            "proof_types": [evidence_source_type],          # multi-label (list)
+            "primary_proof_type": evidence_source_type,     # single label for training/plots
             "proof_type_rationale": proof_rationale,
             "proof_confidence": proof_conf
         },
@@ -248,12 +249,12 @@ def convert_one(ai2: Dict[str, Any], split: Optional[str] = None) -> Dict[str, A
         "evidence_items": [
             {
                 "evidence_id": f"{oid}-e0",
-                "source_type": "simulation",
+                "source_type": evidence_source,
                 "source_url": source_url,
                 "cached_source_url": None,
                 "source_medium": "simulation_state",
                 "stance": stance_from_label(label),
-                "extract": None,
+                "extract": evidence_extract,
                 "evidence_triples": evidence_triples if evidence_triples else None
             }
         ],

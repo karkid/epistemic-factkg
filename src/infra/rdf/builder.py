@@ -214,7 +214,6 @@ class RDFGraphBuilder:
         mapping = self.ontology.by_source(predicate_key)
         if mapping is None:
             return
-
         try:
             v = value
             if getattr(mapping, "transform", None):

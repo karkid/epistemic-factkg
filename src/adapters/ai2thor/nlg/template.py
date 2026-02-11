@@ -1,4 +1,5 @@
 import inflect
+import re
 
 from src.core.graph.types import Triple
 from src.core.ports.nlg.template import BaseTemplate
@@ -25,7 +26,7 @@ class Ai2ThorTemplate(BaseTemplate):
         )
 
         # Negated adjective: The apple is not dirty.
-        self._templates[PredicateForm.ADJ + "_False"] = SentenceTemplate(
+        self._templates[PredicateForm.ADJ + "_Negation"] = SentenceTemplate(
             template="The {s} is not {p}.",
             fields={"s", "p"},
             normalize=True,
@@ -38,9 +39,23 @@ class Ai2ThorTemplate(BaseTemplate):
             normalize=True,
         )
 
+        # Negated verb: The apple does not touch the table.
+        self._templates[PredicateForm.VERB + "_Negation"] = SentenceTemplate(
+            template="The {s} does not {p} the {o}.",
+            fields={"s", "p", "o"},
+            normalize=True,
+        )
+
         # Preposition: An apple is on the table.
         self._templates[PredicateForm.PREP] = SentenceTemplate(
             template="{s} is {p} {o}.",
+            fields={"s", "p", "o"},
+            normalize=True,
+        )
+
+        # Negated preposition: An apple is not on the table.
+        self._templates[PredicateForm.PREP + "_Negation"] = SentenceTemplate(
+            template="{s} is not {p} {o}.",
             fields={"s", "p", "o"},
             normalize=True,
         )
@@ -52,17 +67,38 @@ class Ai2ThorTemplate(BaseTemplate):
             normalize=True,
         )
 
-        # Property: The apple is openable. The cabinet is hot.
-        self._templates[PredicateForm.PROP] = SentenceTemplate(
+        # Negated attribute: The apple's color is not red.
+        self._templates[PredicateForm.ATTR + "_Negation"] = SentenceTemplate(
+            template="The {s}'s {p} is not {o}.",
+            fields={"s", "p", "o"},
+            normalize=True,
+        )
+
+        # State Property: The apple is openable. The cabinet is hot.
+        self._templates[PredicateForm.PROP_STATE] = SentenceTemplate(
             template="The {s} is {p}.",
             fields={"s", "p"},
             normalize=True,
         )
 
-        # Negated property: The apple is not openable. The fridge is not hot.
-        self._templates[PredicateForm.PROP + "_False"] = SentenceTemplate(
+        # Negated state property: The apple is not openable. The fridge is not hot.
+        self._templates[PredicateForm.PROP_STATE + "_Negation"] = SentenceTemplate(
             template="The {s} is not {p}.",
             fields={"s", "p"},
+            normalize=True,
+        )
+
+        # Value Property: The apple is hot.
+        self._templates[PredicateForm.PROP_VALUE] = SentenceTemplate(
+            template="The {s} is {o}.",
+            fields={"s", "o"},
+            normalize=True,
+        )
+
+        # Negated value property: The apple is not hot.
+        self._templates[PredicateForm.PROP_VALUE + "_Negation"] = SentenceTemplate(
+            template="The {s} is not {o}.",
+            fields={"s", "o"},
             normalize=True,
         )
 
@@ -77,8 +113,24 @@ class Ai2ThorTemplate(BaseTemplate):
         Example: apple -> an apple
         """
         return self._inflect.a(noun)
+    
+    def format_with_and(self, text: str) -> str:
+        parts = [p.strip() for p in text.split(",") if p.strip()]
 
-    def _normalize_object(self, obj: str, kind: PredicateForm) -> str:
+        if len(parts) == 0:
+            return ""
+
+        if len(parts) == 1:
+            return parts[0]
+
+        if len(parts) == 2:
+            return f"{parts[0]} and {parts[1]}"
+
+        # More than 2
+        return ", ".join(parts[:-1]) + f" and {parts[-1]}"
+
+    
+    def _normalize_object(self, predicate: str, obj: str) -> str:
 
         if not isinstance(obj, str):
             return str(obj)
@@ -87,18 +139,21 @@ class Ai2ThorTemplate(BaseTemplate):
 
         if not obj:
             return obj
-
-        # Attribute / adjective values → no article
-        if kind in {PredicateForm.ATTR, PredicateForm.ADJ, PredicateForm.PROP}:
-            # Special handling for temperature values
-            if obj in {"RoomTemp", "Hot", "Cold"}:
-                temperature_map = {
-                    "RoomTemp": "at room temperature",
-                    "Hot": "hot",
-                    "Cold": "cold"
-                }
-                return temperature_map.get(obj, obj.lower())
-            return obj.lower()
+        
+        if predicate == "material":
+            obj_norm = self.format_with_and(obj)
+            return f"made up of {obj_norm}".lower()
+        
+        if predicate == "temperature":
+            temperature_map = {
+                "RoomTemp": "at room temperature",
+                "Hot": "hot",
+                "Cold": "cold"
+            }
+            return temperature_map.get(obj, obj.lower())
+        
+        if predicate == "mass":
+            return f"weighs {obj} kg".lower()
 
         # Proper noun
         if obj[0].isupper():
@@ -125,19 +180,59 @@ class Ai2ThorTemplate(BaseTemplate):
 
         # Sentenc case 
         return sentence
+    
+    def strip_repeated_subject(self, sent1, sent2, subject):
+        """
+        Removes 'The <subject> is/are/was' from sent2 if present.
+        """
+
+        patterns = [
+            rf"^the {re.escape(subject.lower())} is\s+",
+            rf"^the {re.escape(subject.lower())} are\s+",
+            rf"^the {re.escape(subject.lower())} was\s+",
+        ]
+
+        s2 = sent2.lower()
+
+        for p in patterns:
+            s2 = re.sub(p, "", s2)
+
+        return s2
+    
+    def smart_and_join(self, sent1: str, sent2: str, conj="and") -> str:
+        sent1 = sent1.rstrip(".")
+        sent2 = sent2.rstrip(".")
+
+        # Check if first sentence already has "and"
+        has_and = " and " in sent1.lower()
+
+        if conj == "and" and has_and:
+            connector = ", and"
+        else:
+            connector = f" {conj}"
+
+        return f"{sent1}{connector} {sent2.lower()}."
+
 
     # ------------------------
     # Main Render
     # ------------------------
 
-    def render(self, triple: Triple, kind: PredicateForm) -> str:
+    def render(self, triple: Triple, kind: PredicateForm, negation: bool = False) -> str:
 
         # Unpack triple
+        # An apple is inside the box.
+        # An apple is dirty.
+        # An apple is hot.
+        # An apple is made up of food and glass.
+        # A door is openable.
         s, p, o = triple
 
         # ------------------------
         # Subject Handling
         # ------------------------
+        if o == "false" or o == "False" or negation:
+            kind = kind + "_Negation"
 
         # Only PREP needs a/an (An apple is on the table)
         if kind == PredicateForm.PREP:
@@ -149,54 +244,20 @@ class Ai2ThorTemplate(BaseTemplate):
         # Object Handling
         # ------------------------
 
-        o_norm = self._normalize_object(o, kind)
+        o_norm = self._normalize_object(p, o)
 
         # ------------------------
         # Template Selection
         # ------------------------
 
-        if kind not in self._templates:
-
-            # Handle negation fallback
-            if kind.endswith("_False") and kind[:-6] in self._templates:
-                template = self._templates[kind + "_False"]
-            else:
-                return ""
-
-        else:
-            template = self._templates[kind]
+        template = self._templates[kind]
 
         # ------------------------
         # Render Sentence
         # ------------------------
         
-        # Check if predicate has special rendering requirements
-        lexicon = getattr(self, '_predicate_lexicon', None)
-        template_mode = "predicate"  # default
-        
-        if lexicon:
-            # Extract predicate name from URI
-            predicate_name = p.split("/")[-1] if "/" in p else p
-            lexeme = lexicon.get(predicate_name)
-            if lexeme and hasattr(lexeme, 'template_mode'):
-                template_mode = lexeme.template_mode
-        
-        if kind == PredicateForm.PROP and template_mode == "value":
-            # For value-based properties (like temperature), use object value instead of predicate
-            template_params = {
-                "s": s_norm,
-                "p": o_norm,  # Use the object value (hot/cold/room temp) instead of "temperature"
-                "o": o_norm,
-            }
-        else:
-            # Normal handling for predicate-based properties (like openable)
-            template_params = {
-                "s": s_norm,
-                "p": p,
-                "o": o_norm,
-            }
 
-        return self._normalize_sentence(template.verbalize(**template_params))
+        return self._normalize_sentence(template.verbalize(s=s_norm, p=p, o=o_norm))
     # ------------------------
     # Conjunction Render
     # ------------------------
@@ -220,24 +281,23 @@ class Ai2ThorTemplate(BaseTemplate):
 
         sent1 = sent1.rstrip(".")
         sent2 = sent2.rstrip(".").lower()
+        # handel this type of sentence:
+        # s1 : The apple is made up of food and glass.
+        # s2 : The apple is dirty.
+        # conj: and
+
 
         # Same subject → remove repetition
         if s1 == s2:
 
             # Remove "The apple " from second sentence
-            prefix = f"The {s2} "
+            reduced = self.strip_repeated_subject(sent1, sent2, s1)
 
-            if sent2.startswith(prefix):
-                sent2 = sent2[len(prefix):]
+            return self._normalize_sentence(self.smart_and_join(sent1=sent1, sent2=reduced, conj=conj))
 
-            return f"{sent1} {conj} {sent2}."
 
         # Different subjects
-        return self._normalize_sentence(f"{sent1} {conj} {sent2}.")
+        return self._normalize_sentence(self.smart_and_join(sent1=sent1, sent2=sent2, conj=conj))
     
     def render_negation(self, triple: Triple, kind: PredicateForm) -> str:
-        
-        if kind == PredicateForm.ADJ or kind == PredicateForm.PROP:
-            neg_kind = kind + "_False"
-            return self.render(triple, neg_kind)
-        return ""
+        return self.render(triple, kind, negation=True)

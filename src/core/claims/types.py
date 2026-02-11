@@ -21,6 +21,7 @@ class Evidence:
     evidence_source: str
     evidence_source_type: str
     evidence_urls: List[str]  # default to empty list at construction
+    evidence_extract: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +83,7 @@ class ClaimInstance:
                 "evidence_source": self.evidence.evidence_source,
                 "evidence_source_type": self.evidence.evidence_source_type,
                 "evidence_urls": list(self.evidence.evidence_urls),
+                "extract": self.evidence.evidence_extract,
             },
             "context": {
                 "context_id": self.context.context_id,
@@ -114,6 +116,7 @@ class ClaimInstance:
         split: Optional[str] = None,
         notes: Optional[str] = None,
         created_utc: Optional[str] = None,
+        evidence_extract: Optional[str] = None,
     ) -> "ClaimInstance":
         # defaults
         if evidence_urls is None:
@@ -129,6 +132,7 @@ class ClaimInstance:
             evidence_source=evidence_source,
             evidence_source_type=evidence_source_type,
             evidence_urls=evidence_urls,
+            evidence_extract=evidence_extract,
         )
         context = Context(context_id=context_id, context_type=context_type, generator=generator, split=split)
         meta = Meta(created_utc=created_utc, notes=notes)

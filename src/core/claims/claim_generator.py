@@ -61,6 +61,20 @@ class ClaimGenerator:
             return ol in {"true", "false", "yes", "no"}
         return False
     
+    def _is_false_boolean_object(self, o: Term) -> bool:
+        object_type = self._object_type_from_entity_id(str(o))
+        if isinstance(object_type, str):
+            ol = object_type.strip().lower()
+            return ol in {"false", "no"}
+        return False
+    
+    def _is_true_boolean_object(self, o: Term) -> bool:
+        object_type = self._object_type_from_entity_id(str(o))
+        if isinstance(object_type, str):
+            ol = object_type.strip().lower()
+            return ol in {"true", "yes"}
+        return False
+    
     def _is_temperature_object(self, o: Term) -> bool:
         """Check if object is a temperature value that can be corrupted."""
         object_type = self._object_type_from_entity_id(str(o))
@@ -222,7 +236,8 @@ class ClaimGenerator:
                         split: Optional[str] = None,
                         notes: Optional[str] = None,
                         created_utc: Optional[str] = None,
-                        source_type: Optional[SourceTypesLabels] = None
+                        source_type: Optional[SourceTypesLabels] = None,
+                        evidence_extract: Optional[str] = None
                        ):
         return ClaimInstance.make_instance(
             rec_id=rec_id,
@@ -240,6 +255,7 @@ class ClaimGenerator:
             split=split,
             notes=notes,
             created_utc=created_utc,
+            evidence_extract=evidence_extract
         )
 
     def save_to_jsonl(self, file_path: str) -> None:
@@ -310,6 +326,7 @@ class ClaimGenerator:
                         evidence_triples=[truth_triple],
                         evidence_urls=[],
                         split= None,
+                        evidence_extract=text,
                         notes = "recorded",
             )
 
@@ -357,6 +374,7 @@ class ClaimGenerator:
                         structural_reasoning=ReasoningLabels.ONE_HOP,
                         evidence_triples=[truth_triple],
                         evidence_urls=[],
+                        evidence_extract=self.realizer.realize(truth_triple),
                         split= None,
                         notes = "corrupted"
             )
@@ -412,7 +430,8 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "recorded",
-                        source_type=SourceTypesLabels.INFERENCE
+                        source_type=SourceTypesLabels.INFERENCE,
+                        evidence_extract=text
             )
 
             if not self._is_new_claim(instance):
@@ -483,7 +502,8 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "corrupted",
-                        source_type=SourceTypesLabels.INFERENCE
+                        source_type=SourceTypesLabels.INFERENCE,
+                        evidence_extract=self.realizer.realize_conjunction(truth_triple_1, truth_triple_2)
             )
 
             if not self._is_new_claim(instance):
@@ -507,7 +527,7 @@ class ClaimGenerator:
         if not self._start_time:
             self.start_timing()
         
-        boolean_triples = [t for t in self.triples if self._is_boolean_object(t.o) ]
+        boolean_triples = [t for t in self.triples if self._is_false_boolean_object(t.o) ]
 
         # ---------------- SUPPORTED ----------------
         supported_target = int(n_supported * n_claims) if add_corruption else n_claims
@@ -516,10 +536,11 @@ class ClaimGenerator:
         supported_count = 0
         attempts = 0
 
-        while supported_count < supported_target and attempts < supported_attempts_budget:
-            
+        while boolean_triples and supported_count < supported_target and attempts < supported_attempts_budget:
+            if not boolean_triples:
+                break
             truth_triple = self._random_triple(boolean_triples)
-            text = self.realizer.realize_negation(truth_triple)
+            text = self.realizer.realize(truth_triple)
 
             if not self._is_valid_text(text):
                 self.stats.skipped_empty += 1
@@ -538,6 +559,7 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "recorded",
+                        evidence_extract=self.realizer.realize(truth_triple)
             )
 
             if not self._is_new_claim(instance):
@@ -553,17 +575,22 @@ class ClaimGenerator:
             return
         
         # ---------------- REFUTED ----------------
+        boolean_triples = [t for t in self.triples if self._is_boolean_object(t.o) ]
+
         refuted_target = int(n_supported * n_claims) if add_corruption else n_claims
         refuted_attempts_budget = refuted_target * max_refuted_attempts
 
         refuted_count = 0
         attempts = 0
-        while refuted_count < refuted_target and attempts < refuted_attempts_budget:
+        while boolean_triples and refuted_count < refuted_target and attempts < refuted_attempts_budget:
             # Glass is breakable.
             # Negate Glass is not breakable => refuted claim with evidence Glass is breakable
+            if not boolean_triples:
+                break
+
             truth_triple = self._random_triple(boolean_triples)
             claim_triple = Triple(s=truth_triple.s, p=truth_triple.p, o=self._flip_bool(truth_triple.o))
-            text = self.realizer.realize_negation(claim_triple)
+            text = self.realizer.realize(claim_triple)
 
             if not self._is_valid_text(text):
                 self.stats.skipped_empty += 1
@@ -582,6 +609,7 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "corrupted",
+                        evidence_extract=self.realizer.realize(truth_triple)
             )
 
             if not self._is_new_claim(instance):

@@ -23,7 +23,7 @@ knowledge_graph_policy:
 
   include_temperature: true
   include_mass: true
-  include_material: true   # <-- fixed
+  include_salientMaterials: true   # <-- fixed
 
 performance:
   cleanup_between_scenes: true

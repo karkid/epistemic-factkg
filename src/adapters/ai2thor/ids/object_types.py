@@ -149,7 +149,9 @@ class ObjectType(StrEnum):
     Wax = "Wax"
     Soap = "Soap"
     Sponge = "Sponge"
-    Organic = "Organic"
+    Organic = "Organic",
+    True_ = "True",
+    False_ = "False",
 
 
 CONTAINER_ROLES: FrozenSet[ObjectType] = frozenset(

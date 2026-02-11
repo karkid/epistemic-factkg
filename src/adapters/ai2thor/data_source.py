@@ -201,8 +201,8 @@ class AI2THORDataSource(GraphDataSource):
             # If prop is not a valid PredicateId, use policy-based check
             return bool(self.kg_policy.get(f"include_{prop}", False))
         
-        if pred_id in STATE_RELATIONS:
-            return False
+        # if pred_id in STATE_RELATIONS:
+        #     return False
         
         if pred_id in ATTRIBUTE_RELATIONS:
             # For attribute relations, only include if the object has the corresponding state
@@ -223,9 +223,12 @@ class AI2THORDataSource(GraphDataSource):
                 continue
             if value is None:
                 continue
-
+            
             if isinstance(value, bool):
                 props[prop] = value
+            elif isinstance(value, (int, float)):
+                if value >0.9:
+                    props[prop] = value
             else:
                 props[prop] = ", ".join(map(str, value)) if isinstance(value, list) else value
 

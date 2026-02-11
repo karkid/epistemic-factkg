@@ -1,4 +1,4 @@
-from convert_averitec import load_json_or_jsonl, convert_one_averitec, write_jsonl
+from dirty.convert_averitec import load_json_or_jsonl, convert_one_averitec, write_jsonl
 
 records = load_json_or_jsonl("averitec/train.jsonl")
 unified = [

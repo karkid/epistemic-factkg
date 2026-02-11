@@ -294,7 +294,7 @@ report-dataset RUN_ID:
         --summary runs/{{RUN_ID}}/summary/unified_validation_summary.json \
         --out_dir runs/{{RUN_ID}}/report \
         --title "Epistemic FactKG Dataset Report (RUN {{RUN_ID}})"
-        
+
 [doc("Analyze Averitec raw data (claim types, evidence types, etc.) and write profile JSON")]
 analyze-averitec:
     uv run python -m src.cli.analyze_averitec_raw \
