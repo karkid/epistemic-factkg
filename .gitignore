@@ -225,5 +225,8 @@ secrets.yaml
 .env.local
 .env.production
 
-# my ignore
+# Generated outputs (reproducible via just pipeline-all)
 runs/
+data/processed/
+data/summary/
+unified/
