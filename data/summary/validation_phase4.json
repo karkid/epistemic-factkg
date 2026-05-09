@@ -1,0 +1,44 @@
+{
+  "generated_utc": "2026-05-09T12:20:19Z",
+  "summaries": [
+    {
+      "file": "data/processed/ai2thor_unified.jsonl",
+      "generated_utc": "2026-05-09T12:20:19Z",
+      "counts": {
+        "total_records": 600,
+        "schema_valid": 600,
+        "schema_invalid": 0,
+        "logic_warnings_records": 0
+      },
+      "distributions": {
+        "verdict_label": {
+          "supported": 300,
+          "refuted": 300
+        },
+        "pramana_primary": {
+          "perception": 600
+        },
+        "pramana_all": {
+          "perception": 600
+        },
+        "dataset": {
+          "ai2thor": 600
+        },
+        "evidence_modality": {
+          "simulation_state": 600
+        },
+        "reasoning_structural": {
+          "one_hop": 200,
+          "conjunction": 200,
+          "negation": 200
+        }
+      },
+      "schema_errors_top": {},
+      "logic_warnings_top": {},
+      "examples": {
+        "schema_invalid": [],
+        "warnings": []
+      }
+    }
+  ]
+}
