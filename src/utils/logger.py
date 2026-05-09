@@ -1,16 +1,19 @@
 import logging
 import sys
-import os
 
 # Detect debugging
 # Option 1: Python __debug__ is True normally, False with -O flag
 # Option 2: Use environment variable DEBUG=True for dev/debug
-DEBUG = False #os.getenv("DEBUG", "False").lower() in ("1", "true", "yes") or __debug__
+DEBUG = (
+    False  # os.getenv("DEBUG", "False").lower() in ("1", "true", "yes") or __debug__
+)
+
 
 class DebugLogger(logging.Logger):
     """
     A logger that only prints messages when debugging.
     """
+
     def __init__(self, name: str):
         super().__init__(name)
         if not self.handlers:
@@ -23,6 +26,7 @@ class DebugLogger(logging.Logger):
         # Disable output if not debugging
         if not DEBUG:
             self.disabled = True
+
 
 def get_logger(name: str) -> logging.Logger:
     """

@@ -1,14 +1,16 @@
 import random
 import time
-import logging
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 
 from src.adapters.ai2thor.semantics.semantic_rules import get_preferred_receptacles
-from src.adapters.ai2thor.result import SceneRandomizerResult, ObjectPlacement, ObjectStateChange
+from src.adapters.ai2thor.result import (
+    SceneRandomizerResult,
+    ObjectPlacement,
+    ObjectStateChange,
+)
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
 
 class SceneRandomizer:
     """
@@ -111,13 +113,16 @@ class SceneRandomizer:
             return None
 
         if time.time() - start > 5:
-            logger.warning(f"Step {kwargs.get('action', '')} took >5s, possible Unity freeze")
+            logger.warning(
+                f"Step {kwargs.get('action', '')} took >5s, possible Unity freeze"
+            )
 
         return event
 
     def _get_objects(self):
-        return getattr(self.controller.last_event.metadata, "objects", []) \
-            or self.controller.last_event.metadata.get("objects", [])
+        return getattr(
+            self.controller.last_event.metadata, "objects", []
+        ) or self.controller.last_event.metadata.get("objects", [])
 
     # ----------------------------
     # Randomizations
@@ -143,9 +148,7 @@ class SceneRandomizer:
 
             logger.info(f"Placing {obj['objectId']} at {to_pos}")
             success = self._safe_step(
-                action="PlaceObjectAtPoint",
-                objectId=obj["objectId"],
-                position=to_pos
+                action="PlaceObjectAtPoint", objectId=obj["objectId"], position=to_pos
             )
 
             self.result.object_placements.append(
@@ -173,14 +176,16 @@ class SceneRandomizer:
             if obj.get("openable", False):
                 old_state.append("Open" if obj.get("isOpen", False) else "Closed")
                 action = "OpenObject" if random.random() < 0.5 else "CloseObject"
-                event = self._safe_step(action=action, objectId=oid, forceAction=True)
+                self._safe_step(action=action, objectId=oid, forceAction=True)
                 new_state.append("Open" if action == "OpenObject" else "Closed")
                 self._wait_for_physics(3)  # small pause after each open/close
 
             if obj.get("toggleable", False):
                 old_state.append("On" if obj.get("isToggled", False) else "Off")
-                action = "ToggleObjectOn" if random.random() < 0.5 else "ToggleObjectOff"
-                event = self._safe_step(action=action, objectId=oid, forceAction=True)
+                action = (
+                    "ToggleObjectOn" if random.random() < 0.5 else "ToggleObjectOff"
+                )
+                self._safe_step(action=action, objectId=oid, forceAction=True)
                 new_state.append("On" if action == "ToggleObjectOn" else "Off")
                 self._wait_for_physics(3)  # small pause after each toggle
 
@@ -190,17 +195,18 @@ class SceneRandomizer:
                     object_type=obj["objectType"],
                     from_state="|".join(old_state) if old_state else "None",
                     to_state="|".join(new_state) if new_state else "None",
-                    success=True
+                    success=True,
                 )
             )
-
 
     def _randomize_lighting(self):
         self._safe_step(action="RandomizeLighting")
 
     def _randomize_receptacles(self):
         objects = self._get_objects()
-        items = [o for o in objects if o.get("pickupable") and not o.get("isPickedUp", False)]
+        items = [
+            o for o in objects if o.get("pickupable") and not o.get("isPickedUp", False)
+        ]
         receptacles = [o for o in objects if o.get("receptacle", False)]
 
         if not items or not receptacles:
@@ -211,7 +217,9 @@ class SceneRandomizer:
 
         for item in items:
             obj_type = item["objectType"]
-            preferred = get_preferred_receptacles(obj_type) if self.use_semantic_rules else []
+            preferred = (
+                get_preferred_receptacles(obj_type) if self.use_semantic_rules else []
+            )
 
             candidates = [r for r in receptacles if r["objectType"] in preferred]
             if not candidates:
@@ -232,7 +240,6 @@ class SceneRandomizer:
 
     def _place_in_receptacle(self, item, receptacle):
         """Physics-safe placement: pickup, move slightly forward, drop"""
-        ctrl = self.controller
 
         # Skip teleport to avoid freeze
         logger.debug(f"Placing {item['objectId']} near {receptacle['objectId']}")

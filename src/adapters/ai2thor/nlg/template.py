@@ -9,7 +9,6 @@ from typing import Optional
 
 
 class Ai2ThorTemplate(BaseTemplate):
-
     def __init__(self, predicate_lexicon: Optional[PredicateLexicon] = None):
         super().__init__()
 
@@ -102,7 +101,6 @@ class Ai2ThorTemplate(BaseTemplate):
             normalize=True,
         )
 
-
     # ------------------------
     # Grammar Helpers
     # ------------------------
@@ -113,7 +111,7 @@ class Ai2ThorTemplate(BaseTemplate):
         Example: apple -> an apple
         """
         return self._inflect.a(noun)
-    
+
     def format_with_and(self, text: str) -> str:
         parts = [p.strip() for p in text.split(",") if p.strip()]
 
@@ -129,7 +127,6 @@ class Ai2ThorTemplate(BaseTemplate):
         # More than 2
         return ", ".join(parts[:-1]) + f" and {parts[-1]}"
 
-    
     def _normalize_object(self, predicate: str, obj: str) -> str:
 
         if not isinstance(obj, str):
@@ -139,19 +136,19 @@ class Ai2ThorTemplate(BaseTemplate):
 
         if not obj:
             return obj
-        
+
         if predicate == "material":
             obj_norm = self.format_with_and(obj)
             return f"made up of {obj_norm}".lower()
-        
+
         if predicate == "temperature":
             temperature_map = {
                 "RoomTemp": "at room temperature",
                 "Hot": "hot",
-                "Cold": "cold"
+                "Cold": "cold",
             }
             return temperature_map.get(obj, obj.lower())
-        
+
         if predicate == "mass":
             return f"weighs {obj} kg".lower()
 
@@ -161,7 +158,6 @@ class Ai2ThorTemplate(BaseTemplate):
 
         return f"the {obj}"
 
-    
     def _normalize_sentence(self, sentence: str) -> str:
         """
         Basic normalization: spacing + capitalization.
@@ -178,9 +174,9 @@ class Ai2ThorTemplate(BaseTemplate):
         if sentence:
             sentence = sentence[0].upper() + sentence[1:]
 
-        # Sentenc case 
+        # Sentenc case
         return sentence
-    
+
     def strip_repeated_subject(self, sent1, sent2, subject):
         """
         Removes 'The <subject> is/are/was' from sent2 if present.
@@ -198,7 +194,7 @@ class Ai2ThorTemplate(BaseTemplate):
             s2 = re.sub(p, "", s2)
 
         return s2
-    
+
     def smart_and_join(self, sent1: str, sent2: str, conj="and") -> str:
         sent1 = sent1.rstrip(".")
         sent2 = sent2.rstrip(".")
@@ -213,12 +209,13 @@ class Ai2ThorTemplate(BaseTemplate):
 
         return f"{sent1}{connector} {sent2.lower()}."
 
-
     # ------------------------
     # Main Render
     # ------------------------
 
-    def render(self, triple: Triple, kind: PredicateForm, negation: bool = False) -> str:
+    def render(
+        self, triple: Triple, kind: PredicateForm, negation: bool = False
+    ) -> str:
 
         # Unpack triple
         # An apple is inside the box.
@@ -255,9 +252,9 @@ class Ai2ThorTemplate(BaseTemplate):
         # ------------------------
         # Render Sentence
         # ------------------------
-        
 
         return self._normalize_sentence(template.verbalize(s=s_norm, p=p, o=o_norm))
+
     # ------------------------
     # Conjunction Render
     # ------------------------
@@ -286,18 +283,19 @@ class Ai2ThorTemplate(BaseTemplate):
         # s2 : The apple is dirty.
         # conj: and
 
-
         # Same subject → remove repetition
         if s1 == s2:
-
             # Remove "The apple " from second sentence
             reduced = self.strip_repeated_subject(sent1, sent2, s1)
 
-            return self._normalize_sentence(self.smart_and_join(sent1=sent1, sent2=reduced, conj=conj))
-
+            return self._normalize_sentence(
+                self.smart_and_join(sent1=sent1, sent2=reduced, conj=conj)
+            )
 
         # Different subjects
-        return self._normalize_sentence(self.smart_and_join(sent1=sent1, sent2=sent2, conj=conj))
-    
+        return self._normalize_sentence(
+            self.smart_and_join(sent1=sent1, sent2=sent2, conj=conj)
+        )
+
     def render_negation(self, triple: Triple, kind: PredicateForm) -> str:
         return self.render(triple, kind, negation=True)

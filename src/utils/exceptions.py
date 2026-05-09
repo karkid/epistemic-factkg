@@ -12,10 +12,14 @@ class FactKGError(Exception):
     pass
 
 
+EpistemicFactKGError = FactKGError  # alias used by tests
+
+
 class DataSourceError(FactKGError):
     """Base exception for data source operations."""
 
     pass
+
 
 class DataLoadError(DataSourceError):
     """Errors during data loading operations (TTL parsing, scene loading, etc.)."""
@@ -28,10 +32,12 @@ class ValidationError(DataSourceError):
 
     pass
 
+
 class ConfigurationError(FactKGError):
     """Configuration-related errors (missing files, invalid config, etc.)."""
 
     pass
+
 
 class OntologyError(FactKGError):
     """Ontology and predicate mapping related errors."""

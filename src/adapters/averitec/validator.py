@@ -22,12 +22,18 @@ class AveritecValidator(DatasetValidator):
             msgs.append("AVeriTeC record has no evidence items.")
 
         if verdict_label is None and evidence:
-            msgs.append("verdict.label is null but evidence is present — check if this is truly a blind-test record.")
+            msgs.append(
+                "verdict.label is null but evidence is present — check if this is truly a blind-test record."
+            )
 
         if verdict_label is not None and not evidence:
-            msgs.append("verdict.label is set but evidence is empty — cannot verify verdict without evidence.")
+            msgs.append(
+                "verdict.label is set but evidence is empty — cannot verify verdict without evidence."
+            )
 
         if record.get("claim_triples") is not None:
-            msgs.append("AVeriTeC record unexpectedly has claim_triples (should be null).")
+            msgs.append(
+                "AVeriTeC record unexpectedly has claim_triples (should be null)."
+            )
 
         return msgs

@@ -10,11 +10,18 @@ from src.core.ports.graph.graph_data_source import GraphDataSource
 from src.utils.exceptions import ConfigurationError, DataSourceError
 
 from src.adapters.ai2thor.config import AI2ThorDataSourceConfig
-from src.adapters.ai2thor.registry.entities import CONTAINER_ROLES, SURFACE_ROLES, HANGING_ROLES
-from src.adapters.ai2thor.semantics.semantic_rules import build_semantic_map
+from src.adapters.ai2thor.registry.entities import (
+    CONTAINER_ROLES,
+    SURFACE_ROLES,
+    HANGING_ROLES,
+)
 from src.utils.logger import get_logger
 
-from src.adapters.ai2thor.ids.predicates import ATTRIBUTE_STATE_MAP, PredicateId, STATE_RELATIONS, ATTRIBUTE_RELATIONS
+from src.adapters.ai2thor.ids.predicates import (
+    ATTRIBUTE_STATE_MAP,
+    PredicateId,
+    ATTRIBUTE_RELATIONS,
+)
 
 
 logger = get_logger(__name__)
@@ -66,7 +73,9 @@ class AI2THORDataSource(GraphDataSource):
                 visibilityDistance=cfg.controller.visibility_distance,
             )
         except Exception as e:
-            raise ConfigurationError(f"Failed to create AI2-THOR controller: {e}") from e
+            raise ConfigurationError(
+                f"Failed to create AI2-THOR controller: {e}"
+            ) from e
 
     # ---------------- GraphDataSource API ----------------
 
@@ -81,7 +90,9 @@ class AI2THORDataSource(GraphDataSource):
         try:
             metadata = self._load_thor_room_metadata(graph_id)
         except Exception as e:
-            raise DataSourceError(f"Failed to load AI2-THOR scene {graph_id}: {e}") from e
+            raise DataSourceError(
+                f"Failed to load AI2-THOR scene {graph_id}: {e}"
+            ) from e
         objects_meta = metadata.get(OBJECTS, []) or []
         objects_by_id = {o.get(OBJECT_ID): o for o in objects_meta if o.get(OBJECT_ID)}
 
@@ -100,25 +111,36 @@ class AI2THORDataSource(GraphDataSource):
                     object_id=oid,
                     object_type=obj_type,
                     properties=self._extract_properties(o),
-                    position=self._extract_position(o) if self.kg_policy.get("include_position", False) else None,
-                    rotation=self._extract_rotation(o) if self.kg_policy.get("include_rotation", False) else None,
+                    position=self._extract_position(o)
+                    if self.kg_policy.get("include_position", False)
+                    else None,
+                    rotation=self._extract_rotation(o)
+                    if self.kg_policy.get("include_rotation", False)
+                    else None,
                 )
             )
 
             # scene membership (bidirectional)
-            rels.append(Relationship(subject_id=graph_id, predicate=HAS_OBJECT, object_id=oid))
-            rels.append(Relationship(subject_id=oid, predicate=IN_SCENE, object_id=graph_id))
+            rels.append(
+                Relationship(subject_id=graph_id, predicate=HAS_OBJECT, object_id=oid)
+            )
+            rels.append(
+                Relationship(subject_id=oid, predicate=IN_SCENE, object_id=graph_id)
+            )
 
             # parent-based spatial relations
             rels.extend(self._extract_parent_relationships(o, objects_by_id))
 
-        return SceneGraph(graph_id=graph_id, objects=objects, relationships=rels, metadata=None)
+        return SceneGraph(
+            graph_id=graph_id, objects=objects, relationships=rels, metadata=None
+        )
 
     def cleanup(self) -> None:
         perf = self.config.performance or {}
 
         if perf.get("cleanup_between_graphs", True):
             import gc
+
             gc.collect()
 
         if getattr(self, "controller", None):
@@ -134,25 +156,24 @@ class AI2THORDataSource(GraphDataSource):
             self.controller.reset(scene=graph_id)
             rz_cfg = self.config.randomizer
             randomizer = SceneRandomizer(
-                            controller=self.controller,
-                            scene_id=graph_id,
-                            seed=rz_cfg.get("seed", 123),
-                            randomize_receptacles=rz_cfg.get("randomize_receptacles", True),
-                            max_objects_per_receptacle=rz_cfg.get("max_objects_per_receptacle", 2),
-                            use_semantic_rules=rz_cfg.get("use_semantic_rules", True),
-                        )
-            
+                controller=self.controller,
+                scene_id=graph_id,
+                seed=rz_cfg.get("seed", 123),
+                randomize_receptacles=rz_cfg.get("randomize_receptacles", True),
+                max_objects_per_receptacle=rz_cfg.get("max_objects_per_receptacle", 2),
+                use_semantic_rules=rz_cfg.get("use_semantic_rules", True),
+            )
 
-            logger.info("-----"*20)
+            logger.info("-----" * 20)
             logger.info(f"Scene {graph_id}")
             logger.info("Initial semantic map:")
-            #logger.info(build_semantic_map(controller=self.controller))
-            logger.info("-----"*20)
+            # logger.info(build_semantic_map(controller=self.controller))
+            logger.info("-----" * 20)
             result = randomizer.randomize()
             logger.info("Final semantic map after randomization:")
             SceneRandomizerSummary(results=[result]).print_summary()
-            #logger.info(build_semantic_map(controller=self.controller))
-            logger.info("-----"*20)
+            # logger.info(build_semantic_map(controller=self.controller))
+            logger.info("-----" * 20)
 
             return self.controller.last_event.metadata
         except Exception as e:
@@ -160,7 +181,9 @@ class AI2THORDataSource(GraphDataSource):
                 self.controller.stop()
             except Exception:
                 pass
-            raise DataSourceError(f"Controller reset failed for graph {graph_id}: {e}") from e
+            raise DataSourceError(
+                f"Controller reset failed for graph {graph_id}: {e}"
+            ) from e
 
     def _extract_parent_relationships(
         self, thor_obj: Dict[str, Any], objects_by_id: Dict[str, Dict[str, Any]]
@@ -194,27 +217,26 @@ class AI2THORDataSource(GraphDataSource):
     def _is_property_allowed(self, prop: str, thor_obj: Dict[str, Any]) -> bool:
         if prop in NOT_CONSIDER_PROPERTY:
             return False
-        
+
         # Convert string to PredicateId for proper comparison
         try:
             pred_id = PredicateId(prop)
         except ValueError:
             # If prop is not a valid PredicateId, use policy-based check
             return bool(self.kg_policy.get(f"include_{prop}", False))
-        
+
         # if pred_id in STATE_RELATIONS:
         #     return False
-        
+
         if pred_id in ATTRIBUTE_RELATIONS:
             # For attribute relations, only include if the object has the corresponding state
             state_prop = ATTRIBUTE_STATE_MAP.get(pred_id)
             if state_prop:
                 return bool(thor_obj.get(str(state_prop)))
             return False
-        
+
         # policy keys like include_isOpen, include_mass, include_temperature...
         return bool(self.kg_policy.get(f"include_{prop}", False))
-
 
     def _extract_properties(self, thor_obj: Dict[str, Any]) -> Dict[str, Any]:
         props: Dict[str, Any] = {}
@@ -224,23 +246,31 @@ class AI2THORDataSource(GraphDataSource):
                 continue
             if value is None:
                 continue
-            
+
             if isinstance(value, bool):
                 props[prop] = value
             elif isinstance(value, (int, float)):
                 props[prop] = value
             else:
-                props[prop] = ", ".join(map(str, value)) if isinstance(value, list) else value
+                props[prop] = (
+                    ", ".join(map(str, value)) if isinstance(value, list) else value
+                )
 
         return props
 
     # ---------------- vectors ----------------
 
     @staticmethod
-    def _extract_3d_vector(thor_obj: Dict[str, Any], field: str) -> tuple[float, float, float]:
+    def _extract_3d_vector(
+        thor_obj: Dict[str, Any], field: str
+    ) -> tuple[float, float, float]:
         v = thor_obj.get(field)
         if isinstance(v, dict):
-            return (float(v.get("x", 0.0)), float(v.get("y", 0.0)), float(v.get("z", 0.0)))
+            return (
+                float(v.get("x", 0.0)),
+                float(v.get("y", 0.0)),
+                float(v.get("z", 0.0)),
+            )
         if isinstance(v, list) and len(v) >= 3:
             return (float(v[0]), float(v[1]), float(v[2]))
         return (0.0, 0.0, 0.0)

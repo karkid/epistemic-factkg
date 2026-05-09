@@ -23,17 +23,25 @@ def main():
     ap = argparse.ArgumentParser(
         description="Convert any registered dataset to unified v2.0 JSONL."
     )
-    ap.add_argument("--output_dir", required=True, help="Output folder, e.g. data/processed/")
     ap.add_argument(
-        "--averitec_inputs", nargs="*", default=[],
+        "--output_dir", required=True, help="Output folder, e.g. data/processed/"
+    )
+    ap.add_argument(
+        "--averitec_inputs",
+        nargs="*",
+        default=[],
         help="AVeriTeC JSON files (top-level list). Example: train.json dev.json",
     )
     ap.add_argument(
-        "--ai2thor_inputs", nargs="*", default=[],
+        "--ai2thor_inputs",
+        nargs="*",
+        default=[],
         help="AI2THOR JSONL files. Example: claims_all.jsonl",
     )
     ap.add_argument(
-        "--split_mode", choices=["infer", "none"], default="infer",
+        "--split_mode",
+        choices=["infer", "none"],
+        default="infer",
         help="How to set split: 'infer' from filename or 'none'.",
     )
     args = ap.parse_args()
@@ -43,8 +51,9 @@ def main():
 
     total = 0
 
-    inputs = [("averitec", p) for p in args.averitec_inputs] + \
-             [("ai2thor", p) for p in args.ai2thor_inputs]
+    inputs = [("averitec", p) for p in args.averitec_inputs] + [
+        ("ai2thor", p) for p in args.ai2thor_inputs
+    ]
 
     for dataset, in_file in inputs:
         in_path = Path(in_file)
@@ -57,12 +66,14 @@ def main():
 
         out_path = out_dir / _out_name(dataset, in_path)
         n = convert_to_unified(dataset, str(in_path), str(out_path), split=split)
-        print(f"[{dataset}] {in_path.name} -> {out_path.name}  ({n} records, split={split})")
+        print(
+            f"[{dataset}] {in_path.name} -> {out_path.name}  ({n} records, split={split})"
+        )
         total += 1
 
     if total == 0:
         available = sorted(CONVERTERS)
-        print(f"No inputs provided. Use --averitec_inputs / --ai2thor_inputs.")
+        print("No inputs provided. Use --averitec_inputs / --ai2thor_inputs.")
         print(f"Registered datasets: {available}")
     else:
         print(f"\nDone. Converted {total} file(s) -> {out_dir}")

@@ -11,6 +11,7 @@ n = convert_to_unified("ai2thor", "data/raw/ai2thor/claims_all.jsonl",
 To add a new dataset, implement DatasetConverter in src/adapters/<name>/converter.py
 and register it in CONVERTERS below.
 """
+
 from __future__ import annotations
 
 from src.adapters.ai2thor.converter import AI2ThorConverter

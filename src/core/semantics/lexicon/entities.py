@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional
 
 
 @dataclass(frozen=True)
 class EntityLexeme:
     label: str  # e.g. "TV stand", "paper towel roll"
     is_countable: bool = True
-    proper: bool = False              # True => no article
+    proper: bool = False  # True => no article
     mass_noun: bool = False
 
 

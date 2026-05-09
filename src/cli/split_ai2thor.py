@@ -5,8 +5,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Set
 
+
 def now_utc_iso():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 def read_jsonl(path: str) -> List[Dict[str, Any]]:
     out = []
@@ -17,10 +19,12 @@ def read_jsonl(path: str) -> List[Dict[str, Any]]:
                 out.append(json.loads(line))
     return out
 
+
 def write_jsonl(path: Path, items: List[Dict[str, Any]]):
     with open(path, "w", encoding="utf-8") as f:
         for obj in items:
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
 
 def parse_list_arg(xs: List[str]) -> List[str]:
     """
@@ -35,19 +39,24 @@ def parse_list_arg(xs: List[str]) -> List[str]:
         return [x.strip() for x in xs[0].split(",") if x.strip()]
     return [x.strip() for x in xs if x.strip()]
 
+
 def main():
     ap = argparse.ArgumentParser(
         description="Split AI2-THOR unified JSONL by floorplan (context_id) without leakage."
     )
-    ap.add_argument("--input", required=True, help="Input unified AI2-THOR JSONL (all claims)")
+    ap.add_argument(
+        "--input", required=True, help="Input unified AI2-THOR JSONL (all claims)"
+    )
     ap.add_argument("--output_dir", required=True, help="Output directory")
-    ap.add_argument("--seed", type=int, default=13, help="Seed for deterministic shuffling")
+    ap.add_argument(
+        "--seed", type=int, default=13, help="Seed for deterministic shuffling"
+    )
 
     ap.add_argument(
         "--mode",
         choices=["pct", "counts", "lists"],
         default="pct",
-        help="Split mode: pct (train/dev pct), counts (floorplan counts), lists (explicit floorplan lists)"
+        help="Split mode: pct (train/dev pct), counts (floorplan counts), lists (explicit floorplan lists)",
     )
 
     # pct mode
@@ -67,11 +76,17 @@ def main():
     args = ap.parse_args()
 
     records = read_jsonl(args.input)
-    floorplans = sorted({r.get("context", {}).get("context_id") for r in records if r.get("context", {}).get("context_id")})
+    floorplans = sorted(
+        {
+            r.get("provenance", {}).get("context_id")
+            for r in records
+            if r.get("provenance", {}).get("context_id")
+        }
+    )
     n = len(floorplans)
 
     if n == 0:
-        raise ValueError("No context.context_id found in input.")
+        raise ValueError("No provenance.context_id found in input.")
 
     rng = random.Random(args.seed)
 
@@ -103,18 +118,26 @@ def main():
 
         if args.mode == "counts":
             if args.n_train_floorplans is None or args.n_dev_floorplans is None:
-                raise ValueError("--n_train_floorplans and --n_dev_floorplans are required in counts mode.")
+                raise ValueError(
+                    "--n_train_floorplans and --n_dev_floorplans are required in counts mode."
+                )
             n_train = args.n_train_floorplans
             n_dev = args.n_dev_floorplans
-            n_test = args.n_test_floorplans if args.n_test_floorplans is not None else (n - n_train - n_dev)
+            n_test = (
+                args.n_test_floorplans
+                if args.n_test_floorplans is not None
+                else (n - n_train - n_dev)
+            )
 
             if n_train < 1 or n_dev < 0 or n_test < 0:
                 raise ValueError("Invalid split counts.")
             if n_train + n_dev + n_test != n:
-                raise ValueError(f"Counts must sum to total floorplans ({n}). Got {n_train+n_dev+n_test}.")
+                raise ValueError(
+                    f"Counts must sum to total floorplans ({n}). Got {n_train + n_dev + n_test}."
+                )
             train_fps = set(fps[:n_train])
-            dev_fps = set(fps[n_train:n_train + n_dev])
-            test_fps = set(fps[n_train + n_dev:])
+            dev_fps = set(fps[n_train : n_train + n_dev])
+            test_fps = set(fps[n_train + n_dev :])
 
         else:  # pct mode
             if args.train_pct + args.dev_pct >= 100:
@@ -136,19 +159,19 @@ def main():
                 n_dev = min(n_dev, n - n_train)
 
             train_fps = set(fps[:n_train])
-            dev_fps = set(fps[n_train:n_train + n_dev])
-            test_fps = set(fps[n_train + n_dev:])
+            dev_fps = set(fps[n_train : n_train + n_dev])
+            test_fps = set(fps[n_train + n_dev :])
 
     buckets = {"train": [], "dev": [], "test": []}
     for r in records:
-        fp = r["context"]["context_id"]
+        fp = r["provenance"]["context_id"]
         if fp in train_fps:
             split = "train"
         elif fp in dev_fps:
             split = "dev"
         else:
             split = "test"
-        r["context"]["split"] = split
+        r["provenance"]["split"] = split
         buckets[split].append(r)
 
     out_dir = Path(args.output_dir)
@@ -176,7 +199,7 @@ def main():
             "train": len(buckets["train"]),
             "dev": len(buckets["dev"]),
             "test": len(buckets["test"]),
-        }
+        },
     }
     manifest_path = out_dir / "ai2thor_splits_manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
@@ -189,6 +212,7 @@ def main():
     print(f"Test  floorplans: {len(test_fps)} | claims: {len(buckets['test'])}")
     print(f"Manifest: {manifest_path}")
     print(f"Outputs: {train_path}, {dev_path}, {test_path}")
+
 
 if __name__ == "__main__":
     main()

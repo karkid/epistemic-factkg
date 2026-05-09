@@ -10,12 +10,15 @@ from src.core.graph.types import Triple
 from src.core.semantics.lexicon.predicates import PredicateLexicon
 from src.core.semantics.lexicon.entities import EntityLexicon
 
+
 @dataclass(frozen=True)
-class TripleRealizer():
+class TripleRealizer:
     template: BaseTemplate
     pred_lexicon: PredicateLexicon
     ent_lexicon: EntityLexicon
-    normallizer: Optional[callable[[str], str]] = None  # e.g. for normalizing object labels
+    normallizer: Optional[callable[[str], str]] = (
+        None  # e.g. for normalizing object labels
+    )
 
     def realize(self, triple: Triple) -> str:
         s, p, o = triple.s, triple.p, triple.o
@@ -29,7 +32,6 @@ class TripleRealizer():
         if lex is None:
             return ""  # unknown predicate => skip
 
-
         s_lex = self.ent_lexicon.get(s)
         subj = s_lex.label if s_lex else s.lower()
 
@@ -38,11 +40,12 @@ class TripleRealizer():
         obj = o_lex.label if o_lex else o.lower()
 
         return self.template.render(
-            triple=Triple(s=subj, p=lex.label, o=obj),
-            kind=lex.kind
+            triple=Triple(s=subj, p=lex.label, o=obj), kind=lex.kind
         )
-    
-    def realize_conjunction(self, triple1: Triple, triple2: Triple, conj: str = "and") -> str:
+
+    def realize_conjunction(
+        self, triple1: Triple, triple2: Triple, conj: str = "and"
+    ) -> str:
         s1, p1, o1 = triple1.s, triple1.p, triple1.o
         s2, p2, o2 = triple2.s, triple2.p, triple2.o
 
@@ -80,7 +83,7 @@ class TripleRealizer():
             k2=lex2.kind,
             conj=conj,
         )
-    
+
     def realize_negation(self, triple: Triple) -> str:
         s, p, o = triple.s, triple.p, triple.o
 
@@ -100,6 +103,5 @@ class TripleRealizer():
         obj = o_lex.label if o_lex else o.lower()
 
         return self.template.render_negation(
-            triple=Triple(s=subj, p=lex.label, o=obj),
-            kind=lex.kind
+            triple=Triple(s=subj, p=lex.label, o=obj), kind=lex.kind
         )

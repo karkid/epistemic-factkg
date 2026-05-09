@@ -32,7 +32,8 @@ def load_ai2thor_config(path: str | Path) -> AI2ThorDataSourceConfig:
 
     # keep only actual controller kwargs (strip comments, None)
     controller_settings = {
-        k: v for k, v in controller_raw.items()
+        k: v
+        for k, v in controller_raw.items()
         if v is not None and not str(k).startswith("#")
     }
 
@@ -43,8 +44,12 @@ def load_ai2thor_config(path: str | Path) -> AI2ThorDataSourceConfig:
             visibility_distance=float(controller_raw.get("visibilityDistance", 1.5)),
             render_image=bool(controller_raw.get("renderImage", False)),
             render_depth=bool(controller_raw.get("renderDepthImage", False)),
-            render_instance_segmentation=bool(controller_raw.get("renderInstanceSegmentation", False)),
-            render_semantic_segmentation=bool(controller_raw.get("renderSemanticSegmentation", False)),
+            render_instance_segmentation=bool(
+                controller_raw.get("renderInstanceSegmentation", False)
+            ),
+            render_semantic_segmentation=bool(
+                controller_raw.get("renderSemanticSegmentation", False)
+            ),
         ),
         knowledge_graph_policy={str(k): bool(v) for k, v in kg_policy.items()},
         performance=performance,

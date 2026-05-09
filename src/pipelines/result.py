@@ -22,6 +22,7 @@ class BuildRDFResult:
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
 
+
 @dataclass(frozen=True)
 class BuildClaimsResult:
     ttl_path: str
@@ -45,7 +46,7 @@ class BuildRDFResultSummary:
         total_triples = sum(r.total_triples for r in self.results)
         total_receptacles = sum(len(r.contexts_processed) for r in self.results)
 
-        logger_func("="*72)
+        logger_func("=" * 72)
         logger_func(f"Scenes processed  : {len(self.results)}")
         logger_func(f"Total objects     : {total_objects}")
         logger_func(f"Total relations   : {total_relations}")
@@ -53,7 +54,7 @@ class BuildRDFResultSummary:
         logger_func(f"Total receptacles : {total_receptacles}")
         logger_func(f"Total warnings    : {sum(len(r.warnings) for r in self.results)}")
         logger_func(f"Total errors      : {sum(len(r.errors) for r in self.results)}")
-        logger_func("="*72)
+        logger_func("=" * 72)
 
         for res in self.results:
             status = "OK" if res.success else "FAILED"
@@ -72,7 +73,10 @@ class BuildRDFResultSummary:
             if res.contexts_processed:
                 logger_func(f"Scenes     : {len(res.contexts_processed)}")
                 sample = ", ".join(res.contexts_processed[:3])
-                logger_func(f"Scene IDs  : {sample}" + (" ..." if len(res.contexts_processed) > 3 else ""))
+                logger_func(
+                    f"Scene IDs  : {sample}"
+                    + (" ..." if len(res.contexts_processed) > 3 else "")
+                )
 
             logger_func("-" * 72)
             logger_func(f"Warnings   : {len(res.warnings)}")
@@ -114,13 +118,13 @@ class BuildClaimsResultSummary:
         total_claims = sum(len(r.claim_corpus.claims) for r in self.results)
         total_files = sum(len(r.output_files) for r in self.results)
 
-        logger_func("="*72)
+        logger_func("=" * 72)
         logger_func(f"Claims processed  : {len(self.results)}")
         logger_func(f"Total triples     : {total_triples}")
         logger_func(f"Total contexts    : {total_contexts}")
         logger_func(f"Total claims      : {total_claims}")
         logger_func(f"Total files       : {total_files}")
-        logger_func("="*72)
+        logger_func("=" * 72)
 
         for res in self.results:
             logger_func("")
@@ -131,10 +135,13 @@ class BuildClaimsResultSummary:
             logger_func(f"Input TTL      : {res.ttl_path}")
             logger_func(f"Total Triples  : {res.total_triples}")
             logger_func(f"Contexts       : {len(res.contexts)}")
-            
+
             if res.contexts:
                 sample = ", ".join(res.contexts[:3])
-                logger_func(f"Context IDs    : {sample}" + (" ..." if len(res.contexts) > 3 else ""))
+                logger_func(
+                    f"Context IDs    : {sample}"
+                    + (" ..." if len(res.contexts) > 3 else "")
+                )
 
             logger_func(f"Total Claims   : {len(res.claim_corpus.claims)}")
             logger_func(f"Output Files   : {len(res.output_files)}")

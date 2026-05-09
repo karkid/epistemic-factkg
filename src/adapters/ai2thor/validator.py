@@ -24,10 +24,14 @@ class AI2ThorValidator(DatasetValidator):
         pramana = (record.get("epistemic") or {}).get("pramana_primary")
 
         if stance == "absent" and ev_triples:
-            msgs.append("AI2THOR absence claim (stance=absent) has non-empty evidence triples.")
+            msgs.append(
+                "AI2THOR absence claim (stance=absent) has non-empty evidence triples."
+            )
 
         if pramana == "non_apprehension" and stance != "absent":
-            msgs.append(f"AI2THOR non_apprehension claim expected stance=absent, got {stance!r}.")
+            msgs.append(
+                f"AI2THOR non_apprehension claim expected stance=absent, got {stance!r}."
+            )
 
         if record.get("claim_triples") is None:
             msgs.append("AI2THOR record missing claim_triples.")

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -13,10 +12,13 @@ from src.adapters.ai2thor.data_source import AI2THORDataSource
 
 from src.adapters.ai2thor.registry.entities import create_entity_registry
 from src.adapters.ai2thor.registry.relations import create_relation_registry
-from src.adapters.ai2thor.ontology import create_ontology  # your factory returning BaseOntology
+from src.adapters.ai2thor.ontology import (
+    create_ontology,
+)  # your factory returning BaseOntology
 
 from src.infra.rdf.builder import RDFGraphBuilder
 from src.infra.rdf.namespaces import NamespaceConfig, NamespaceManager
+
 
 def build_ai2thor_rdf(
     *,
@@ -44,7 +46,9 @@ def build_ai2thor_rdf(
     ns = NamespaceManager(ns_cfg)
 
     # 4) build graph
-    builder = RDFGraphBuilder(ontology=ontology, namespaces=ns, strict_validation=strict)
+    builder = RDFGraphBuilder(
+        ontology=ontology, namespaces=ns, strict_validation=strict
+    )
     result = builder.build_from_source(ds)
 
     # 5) save

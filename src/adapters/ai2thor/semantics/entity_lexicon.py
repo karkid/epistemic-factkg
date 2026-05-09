@@ -1,24 +1,19 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 from src.core.semantics.lexicon.entities import EntityLexeme, EntityLexicon
 
-from src.adapters.ai2thor.ids.object_types import PICKABLE_OBJECTS, ObjectType, ACRONYMS, COUNTABLE_OBJECTS
+from src.adapters.ai2thor.ids.object_types import (
+    PICKABLE_OBJECTS,
+    ObjectType,
+    ACRONYMS,
+    COUNTABLE_OBJECTS,
+)
 
 
 # ---- helpers ----
 
-# Example: define your acronyms somewhere global
-ACRONYMS = {
-    "TV",
-    "CD",
-    "USB",
-    "DVD",
-    "HD",
-}
 
 # Split only when: lowercase/digit → Uppercase
 _CAMEL_SPLIT = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
@@ -63,6 +58,7 @@ def _normalize_case(text: str) -> str:
 
     return " ".join(words)
 
+
 def _fix_special_cases(text: str) -> str:
     """
     Handle any special cases that aren't covered by the general rules.
@@ -73,6 +69,7 @@ def _fix_special_cases(text: str) -> str:
 
     # For now, we don't have any special cases, but you can add them here if needed.
     return text
+
 
 def default_object_type_label(object_type: str) -> str:
     """
@@ -98,10 +95,11 @@ def default_object_type_label(object_type: str) -> str:
 
     return text
 
+
 # ---- lexicon ----
 
+
 def create_ai2thor_object_type_lexicon() -> EntityLexicon:
-    
     """
     Create an EntityLexeme for an AI2-THOR ObjectType, using a default label.
     """
@@ -115,7 +113,9 @@ def create_ai2thor_object_type_lexicon() -> EntityLexicon:
                 label=default_object_type_label(ot),
                 is_countable=ot in COUNTABLE_OBJECTS,
                 proper=False,
-                mass_noun= ot in PICKABLE_OBJECTS and not ot in COUNTABLE_OBJECTS,  # e.g. "water" is a mass noun, but "knife" isn't
+                mass_noun=ot in PICKABLE_OBJECTS
+                and ot
+                not in COUNTABLE_OBJECTS,  # e.g. "water" is a mass noun, but "knife" isn't
             ),
         )
 

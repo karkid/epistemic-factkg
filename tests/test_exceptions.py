@@ -2,7 +2,6 @@
 Simple test for exceptions module to validate basic functionality.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
@@ -11,10 +10,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from utils.exceptions import (
     EpistemicFactKGError,
-    ConfigurationError, 
+    ConfigurationError,
     DataSourceError,
     BuildError,
-    ValidationError
+    ValidationError,
 )
 
 
@@ -48,5 +47,5 @@ def test_build_error():
 def test_validation_error():
     """Test validation error."""
     error = ValidationError("Validation failed")
-    assert str(error) == "Validation failed" 
+    assert str(error) == "Validation failed"
     assert isinstance(error, EpistemicFactKGError)

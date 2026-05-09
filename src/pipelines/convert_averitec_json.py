@@ -4,7 +4,6 @@ Kept for backward compatibility with src/cli/convert_to_unified.py.
 
 infer_proof_types / pick_primary are retained for any external callers.
 """
-import re
 
 from src.adapters.averitec.converter import (
     AveritecConverter,
@@ -12,11 +11,7 @@ from src.adapters.averitec.converter import (
     _normalize_label,
     _medium_to_modality,
     _PRIMARY_ORDER,
-    _PERCEPTUAL,
-    _TEXTUAL,
-    _NUMERIC_CUES,
 )
-from src.core.claims.labels import CONFIDENCE_WEIGHTS, PramanaLabel
 
 _converter = AveritecConverter()
 
@@ -24,6 +19,7 @@ _converter = AveritecConverter()
 # ---------------------------------------------------------------------------
 # Legacy helpers retained for backward compatibility
 # ---------------------------------------------------------------------------
+
 
 def pick_primary(proof_types):
     s = set(proof_types or [])
@@ -44,14 +40,14 @@ def infer_proof_types(label: str, claim_types, strategies, qa_out, evidence_item
     answer_types: list[str] = []
     answers_text_parts: list[str] = []
 
-    for e in (evidence_items or []):
+    for e in evidence_items or []:
         mod = _medium_to_modality(e.get("source_medium") or e.get("source_type"))
         modalities.add(mod)
         if e.get("source_url"):
             src_urls.add(e["source_url"])
 
-    for q in (qa_out or []):
-        for a in (q.get("answers") or []):
+    for q in qa_out or []:
+        for a in q.get("answers") or []:
             at = str(a.get("answer_type") or "").strip().lower()
             answer_types.append(at)
             answers_text_parts.append(str(a.get("answer") or ""))

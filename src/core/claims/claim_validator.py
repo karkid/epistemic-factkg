@@ -1,7 +1,7 @@
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional
 
 from jsonschema import validate, ValidationError
 from datetime import datetime
@@ -31,15 +31,27 @@ class ClaimValidationResult:
     quality_valid: bool = True
     consistency_valid: bool = True
 
-    def add_issue(self, category: str, severity: str, message: str,
-                  field: str = None, suggestion: str = None):
-        self.issues.append(ClaimValidationIssue(category, severity, message, field, suggestion))
+    def add_issue(
+        self,
+        category: str,
+        severity: str,
+        message: str,
+        field: str = None,
+        suggestion: str = None,
+    ):
+        self.issues.append(
+            ClaimValidationIssue(category, severity, message, field, suggestion)
+        )
         if severity == "error":
             self.is_valid = False
-            if category == "schema":       self.schema_valid = False
-            elif category == "semantic":   self.semantic_valid = False
-            elif category == "quality":    self.quality_valid = False
-            elif category == "consistency": self.consistency_valid = False
+            if category == "schema":
+                self.schema_valid = False
+            elif category == "semantic":
+                self.semantic_valid = False
+            elif category == "quality":
+                self.quality_valid = False
+            elif category == "consistency":
+                self.consistency_valid = False
 
 
 @dataclass
@@ -63,8 +75,8 @@ class AdvancedClaimValidationSummary:
         print("CLAIM VALIDATION SUMMARY (schema v2.0)")
         print("=" * 60)
         print(f"Total:    {total:,}")
-        print(f"Valid:    {valid:,} ({valid/total*100:.1f}%)")
-        print(f"Invalid:  {total-valid:,} ({(total-valid)/total*100:.1f}%)")
+        print(f"Valid:    {valid:,} ({valid / total * 100:.1f}%)")
+        print(f"Invalid:  {total - valid:,} ({(total - valid) / total * 100:.1f}%)")
         print(f"Avg quality score: {avg_q:.3f}")
 
         by_cat: Dict[str, int] = {}
@@ -85,17 +97,25 @@ class AdvancedClaimValidationSummary:
             for cat, n in sorted(by_cat.items(), key=lambda x: x[1], reverse=True):
                 print(f"  {cat}: {n}")
 
-        quality_ranges = {"Excellent (>=0.9)": 0, "Good (0.7-0.9)": 0,
-                          "Fair (0.5-0.7)": 0, "Poor (<0.5)": 0}
+        quality_ranges = {
+            "Excellent (>=0.9)": 0,
+            "Good (0.7-0.9)": 0,
+            "Fair (0.5-0.7)": 0,
+            "Poor (<0.5)": 0,
+        }
         for r in self.results:
-            if r.quality_score >= 0.9:    quality_ranges["Excellent (>=0.9)"] += 1
-            elif r.quality_score >= 0.7:  quality_ranges["Good (0.7-0.9)"] += 1
-            elif r.quality_score >= 0.5:  quality_ranges["Fair (0.5-0.7)"] += 1
-            else:                          quality_ranges["Poor (<0.5)"] += 1
+            if r.quality_score >= 0.9:
+                quality_ranges["Excellent (>=0.9)"] += 1
+            elif r.quality_score >= 0.7:
+                quality_ranges["Good (0.7-0.9)"] += 1
+            elif r.quality_score >= 0.5:
+                quality_ranges["Fair (0.5-0.7)"] += 1
+            else:
+                quality_ranges["Poor (<0.5)"] += 1
 
         print("\nQuality distribution:")
         for label, count in quality_ranges.items():
-            print(f"  {label}: {count:,} ({count/total*100:.1f}%)")
+            print(f"  {label}: {count:,} ({count / total * 100:.1f}%)")
 
         print("=" * 60)
 
@@ -104,14 +124,40 @@ class AdvancedClaimValidator:
     """Validates unified v2.0 claim records."""
 
     def __init__(self):
-        self._sentence_end = re.compile(r'[.!?]$')
+        self._sentence_end = re.compile(r"[.!?]$")
         self._common = {
-            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to',
-            'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'has',
-            'have', 'had', 'will', 'would', 'can', 'could', 'should', 'not'
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "is",
+            "are",
+            "was",
+            "were",
+            "has",
+            "have",
+            "had",
+            "will",
+            "would",
+            "can",
+            "could",
+            "should",
+            "not",
         }
 
-    def validate_claim_advanced(self, claim_json: dict, claim_id: str = None) -> ClaimValidationResult:
+    def validate_claim_advanced(
+        self, claim_json: dict, claim_id: str = None
+    ) -> ClaimValidationResult:
         start = time.time()
         cid = claim_id or claim_json.get("id", "unknown")
         result = ClaimValidationResult(claim_id=cid, is_valid=True)
@@ -133,9 +179,12 @@ class AdvancedClaimValidator:
         try:
             validate(instance=claim, schema=CLAIM_SCHEMA)
         except ValidationError as e:
-            result.add_issue("schema", "error",
-                             f"Schema: {e.message}",
-                             field=str(e.path) if e.path else None)
+            result.add_issue(
+                "schema",
+                "error",
+                f"Schema: {e.message}",
+                field=str(e.path) if e.path else None,
+            )
 
     def _validate_semantics(self, claim: dict, result: ClaimValidationResult):
         triples = claim.get("claim_triples") or []
@@ -143,34 +192,51 @@ class AdvancedClaimValidator:
         text = claim.get("claim", "")
 
         if reasoning == "one_hop" and len(triples) != 1:
-            result.add_issue("semantic", "error",
-                             f"one_hop requires exactly 1 claim triple, found {len(triples)}",
-                             "claim_triples")
+            result.add_issue(
+                "semantic",
+                "error",
+                f"one_hop requires exactly 1 claim triple, found {len(triples)}",
+                "claim_triples",
+            )
 
         if reasoning == "conjunction" and len(triples) < 2:
-            result.add_issue("semantic", "error",
-                             f"conjunction requires >=2 claim triples, found {len(triples)}",
-                             "claim_triples")
+            result.add_issue(
+                "semantic",
+                "error",
+                f"conjunction requires >=2 claim triples, found {len(triples)}",
+                "claim_triples",
+            )
 
         if reasoning == "negation":
-            has_neg = any(w in text.lower() for w in ("not", "false", "n't", "never", "no "))
+            has_neg = any(
+                w in text.lower() for w in ("not", "false", "n't", "never", "no ")
+            )
             if not has_neg:
-                result.add_issue("semantic", "warning",
-                                 "negation claim has no negation word in text",
-                                 "claim")
+                result.add_issue(
+                    "semantic",
+                    "warning",
+                    "negation claim has no negation word in text",
+                    "claim",
+                )
 
         for i, triple in enumerate(triples):
             if not (isinstance(triple, (list, tuple)) and len(triple) == 3):
-                result.add_issue("semantic", "error",
-                                 f"claim_triples[{i}] malformed — expected [s, p, o]",
-                                 f"claim_triples[{i}]")
+                result.add_issue(
+                    "semantic",
+                    "error",
+                    f"claim_triples[{i}] malformed — expected [s, p, o]",
+                    f"claim_triples[{i}]",
+                )
 
-        for ev in (claim.get("evidence") or []):
+        for ev in claim.get("evidence") or []:
             if ev.get("stance") == "absent" and (ev.get("triples") or []):
-                result.add_issue("semantic", "warning",
-                                 f"evidence {ev.get('evidence_id')}: stance=absent but triples is non-empty",
-                                 "evidence[].triples",
-                                 suggestion="absent stance should have triples=[]")
+                result.add_issue(
+                    "semantic",
+                    "warning",
+                    f"evidence {ev.get('evidence_id')}: stance=absent but triples is non-empty",
+                    "evidence[].triples",
+                    suggestion="absent stance should have triples=[]",
+                )
 
     def _validate_quality(self, claim: dict, result: ClaimValidationResult):
         text = claim.get("claim", "").strip()
@@ -179,30 +245,61 @@ class AdvancedClaimValidator:
             return
 
         if len(text) < 10:
-            result.add_issue("quality", "warning", f"Claim text very short ({len(text)} chars)", "claim")
+            result.add_issue(
+                "quality",
+                "warning",
+                f"Claim text very short ({len(text)} chars)",
+                "claim",
+            )
         if len(text) > 250:
-            result.add_issue("quality", "warning", f"Claim text very long ({len(text)} chars)", "claim")
+            result.add_issue(
+                "quality",
+                "warning",
+                f"Claim text very long ({len(text)} chars)",
+                "claim",
+            )
         if not self._sentence_end.search(text):
-            result.add_issue("quality", "warning", "Claim does not end with punctuation", "claim")
+            result.add_issue(
+                "quality", "warning", "Claim does not end with punctuation", "claim"
+            )
         if not text[0].isupper():
-            result.add_issue("quality", "warning", "Claim does not start with capital letter", "claim")
+            result.add_issue(
+                "quality",
+                "warning",
+                "Claim does not start with capital letter",
+                "claim",
+            )
 
         words = text.lower().split()
         if len(words) < 3:
-            result.add_issue("quality", "warning", f"Claim has very few words ({len(words)})", "claim")
+            result.add_issue(
+                "quality",
+                "warning",
+                f"Claim has very few words ({len(words)})",
+                "claim",
+            )
 
         meaningful = [w for w in words if w not in self._common and len(w) > 2]
         if len(meaningful) < 2:
-            result.add_issue("quality", "warning", "Claim may lack meaningful content", "claim")
+            result.add_issue(
+                "quality", "warning", "Claim may lack meaningful content", "claim"
+            )
 
         if "http://" in text or "https://" in text:
-            result.add_issue("quality", "error",
-                             "Claim text contains raw URIs — should be human-readable",
-                             "claim")
+            result.add_issue(
+                "quality",
+                "error",
+                "Claim text contains raw URIs — should be human-readable",
+                "claim",
+            )
 
         if "|" in text and "%" in text:
-            result.add_issue("quality", "warning",
-                             "Claim may contain unconverted entity IDs", "claim")
+            result.add_issue(
+                "quality",
+                "warning",
+                "Claim may contain unconverted entity IDs",
+                "claim",
+            )
 
         for bad, suggestion in [
             ("is temperature", "specify value: hot/cold/at room temperature"),
@@ -210,57 +307,94 @@ class AdvancedClaimValidator:
             (" is false.", "boolean should not show 'false'"),
         ]:
             if bad in text.lower():
-                result.add_issue("quality", "warning", f"Awkward phrasing: '{bad}'",
-                                 "claim", suggestion=suggestion)
+                result.add_issue(
+                    "quality",
+                    "warning",
+                    f"Awkward phrasing: '{bad}'",
+                    "claim",
+                    suggestion=suggestion,
+                )
 
     def _validate_consistency(self, claim: dict, result: ClaimValidationResult):
         label = (claim.get("verdict") or {}).get("label")
         evidence = claim.get("evidence") or []
         claim_triples_raw = claim.get("claim_triples")
-        claim_triples = claim_triples_raw or []
 
-        if label and label not in ("supported", "refuted", "not_enough_evidence",
-                                   "conflicting_evidence"):
-            result.add_issue("consistency", "error", f"Unknown verdict label: {label}", "verdict.label")
+        if label and label not in (
+            "supported",
+            "refuted",
+            "not_enough_evidence",
+            "conflicting_evidence",
+        ):
+            result.add_issue(
+                "consistency",
+                "error",
+                f"Unknown verdict label: {label}",
+                "verdict.label",
+            )
 
         stances = [e.get("stance") for e in evidence if e.get("stance")]
         if label == "supported" and stances and all(s == "refutes" for s in stances):
-            result.add_issue("consistency", "error",
-                             "All evidence stances are 'refutes' but verdict is 'supported'",
-                             "evidence[].stance")
+            result.add_issue(
+                "consistency",
+                "error",
+                "All evidence stances are 'refutes' but verdict is 'supported'",
+                "evidence[].stance",
+            )
         if label == "refuted" and stances and all(s == "supports" for s in stances):
-            result.add_issue("consistency", "error",
-                             "All evidence stances are 'supports' but verdict is 'refuted'",
-                             "evidence[].stance")
+            result.add_issue(
+                "consistency",
+                "error",
+                "All evidence stances are 'supports' but verdict is 'refuted'",
+                "evidence[].stance",
+            )
 
         meta_utc = (claim.get("meta") or {}).get("created_utc")
         if meta_utc:
             try:
                 datetime.fromisoformat(meta_utc.replace("Z", "+00:00"))
-            except (ValueError, TypeError):
-                result.add_issue("consistency", "warning",
-                                 "meta.created_utc is not a valid ISO timestamp", "meta.created_utc")
+            except ValueError, TypeError:
+                result.add_issue(
+                    "consistency",
+                    "warning",
+                    "meta.created_utc is not a valid ISO timestamp",
+                    "meta.created_utc",
+                )
 
         provenance = claim.get("provenance") or {}
         dataset = provenance.get("dataset", "")
         if dataset == "ai2thor" and claim_triples_raw is None:
-            result.add_issue("consistency", "warning",
-                             "AI2THOR record missing claim_triples", "claim_triples")
+            result.add_issue(
+                "consistency",
+                "warning",
+                "AI2THOR record missing claim_triples",
+                "claim_triples",
+            )
         if dataset == "averitec" and claim_triples_raw is not None:
-            result.add_issue("consistency", "info",
-                             "AVeriTeC record unexpectedly has claim_triples", "claim_triples")
+            result.add_issue(
+                "consistency",
+                "info",
+                "AVeriTeC record unexpectedly has claim_triples",
+                "claim_triples",
+            )
 
     def _quality_score(self, claim: dict, result: ClaimValidationResult) -> float:
         score = 1.0
         for issue in result.issues:
-            if issue.severity == "error":   score -= 0.3
-            elif issue.severity == "warning": score -= 0.1
-            elif issue.severity == "info":    score -= 0.02
+            if issue.severity == "error":
+                score -= 0.3
+            elif issue.severity == "warning":
+                score -= 0.1
+            elif issue.severity == "info":
+                score -= 0.02
 
         text = claim.get("claim", "")
-        if 10 <= len(text) <= 150:         score += 0.05
-        if self._sentence_end.search(text): score += 0.02
-        if len(text.split()) >= 5:          score += 0.03
+        if 10 <= len(text) <= 150:
+            score += 0.05
+        if self._sentence_end.search(text):
+            score += 0.02
+        if len(text.split()) >= 5:
+            score += 0.03
 
         return max(0.0, min(1.0, score))
 
@@ -270,7 +404,11 @@ class AdvancedClaimValidator:
 # ------------------------------------------------------------------
 def semantic_checks(claim: dict):
     result = AdvancedClaimValidator().validate_claim_advanced(claim)
-    errors = [i.message for i in result.issues if i.severity == "error" and i.category == "semantic"]
+    errors = [
+        i.message
+        for i in result.issues
+        if i.severity == "error" and i.category == "semantic"
+    ]
     if errors:
         raise ValueError(errors[0])
 
@@ -281,6 +419,8 @@ def validate_claim(claim_json: dict) -> bool:
         for issue in result.issues:
             if issue.severity == "error":
                 if issue.category == "schema":
-                    raise CustomValidationError(f"Claim failed schema validation: {issue.message}")
+                    raise CustomValidationError(
+                        f"Claim failed schema validation: {issue.message}"
+                    )
                 raise ValueError(issue.message)
     return True

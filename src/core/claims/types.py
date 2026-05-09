@@ -10,9 +10,9 @@ from src.core.graph.types import Triple, TripleList
 from src.utils.io import write_jsonl
 from src.utils.time import utc_now_iso
 
+
 @dataclass(frozen=True, slots=True)
 class Evidence:
-
     evidence_triples: Sequence[Triple]
     evidence_source: str
     evidence_source_type: str
@@ -22,7 +22,6 @@ class Evidence:
 
 @dataclass(frozen=True, slots=True)
 class Context:
-
     context_id: Optional[str] = None
     context_type: Optional[str] = None
     generator: str = "agent"
@@ -31,14 +30,12 @@ class Context:
 
 @dataclass(frozen=True, slots=True)
 class Meta:
-
     created_utc: str
     notes: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
 class Reasoning:
-
     structural: str
 
 
@@ -50,6 +47,7 @@ class Claim:
     `text` is a good key name (common, unambiguous).
     Avoid `claim` as a field name because it conflicts with the concept/type name.
     """
+
     text: str
     claim_triples: TripleList
 
@@ -59,6 +57,7 @@ class ClaimInstance:
     """
     One labeled example in your dataset: claim + label + reasoning + evidence + context + meta.
     """
+
     rec_id: str
     claim: Claim
     label: str
@@ -100,7 +99,9 @@ class ClaimInstance:
             "reasoning": {
                 "structural": structural_v2,
                 "strategy": None,
-            } if structural_v2 else None,
+            }
+            if structural_v2
+            else None,
             "evidence": [
                 {
                     "evidence_id": f"{self.rec_id}-e0",
@@ -109,7 +110,9 @@ class ClaimInstance:
                     "triple_source": "ground_truth",
                     "modality": "simulation_state",
                     "stance": "supports" if self.label == "supported" else "refutes",
-                    "source_url": self.evidence.evidence_urls[0] if self.evidence.evidence_urls else None,
+                    "source_url": self.evidence.evidence_urls[0]
+                    if self.evidence.evidence_urls
+                    else None,
                 }
             ],
             "provenance": {
@@ -122,7 +125,7 @@ class ClaimInstance:
                 "created_utc": self.meta.created_utc,
             },
         }
-    
+
     def get_schema_layout_json(self) -> str:
 
         return json.dumps(self.get_schema_layout(), indent=2)
@@ -163,7 +166,12 @@ class ClaimInstance:
             evidence_urls=evidence_urls,
             evidence_extract=evidence_extract,
         )
-        context = Context(context_id=context_id, context_type=context_type, generator=generator, split=split)
+        context = Context(
+            context_id=context_id,
+            context_type=context_type,
+            generator=generator,
+            split=split,
+        )
         meta = Meta(created_utc=created_utc, notes=notes)
 
         return ClaimInstance(
@@ -218,7 +226,7 @@ class ClaimCorpus:
         for ci in self.claims:
             if ci.rec_id == rec_id:
                 return ci
-            
+
         return None
 
     def get_by_ids(self, rec_ids: Sequence[str]) -> List[ClaimInstance]:
@@ -238,7 +246,7 @@ class ClaimCorpus:
     def get_schema_layout(self) -> List[Dict[str, Any]]:
 
         return [ci.get_schema_layout() for ci in self.claims]
-    
+
     def get_schema_layout_json(self) -> str:
 
         return json.dumps(self.get_schema_layout(), indent=2)

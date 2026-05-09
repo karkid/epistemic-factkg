@@ -1,7 +1,6 @@
-
 from enum import StrEnum
 from typing import FrozenSet
-import re
+
 
 class ObjectType(StrEnum):
     AlarmClock = "AlarmClock"
@@ -149,9 +148,9 @@ class ObjectType(StrEnum):
     Wax = "Wax"
     Soap = "Soap"
     Sponge = "Sponge"
-    Organic = "Organic",
-    True_ = "True",
-    False_ = "False",
+    Organic = ("Organic",)
+    True_ = ("True",)
+    False_ = ("False",)
 
 
 CONTAINER_ROLES: FrozenSet[ObjectType] = frozenset(
@@ -192,7 +191,7 @@ HANGING_ROLES: FrozenSet[ObjectType] = frozenset(
         ObjectType.ToiletPaperHanger,
         ObjectType.TowelHolder,
         ObjectType.ShowerCurtain,
-        ObjectType.Wall
+        ObjectType.Wall,
     ]
 )
 
@@ -386,5 +385,3 @@ ACRONYMS: FrozenSet[ObjectType] = frozenset(
         "DC",
     ]
 )
-
-

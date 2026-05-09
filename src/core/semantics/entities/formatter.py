@@ -24,18 +24,20 @@ class EntityFormatter:
     If later you want entity-id formatting ("Mug|..."), resolve id->type first.
     """
 
-    def __init__(self, entity_lexicon: EntityLexicon, *, default_definite: bool = False):
+    def __init__(
+        self, entity_lexicon: EntityLexicon, *, default_definite: bool = False
+    ):
 
         self.lex = entity_lexicon
         self.default_definite = default_definite
 
-    def format_type(self,
-                    object_type: str,
-                    *,
-                    definite: Optional[bool] = None,
-                    count: int = 1,
-                    ) -> str:
-        
+    def format_type(
+        self,
+        object_type: str,
+        *,
+        definite: Optional[bool] = None,
+        count: int = 1,
+    ) -> str:
         """
         Examples:
           format_type("Mug") -> "a mug"
@@ -47,9 +49,10 @@ class EntityFormatter:
 
         lexeme = self.lex.get(object_type)
         if lexeme is None:
-
             base = _clean_label(object_type).lower()
-            return self._apply_determiner(base, definite=definite, count=count, lexeme=None)
+            return self._apply_determiner(
+                base, definite=definite, count=count, lexeme=None
+            )
 
         base = _clean_label(lexeme.label)
 
@@ -68,9 +71,11 @@ class EntityFormatter:
         # singular countable: add article
         return self._apply_determiner(base, definite=definite, count=1, lexeme=lexeme)
 
-    def _apply_determiner(self, base: str, *, definite: bool, count: int, lexeme: Optional[EntityLexeme]) -> str:
+    def _apply_determiner(
+        self, base: str, *, definite: bool, count: int, lexeme: Optional[EntityLexeme]
+    ) -> str:
 
         if definite:
             return f"the {base}"
-        
+
         return _engine.a(base)

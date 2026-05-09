@@ -22,13 +22,13 @@ class TestKnowledgeGraphBuilderAPI:
         dummy_triples = [
             {"subject": "Apple_1", "predicate": "rdf:type", "object": "Apple"},
             {"subject": "Apple_1", "predicate": "hasPosition", "object": "Position_1"},
-            {"subject": "Position_1", "predicate": "hasX", "object": "1.0"}
+            {"subject": "Position_1", "predicate": "hasX", "object": "1.0"},
         ]
-        
+
         # Validate triple structure
         assert len(dummy_triples) == 3
         assert all("subject" in triple for triple in dummy_triples)
-        assert all("predicate" in triple for triple in dummy_triples) 
+        assert all("predicate" in triple for triple in dummy_triples)
         assert all("object" in triple for triple in dummy_triples)
 
     def test_dummy_build_result(self):
@@ -38,9 +38,9 @@ class TestKnowledgeGraphBuilderAPI:
             "triple_count": 396,
             "object_count": 110,
             "scene_count": 2,
-            "processing_time": 0.5
+            "processing_time": 0.5,
         }
-        
+
         assert dummy_build_result["success"] is True
         assert dummy_build_result["triple_count"] > 0
         assert dummy_build_result["object_count"] > 0
@@ -49,7 +49,7 @@ class TestKnowledgeGraphBuilderAPI:
     def test_dummy_validation_modes(self):
         """Test validation modes with dummy data."""
         validation_modes = ["strict", "lenient", "permissive"]
-        
+
         for mode in validation_modes:
             # Test that mode can be set
             config = {"validation_mode": mode}
@@ -59,10 +59,10 @@ class TestKnowledgeGraphBuilderAPI:
         """Test namespace data structure."""
         dummy_namespaces = {
             "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-            "rdfs": "http://www.w3.org/2000/01/rdf-schema#", 
-            "ex": "http://example.org/"
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+            "ex": "http://example.org/",
         }
-        
+
         assert "rdf" in dummy_namespaces
         assert dummy_namespaces["rdf"].startswith("http://")
         assert len(dummy_namespaces) >= 3
@@ -72,9 +72,9 @@ class TestKnowledgeGraphBuilderAPI:
         dummy_mappings = {
             "Apple": "http://example.org/Apple",
             "Table": "http://example.org/Table",
-            "on_top_of": "http://example.org/onTopOf"
+            "on_top_of": "http://example.org/onTopOf",
         }
-        
+
         # Test mapping structure
         assert "Apple" in dummy_mappings
         assert dummy_mappings["Apple"].startswith("http://")
@@ -85,7 +85,7 @@ class TestKnowledgeGraphBuilderAPI:
         # Test build error
         with pytest.raises(BuildError):
             raise BuildError("Dummy build failed")
-        
+
         # Test validation error
         with pytest.raises(ValidationError):
             raise ValidationError("Dummy validation failed")
@@ -93,7 +93,7 @@ class TestKnowledgeGraphBuilderAPI:
     def test_serialization_formats_dummy(self):
         """Test serialization formats with dummy data."""
         supported_formats = ["turtle", "rdf/xml", "n3", "json-ld"]
-        
+
         for format_type in supported_formats:
             # Test format is supported
             config = {"output_format": format_type}

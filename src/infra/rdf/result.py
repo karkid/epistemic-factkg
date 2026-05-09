@@ -1,6 +1,6 @@
 # src/core/build/result.py
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Set, List
 from rdflib import Graph as RDFGraph
 

@@ -3,9 +3,11 @@ import argparse
 from collections import Counter, defaultdict
 from pathlib import Path
 
+
 def load_json(path: str):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 def norm(x):
     if x is None:
@@ -15,10 +17,20 @@ def norm(x):
         return x if x else None
     return x
 
+
 def main():
-    ap = argparse.ArgumentParser(description="Analyze raw Averitec JSON and collect unique values + counts.")
-    ap.add_argument("--inputs", nargs="+", required=True, help="One or more Averitec JSON files (train/dev/test).")
-    ap.add_argument("--out", default="averitec_profile.json", help="Output JSON profile file")
+    ap = argparse.ArgumentParser(
+        description="Analyze raw Averitec JSON and collect unique values + counts."
+    )
+    ap.add_argument(
+        "--inputs",
+        nargs="+",
+        required=True,
+        help="One or more Averitec JSON files (train/dev/test).",
+    )
+    ap.add_argument(
+        "--out", default="averitec_profile.json", help="Output JSON profile file"
+    )
     args = ap.parse_args()
 
     # Global counters
@@ -84,11 +96,13 @@ def main():
             # Meta fields presence
             speaker = norm(rec.get("speaker"))
             speaker_counts["present" if speaker else "missing"] += 1
-            if speaker: unique["speaker"].add(speaker)
+            if speaker:
+                unique["speaker"].add(speaker)
 
             rs = norm(rec.get("reporting_source"))
             reporting_source_counts["present" if rs else "missing"] += 1
-            if rs: unique["reporting_source"].add(rs)
+            if rs:
+                unique["reporting_source"].add(rs)
 
             ou = norm(rec.get("original_claim_url"))
             original_url_counts["present" if ou else "missing"] += 1
@@ -189,11 +203,15 @@ def main():
             "answer_type": sorted(list(unique["answer_type"])),
             "source_medium": sorted(list(unique["source_medium"])),
             "claim_types": sorted(list(unique["claim_types"])),
-            "fact_checking_strategies": sorted(list(unique["fact_checking_strategies"])),
+            "fact_checking_strategies": sorted(
+                list(unique["fact_checking_strategies"])
+            ),
             "location_ISO_code": sorted(list(unique["location_ISO_code"])),
-            "reporting_source_examples_top50": sorted(list(unique["reporting_source"]))[:50],
+            "reporting_source_examples_top50": sorted(list(unique["reporting_source"]))[
+                :50
+            ],
             "speaker_examples_top50": sorted(list(unique["speaker"]))[:50],
-        }
+        },
     }
 
     out_path = Path(args.out)
@@ -202,13 +220,16 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     print(f"✅ Wrote profile: {out_path}")
-    print(f"Claims: {total_claims} | Questions: {total_questions} | Answers: {total_answers}")
+    print(
+        f"Claims: {total_claims} | Questions: {total_questions} | Answers: {total_answers}"
+    )
     print("\nTop derived_source_type:")
     for k, v in derived_source_type_counts.most_common(10):
         print(f"  {k}: {v}")
     print("\nTop answer_type:")
     for k, v in answer_type_counts.most_common(10):
         print(f"  {k}: {v}")
+
 
 if __name__ == "__main__":
     main()

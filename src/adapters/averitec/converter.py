@@ -45,7 +45,9 @@ _PRIMARY_ORDER = [
 def _normalize_label(label) -> str:
     if not label:
         return "not_enough_evidence"
-    return _LABEL_MAP.get(str(label).strip().lower(), str(label).strip().lower().replace(" ", "_"))
+    return _LABEL_MAP.get(
+        str(label).strip().lower(), str(label).strip().lower().replace(" ", "_")
+    )
 
 
 def _medium_to_modality(source_medium) -> str:
@@ -53,9 +55,15 @@ def _medium_to_modality(source_medium) -> str:
         return "other"
     sm = str(source_medium).strip().lower().replace(" ", "_")
     for key, mod in (
-        ("web_table", "web_table"), ("web_text", "web_text"), ("pdf", "pdf"),
-        ("video", "video"), ("youtube", "video"), ("image", "image"),
-        ("jpeg", "image"), ("png", "image"), ("audio", "audio"),
+        ("web_table", "web_table"),
+        ("web_text", "web_text"),
+        ("pdf", "pdf"),
+        ("video", "video"),
+        ("youtube", "video"),
+        ("image", "image"),
+        ("jpeg", "image"),
+        ("png", "image"),
+        ("audio", "audio"),
     ):
         if key in sm:
             return mod
@@ -109,6 +117,7 @@ class AveritecConverter(DatasetConverter):
 
     def iter_records(self, in_path: str):
         import json
+
         with open(in_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, list):
@@ -146,18 +155,20 @@ class AveritecConverter(DatasetConverter):
                 ans_type = _ANSWER_TYPE_MAP.get(ans_type_key, "unanswerable")
                 text = f"{qtext} {ans_text}".strip() if qtext else ans_text
 
-                items.append({
-                    "evidence_id": evidence_id,
-                    "text": text or None,
-                    "triples": [],
-                    "triple_source": None,
-                    "modality": modality,
-                    "stance": stance,
-                    "source_url": a.get("source_url"),
-                    # Private keys stripped before output
-                    "_answer_type": ans_type,
-                    "_answer_text": ans_text,
-                })
+                items.append(
+                    {
+                        "evidence_id": evidence_id,
+                        "text": text or None,
+                        "triples": [],
+                        "triple_source": None,
+                        "modality": modality,
+                        "stance": stance,
+                        "source_url": a.get("source_url"),
+                        # Private keys stripped before output
+                        "_answer_type": ans_type,
+                        "_answer_text": ans_text,
+                    }
+                )
         return items
 
     def convert_one(self, raw_record: dict, rec_id: str) -> dict:
@@ -176,18 +187,22 @@ class AveritecConverter(DatasetConverter):
             label, modalities, src_urls, answer_types, answers_text
         )
 
-        evidence_out = [{k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_raw]
+        evidence_out = [
+            {k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_raw
+        ]
 
         if not evidence_out:
-            evidence_out = [{
-                "evidence_id": f"{oid}-e0",
-                "text": None,
-                "triples": [],
-                "triple_source": None,
-                "modality": "other",
-                "stance": "unknown",
-                "source_url": None,
-            }]
+            evidence_out = [
+                {
+                    "evidence_id": f"{oid}-e0",
+                    "text": None,
+                    "triples": [],
+                    "triple_source": None,
+                    "modality": "other",
+                    "stance": "unknown",
+                    "source_url": None,
+                }
+            ]
 
         return {
             "schema_version": "2.0",

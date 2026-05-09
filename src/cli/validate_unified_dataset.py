@@ -10,6 +10,7 @@ python -m src.cli.validate_unified_dataset \\
 --schema is optional; defaults to the built-in CLAIM_SCHEMA (src/core/claims/claim_schema.py).
 Pass an external JSON Schema file to override.
 """
+
 import json
 import argparse
 from collections import Counter
@@ -34,6 +35,7 @@ _DATASET_VALIDATORS: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
@@ -61,11 +63,13 @@ def _safe_get(d: dict, path: List[str], default=None):
 # Logic checks (v2.0 field names)
 # ---------------------------------------------------------------------------
 
+
 def _check_stance_consistency(obj: dict) -> List[str]:
     msgs = []
     vlabel = _safe_get(obj, ["verdict", "label"])
     stances = [
-        e.get("stance") for e in (obj.get("evidence") or [])
+        e.get("stance")
+        for e in (obj.get("evidence") or [])
         if isinstance(e, dict) and e.get("stance")
     ]
     if not stances or vlabel is None:
@@ -88,6 +92,7 @@ def _check_dataset_specific(obj: dict) -> List[str]:
 # ---------------------------------------------------------------------------
 # Per-file summary
 # ---------------------------------------------------------------------------
+
 
 def summarize_file(
     path: str,
@@ -124,9 +129,15 @@ def summarize_file(
         summary["counts"]["total_records"] += 1
 
         # Distributions
-        summary["distributions"]["verdict_label"][_safe_get(obj, ["verdict", "label"])] += 1
-        summary["distributions"]["pramana_primary"][_safe_get(obj, ["epistemic", "pramana_primary"])] += 1
-        summary["distributions"]["dataset"][_safe_get(obj, ["provenance", "dataset"])] += 1
+        summary["distributions"]["verdict_label"][
+            _safe_get(obj, ["verdict", "label"])
+        ] += 1
+        summary["distributions"]["pramana_primary"][
+            _safe_get(obj, ["epistemic", "pramana_primary"])
+        ] += 1
+        summary["distributions"]["dataset"][
+            _safe_get(obj, ["provenance", "dataset"])
+        ] += 1
         summary["distributions"]["reasoning_structural"][
             _safe_get(obj, ["reasoning", "structural"])
         ] += 1
@@ -134,26 +145,33 @@ def summarize_file(
         for pt in _safe_get(obj, ["epistemic", "pramana_all"], []):
             summary["distributions"]["pramana_all"][pt] += 1
 
-        for e in (obj.get("evidence") or []):
+        for e in obj.get("evidence") or []:
             if isinstance(e, dict):
                 summary["distributions"]["evidence_modality"][e.get("modality")] += 1
 
         # JSON Schema validation
-        schema_errors = sorted(schema_validator.iter_errors(obj), key=lambda e: list(e.path))
+        schema_errors = sorted(
+            schema_validator.iter_errors(obj), key=lambda e: list(e.path)
+        )
         if schema_errors:
             summary["counts"]["schema_invalid"] += 1
             for e in schema_errors:
                 key = f"{'/'.join(str(x) for x in e.path)} | {e.message}"
                 summary["schema_errors_top"][key] += 1
             if len(summary["examples"]["schema_invalid"]) < max_examples:
-                summary["examples"]["schema_invalid"].append({
-                    "line": line_no,
-                    "id": obj.get("id"),
-                    "errors": [
-                        {"path": "/".join(str(x) for x in e.path), "message": e.message}
-                        for e in schema_errors[:5]
-                    ],
-                })
+                summary["examples"]["schema_invalid"].append(
+                    {
+                        "line": line_no,
+                        "id": obj.get("id"),
+                        "errors": [
+                            {
+                                "path": "/".join(str(x) for x in e.path),
+                                "message": e.message,
+                            }
+                            for e in schema_errors[:5]
+                        ],
+                    }
+                )
         else:
             summary["counts"]["schema_valid"] += 1
 
@@ -167,11 +185,13 @@ def summarize_file(
             for w in warnings:
                 summary["logic_warnings_top"][w] += 1
             if len(summary["examples"]["warnings"]) < max_examples:
-                summary["examples"]["warnings"].append({
-                    "line": line_no,
-                    "id": obj.get("id"),
-                    "warnings": warnings[:5],
-                })
+                summary["examples"]["warnings"].append(
+                    {
+                        "line": line_no,
+                        "id": obj.get("id"),
+                        "warnings": warnings[:5],
+                    }
+                )
 
     # Serialize Counters
     for k in list(summary["distributions"]):
@@ -186,6 +206,7 @@ def summarize_file(
 # Pretty print
 # ---------------------------------------------------------------------------
 
+
 def pretty_print_summary(s: Dict[str, Any]) -> None:
     c = s["counts"]
     print("\n" + "=" * 50)
@@ -197,11 +218,15 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
     print(f"Records w/ warnings:  {c['logic_warnings_records']:,}")
 
     print("\n-- Verdict label --")
-    for k, v in sorted(s["distributions"]["verdict_label"].items(), key=lambda x: str(x[0])):
+    for k, v in sorted(
+        s["distributions"]["verdict_label"].items(), key=lambda x: str(x[0])
+    ):
         print(f"  {k}: {v}")
 
     print("\n-- Pramana primary --")
-    for k, v in sorted(s["distributions"]["pramana_primary"].items(), key=lambda x: str(x[0])):
+    for k, v in sorted(
+        s["distributions"]["pramana_primary"].items(), key=lambda x: str(x[0])
+    ):
         print(f"  {k}: {v}")
 
     print("\n-- Dataset --")
@@ -209,7 +234,9 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
         print(f"  {k}: {v}")
 
     print("\n-- Evidence modality --")
-    for k, v in sorted(s["distributions"]["evidence_modality"].items(), key=lambda x: str(x[0])):
+    for k, v in sorted(
+        s["distributions"]["evidence_modality"].items(), key=lambda x: str(x[0])
+    ):
         print(f"  {k}: {v}")
 
     print("\n-- Top schema errors --")
@@ -245,24 +272,31 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Validate unified v2.0 JSONL files against schema + logic checks."
     )
     ap.add_argument(
-        "--files", nargs="+", required=True,
+        "--files",
+        nargs="+",
+        required=True,
         help="One or more unified v2.0 JSONL files to validate.",
     )
     ap.add_argument(
-        "--schema", default=None,
+        "--schema",
+        default=None,
         help="Path to an external JSON Schema file. Defaults to built-in CLAIM_SCHEMA.",
     )
     ap.add_argument(
-        "--out", default="data/summary/validation.json",
+        "--out",
+        default="data/summary/validation.json",
         help="Where to write the summary JSON.",
     )
     ap.add_argument(
-        "--max_examples", type=int, default=3,
+        "--max_examples",
+        type=int,
+        default=3,
         help="Max failing examples to include in the summary.",
     )
     args = ap.parse_args()
@@ -280,8 +314,12 @@ def main() -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"generated_utc": utc_now_iso(), "summaries": all_summaries},
-                  f, ensure_ascii=False, indent=2)
+        json.dump(
+            {"generated_utc": utc_now_iso(), "summaries": all_summaries},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     print(f"\nWrote summary to: {args.out}")
 

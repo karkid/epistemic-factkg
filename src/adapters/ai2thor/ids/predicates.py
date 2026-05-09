@@ -1,6 +1,7 @@
 from enum import StrEnum
 from typing import FrozenSet
 
+
 class PredicateId(StrEnum):
     # attributes
     openable = "openable"

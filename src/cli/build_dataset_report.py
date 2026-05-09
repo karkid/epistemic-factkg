@@ -33,7 +33,9 @@ def sort_dict_by_value_desc(d: Dict[str, int]) -> List[Tuple[str, int]]:
     return sorted(d.items(), key=lambda kv: kv[1], reverse=True)
 
 
-def plot_bar(dist: Dict[str, int], title: str, out_path: Path, top_k: Optional[int] = None):
+def plot_bar(
+    dist: Dict[str, int], title: str, out_path: Path, top_k: Optional[int] = None
+):
     items = sort_dict_by_value_desc(dist)
     if top_k is not None:
         items = items[:top_k]
@@ -76,15 +78,29 @@ def summarize_one(summary: Dict[str, Any]) -> str:
     parts.append(f"- warnings_records: {counts.get('warnings_records', 0)}\n\n")
 
     if dists.get("verdict_label"):
-        parts.append(md_table_from_dist("Verdict label distribution", dists["verdict_label"]))
+        parts.append(
+            md_table_from_dist("Verdict label distribution", dists["verdict_label"])
+        )
     if dists.get("epistemic_proof_type"):
-        parts.append(md_table_from_dist("Epistemic proof type distribution", dists["epistemic_proof_type"]))
+        parts.append(
+            md_table_from_dist(
+                "Epistemic proof type distribution", dists["epistemic_proof_type"]
+            )
+        )
     if dists.get("context_type"):
-        parts.append(md_table_from_dist("Context type distribution", dists["context_type"]))
+        parts.append(
+            md_table_from_dist("Context type distribution", dists["context_type"])
+        )
     if dists.get("source_type"):
-        parts.append(md_table_from_dist("Evidence source_type distribution", dists["source_type"]))
+        parts.append(
+            md_table_from_dist(
+                "Evidence source_type distribution", dists["source_type"]
+            )
+        )
     if dists.get("answer_type"):
-        parts.append(md_table_from_dist("Answer type distribution", dists["answer_type"]))
+        parts.append(
+            md_table_from_dist("Answer type distribution", dists["answer_type"])
+        )
 
     # Errors/warnings top
     schema_errors_top = summary.get("schema_errors_top") or {}
@@ -110,11 +126,23 @@ def summarize_one(summary: Dict[str, Any]) -> str:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Build dataset report (md + plots) from validation summary JSON.")
-    ap.add_argument("--summary", required=True, help="Path to validation_summary.json produced by validate_unified_dataset")
-    ap.add_argument("--out_dir", required=True, help="Output directory for report (md + plots)")
-    ap.add_argument("--title", default="Epistemic FactKG Dataset Report", help="Report title")
-    ap.add_argument("--top_k_sources", type=int, default=15, help="Top-K for source_type plot")
+    ap = argparse.ArgumentParser(
+        description="Build dataset report (md + plots) from validation summary JSON."
+    )
+    ap.add_argument(
+        "--summary",
+        required=True,
+        help="Path to validation_summary.json produced by validate_unified_dataset",
+    )
+    ap.add_argument(
+        "--out_dir", required=True, help="Output directory for report (md + plots)"
+    )
+    ap.add_argument(
+        "--title", default="Epistemic FactKG Dataset Report", help="Report title"
+    )
+    ap.add_argument(
+        "--top_k_sources", type=int, default=15, help="Top-K for source_type plot"
+    )
     args = ap.parse_args()
 
     src = load_json(args.summary)
@@ -137,18 +165,31 @@ def main():
         if dists.get("verdict_label"):
             p = plots_dir / f"{file_name}__verdict_label.png"
             plot_bar(dists["verdict_label"], f"{s.get('file')} — verdict_label", p)
-            plot_index_lines.append(f"- {s.get('file')} verdict_label: plots/{p.name}\n")
+            plot_index_lines.append(
+                f"- {s.get('file')} verdict_label: plots/{p.name}\n"
+            )
 
         # epistemic_proof_type
         if dists.get("epistemic_proof_type"):
             p = plots_dir / f"{file_name}__epistemic_proof_type.png"
-            plot_bar(dists["epistemic_proof_type"], f"{s.get('file')} — epistemic_proof_type", p)
-            plot_index_lines.append(f"- {s.get('file')} epistemic_proof_type: plots/{p.name}\n")
+            plot_bar(
+                dists["epistemic_proof_type"],
+                f"{s.get('file')} — epistemic_proof_type",
+                p,
+            )
+            plot_index_lines.append(
+                f"- {s.get('file')} epistemic_proof_type: plots/{p.name}\n"
+            )
 
         # source_type (top-k)
         if dists.get("source_type"):
             p = plots_dir / f"{file_name}__source_type.png"
-            plot_bar(dists["source_type"], f"{s.get('file')} — source_type (top {args.top_k_sources})", p, top_k=args.top_k_sources)
+            plot_bar(
+                dists["source_type"],
+                f"{s.get('file')} — source_type (top {args.top_k_sources})",
+                p,
+                top_k=args.top_k_sources,
+            )
             plot_index_lines.append(f"- {s.get('file')} source_type: plots/{p.name}\n")
 
         # answer_type
@@ -168,7 +209,9 @@ def main():
     if plot_index_lines:
         md_parts.extend(plot_index_lines)
         md_parts.append("\n")
-        md_parts.append("> Note: image links are relative paths. Open `dataset_report.md` from the report folder.\n\n")
+        md_parts.append(
+            "> Note: image links are relative paths. Open `dataset_report.md` from the report folder.\n\n"
+        )
     else:
         md_parts.append("- (no plots generated)\n\n")
 

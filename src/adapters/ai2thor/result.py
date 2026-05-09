@@ -4,6 +4,7 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 # ----------------------------
 # Event-level dataclasses
 # ----------------------------
@@ -16,6 +17,7 @@ class ObjectPlacement:
     success: bool = True
     error: Optional[str] = None
 
+
 @dataclass
 class ObjectStateChange:
     object_id: str
@@ -24,6 +26,7 @@ class ObjectStateChange:
     to_state: str
     success: bool = True
     error: Optional[str] = None
+
 
 # ----------------------------
 # Scene-level result
@@ -36,6 +39,7 @@ class SceneRandomizerResult:
     receptacles_used: int = 0
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+
 
 # ----------------------------
 # Summary across scenes
@@ -51,9 +55,9 @@ class SceneRandomizerSummary:
         self.results.append(result)
 
     def print_summary(self, logger_func=logger.info):
-        logger_func("="*72)
+        logger_func("=" * 72)
         logger_func("Scene Randomization Summary")
-        logger_func("="*72)
+        logger_func("=" * 72)
 
         for res in self.results:
             logger_func(f"Scene ID: {res.scene_id}")
@@ -83,7 +87,7 @@ class SceneRandomizerSummary:
                 for e in res.errors:
                     logger_func(f"  - {e}")
 
-            logger_func("-"*72)
+            logger_func("-" * 72)
         # ----------------------------
         # Overall totals
         # ----------------------------
@@ -93,11 +97,11 @@ class SceneRandomizerSummary:
         total_warnings = sum(len(r.warnings) for r in self.results)
         total_errors = sum(len(r.errors) for r in self.results)
 
-        logger_func("="*72)
+        logger_func("=" * 72)
         logger_func(f"Scenes processed : {len(self.results)}")
         logger_func(f"Total object placements : {total_objects}")
         logger_func(f"Total state changes     : {total_states}")
         logger_func(f"Total receptacles used  : {total_receptacles}")
         logger_func(f"Total warnings          : {total_warnings}")
         logger_func(f"Total errors            : {total_errors}")
-        logger_func("="*72)
+        logger_func("=" * 72)

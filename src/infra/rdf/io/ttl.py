@@ -8,7 +8,7 @@ Keep rdflib out of core graph/query logic.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable
 
 from rdflib import Graph as RDFGraph, URIRef, Literal
 
@@ -52,5 +52,11 @@ def write_triples_to_nt(triples: Iterable[Triple], out_path: str | Path) -> None
     path = Path(out_path)
     g = RDFGraph()
     for s, p, o in triples:
-        g.add((URIRef(s), URIRef(p), Literal(o) if not str(o).startswith("http") else URIRef(o)))
+        g.add(
+            (
+                URIRef(s),
+                URIRef(p),
+                Literal(o) if not str(o).startswith("http") else URIRef(o),
+            )
+        )
     g.serialize(destination=str(path), format="nt")

@@ -68,13 +68,16 @@ class DatasetConverter(ABC):
         Default: reads JSONL. Override for JSON arrays or other formats.
         """
         import json
+
         with open(in_path, "r", encoding="utf-8") as f:
             for i, line in enumerate(f, start=1):
                 line = line.strip()
                 if line:
                     yield i, json.loads(line)
 
-    def convert_file(self, in_path: str, out_path: str, split: str | None = None) -> int:
+    def convert_file(
+        self, in_path: str, out_path: str, split: str | None = None
+    ) -> int:
         """
         Convert an entire source file to unified v2.0 JSONL.
 
@@ -89,6 +92,7 @@ class DatasetConverter(ABC):
         int — number of records written
         """
         import json
+
         count = 0
         with open(out_path, "w", encoding="utf-8") as fout:
             for i, raw in self.iter_records(in_path):

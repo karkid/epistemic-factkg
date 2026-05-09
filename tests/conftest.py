@@ -25,13 +25,8 @@ def temp_dir():
 def simple_config():
     """Create a simple test configuration."""
     return {
-        "ai2thor": {
-            "environment": "TestScene",
-            "grid_size": 0.25
-        },
-        "knowledge_graph": {
-            "base_uri": "http://test.example.org/"
-        }
+        "ai2thor": {"environment": "TestScene", "grid_size": 0.25},
+        "knowledge_graph": {"base_uri": "http://test.example.org/"},
     }
 
 
@@ -39,15 +34,15 @@ def simple_config():
 def lightweight_mock_data_source():
     """Create a lightweight mock data source - no real scenes loaded."""
     mock_source = Mock()
-    
+
     # Simple test data - completely mocked
     mock_source.get_scene_data.return_value = {
         "scene": "MockScene",
-        "objects": [{"objectId": "Apple_1", "objectType": "Apple"}]
+        "objects": [{"objectId": "Apple_1", "objectType": "Apple"}],
     }
     mock_source.scene_names = ["MockScene"]  # Only one mock scene
     mock_source.validate.return_value = True
-    
+
     return mock_source
 
 

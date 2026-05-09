@@ -27,18 +27,18 @@ class TestDataSourceAPI:
                     "objectType": "Apple",
                     "position": {"x": 1.0, "y": 0.5, "z": 2.0},
                     "visible": True,
-                    "receptacle": False
+                    "receptacle": False,
                 },
                 {
-                    "objectId": "Table_1", 
+                    "objectId": "Table_1",
                     "objectType": "Table",
                     "position": {"x": 0.0, "y": 0.0, "z": 0.0},
                     "visible": True,
-                    "receptacle": True
-                }
-            ]
+                    "receptacle": True,
+                },
+            ],
         }
-        
+
         # Validate structure
         assert "scene" in dummy_scene
         assert "objects" in dummy_scene
@@ -49,9 +49,9 @@ class TestDataSourceAPI:
         """Test processing dummy data."""
         dummy_data = [
             {"objectId": "Cup_1", "objectType": "Cup", "visible": True},
-            {"objectId": "Spoon_1", "objectType": "Spoon", "visible": False}
+            {"objectId": "Spoon_1", "objectType": "Spoon", "visible": False},
         ]
-        
+
         # Test filtering visible objects
         visible_objects = [obj for obj in dummy_data if obj["visible"]]
         assert len(visible_objects) == 1
@@ -70,16 +70,16 @@ class TestDataSourceAPI:
                 "subject": "Apple_1",
                 "predicate": "on_top_of",
                 "object": "Table_1",
-                "confidence": 0.95
+                "confidence": 0.95,
             },
             {
                 "subject": "Cup_1",
                 "predicate": "near",
-                "object": "Apple_1", 
-                "confidence": 0.8
-            }
+                "object": "Apple_1",
+                "confidence": 0.8,
+            },
         ]
-        
+
         # Test relationship structure
         assert len(dummy_relationships) == 2
         assert dummy_relationships[0]["predicate"] == "on_top_of"
@@ -90,7 +90,7 @@ class TestDataSourceAPI:
         # Test configuration error
         with pytest.raises(ConfigurationError):
             raise ConfigurationError("Invalid dummy config")
-        
+
         # Test data source error
         with pytest.raises(DataSourceError):
             raise DataSourceError("Dummy data source failed")

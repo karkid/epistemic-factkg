@@ -38,11 +38,10 @@ class BaseOntology:
         self._by_source[info.name] = mapping
         self._by_uri[uri] = mapping
 
-
     def register_object_type(
         self,
         info: EntityInfo,
-        uri: str, # uri
+        uri: str,  # uri
         transform: Optional[Callable] = None,
     ) -> None:
 
@@ -65,11 +64,7 @@ class BaseOntology:
         relation_type: RelationType,
     ) -> Set[str]:
 
-        return {
-            m.uri
-            for m in self._by_uri.values()
-            if m.info.type == relation_type
-        }
+        return {m.uri for m in self._by_uri.values() if m.info.type == relation_type}
 
     def is_predicate_type(
         self,
@@ -80,7 +75,6 @@ class BaseOntology:
         m = self._by_uri.get(uri)
 
         return m is not None and m.info.type == relation_type
-
 
     def is_state(self, uri: str) -> bool:
         return self.is_predicate_type(uri, RelationType.STATE)

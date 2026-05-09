@@ -1,19 +1,21 @@
 # src/infra/rdf/builder.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Optional, Set, List, Iterable
+from typing import Any, Optional
 
 from rdflib import Graph, URIRef, Literal, RDF
 
 from src.infra.rdf.namespaces import NamespaceManager, NamespaceConfig
 from src.core.graph.types import Graph as SceneGraph, Object, Relationship
-from src.core.ports.graph.graph_data_source import GraphDataSource  # your DataSource port
+from src.core.ports.graph.graph_data_source import (
+    GraphDataSource,
+)  # your DataSource port
 from src.core.ontology.base import BaseOntology  # your BaseOntology
 from src.utils.exceptions import BuildError, ValidationError, DataSourceError
 from src.infra.rdf.result import GraphBuildResult
 
 # ---------- Builder ----------
+
 
 class RDFGraphBuilder:
     """
@@ -141,7 +143,9 @@ class RDFGraphBuilder:
             try:
                 self._add_object(obj, scene_uri)
             except Exception as e:
-                msg = f"Failed to add object {getattr(obj, 'object_id', 'unknown')}: {e}"
+                msg = (
+                    f"Failed to add object {getattr(obj, 'object_id', 'unknown')}: {e}"
+                )
                 self._result.add_warning(msg)
                 if self.strict_validation:
                     raise ValidationError(msg) from e
@@ -151,9 +155,7 @@ class RDFGraphBuilder:
             try:
                 self._add_relationship(rel)
             except Exception as e:
-                msg = (
-                    f"Failed to add relationship {rel.subject_id} -[{rel.predicate}]-> {rel.object_id}: {e}"
-                )
+                msg = f"Failed to add relationship {rel.subject_id} -[{rel.predicate}]-> {rel.object_id}: {e}"
                 self._result.add_warning(msg)
                 if self.strict_validation:
                     raise ValidationError(msg) from e
@@ -177,13 +179,25 @@ class RDFGraphBuilder:
 
         # position/rotation [optional]
         if obj.position is not None:
-            self._try_add_data_literal(obj_uri, self.POSITION_KEY, f"{obj.position[0]},{obj.position[1]},{obj.position[2]}", where="position")
+            self._try_add_data_literal(
+                obj_uri,
+                self.POSITION_KEY,
+                f"{obj.position[0]},{obj.position[1]},{obj.position[2]}",
+                where="position",
+            )
         if obj.rotation is not None:
-            self._try_add_data_literal(obj_uri, self.ROTATION_KEY, f"{obj.rotation[0]},{obj.rotation[1]},{obj.rotation[2]}", where="rotation")
+            self._try_add_data_literal(
+                obj_uri,
+                self.ROTATION_KEY,
+                f"{obj.rotation[0]},{obj.rotation[1]},{obj.rotation[2]}",
+                where="rotation",
+            )
 
         # properties -> literals
         for prop_name, prop_value in (obj.properties or {}).items():
-            self._try_add_data_literal(obj_uri, prop_name, prop_value, where=f"property {prop_name}")
+            self._try_add_data_literal(
+                obj_uri, prop_name, prop_value, where=f"property {prop_name}"
+            )
 
         self._stats["objects"] += 1
 
@@ -210,7 +224,9 @@ class RDFGraphBuilder:
             if self.strict_validation:
                 raise ValidationError(msg) from e
 
-    def _try_add_data_literal(self, s: URIRef, predicate_key: str, value: Any, *, where: str) -> None:
+    def _try_add_data_literal(
+        self, s: URIRef, predicate_key: str, value: Any, *, where: str
+    ) -> None:
         mapping = self.ontology.by_source(predicate_key)
         if mapping is None:
             return

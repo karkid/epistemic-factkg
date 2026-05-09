@@ -36,6 +36,7 @@ def short_uri(x: str) -> str:
         x = x.split("/")[-1]
     return x
 
+
 def entity_objtype(node: str) -> str:
     """
     Extract object type from an uri
@@ -51,6 +52,7 @@ def entity_objtype(node: str) -> str:
         return tail.split("_", 1)[0]
     return tail
 
+
 def flip_bool_object(o: object) -> str:
     ol = str(o).strip().lower()
     if ol in {"true", "1", "yes", "y", "t"}:
@@ -58,6 +60,7 @@ def flip_bool_object(o: object) -> str:
     if ol in {"false", "0", "no", "n", "f"}:
         return "True"
     return "True"
+
 
 def dedupe(triples: Iterable[Triple]) -> TripleList:
     """
@@ -100,7 +103,11 @@ class TripleQueryEngine:
         """
         out: TripleList = []
         for triple in self.triples:
-            if (subject is None or triple.s == subject) and (predicate is None or triple.p == predicate) and (obj is None or triple.o == obj):
+            if (
+                (subject is None or triple.s == subject)
+                and (predicate is None or triple.p == predicate)
+                and (obj is None or triple.o == obj)
+            ):
                 out.append(triple)
         return out
 
@@ -125,10 +132,18 @@ class TripleQueryEngine:
     # ---------------- Relationship Queries ----------------
 
     def objects_of(self, subject: str, predicates: List[str]) -> List[str]:
-        return [triple.o for triple in self.triples if triple.s == subject and triple.p in predicates]
+        return [
+            triple.o
+            for triple in self.triples
+            if triple.s == subject and triple.p in predicates
+        ]
 
     def subjects_of(self, obj: str, predicates: List[str]) -> List[str]:
-        return [triple.s for triple in self.triples if triple.o == obj and triple.p in predicates]
+        return [
+            triple.s
+            for triple in self.triples
+            if triple.o == obj and triple.p in predicates
+        ]
 
     def nodes_of(self, predicates: List[str]) -> Set[str]:
         nodes: Set[str] = set()
@@ -137,18 +152,18 @@ class TripleQueryEngine:
                 nodes.add(triple.s)
                 nodes.add(triple.o)
         return nodes
-    
+
     def has_triple(self, subject=None, predicate=None, obj=None) -> bool:
         for triple in self.triples:
-            if (subject is None or triple.s == subject) and (predicate is None or triple.p == predicate) and (obj is None or triple.o == obj):
+            if (
+                (subject is None or triple.s == subject)
+                and (predicate is None or triple.p == predicate)
+                and (obj is None or triple.o == obj)
+            ):
                 return True
         return False
-    
-    def is_boolean_predicate(
-        self,
-        subject: str,
-        predicate: str
-    ) -> bool:
+
+    def is_boolean_predicate(self, subject: str, predicate: str) -> bool:
 
         for triple in self.triples:
             if triple.s == subject and triple.p == predicate:
@@ -164,16 +179,16 @@ class TripleQueryEngine:
     def group_by_namespace(self, namespace: str) -> Dict[str, TripleList]:
         """
         Group triples by namespace name in subject or object URIs using two-phase mapping.
-        
+
         Phase 1: Build object-to-context mapping via hasObject/inScene relations
         Phase 2: Group all triples using this mapping (similar to group_by_floorplan)
 
         Args:
-            namespace: Either a full namespace URI (e.g., "http://example.com/contexts/") 
+            namespace: Either a full namespace URI (e.g., "http://example.com/contexts/")
                       or just a namespace name (e.g., "contexts")
         """
         from urllib.parse import unquote
-        
+
         # Helper functions
         def _short(x: str) -> str:
             x = unquote(x)
@@ -193,7 +208,7 @@ class TripleQueryEngine:
                         return parts[1].split("/", 1)[0].split("#", 1)[0]
             else:
                 # Use regex to match namespace name
-                pattern = re.compile(rf'{re.escape(ns)}[/#]([^/#]+)')
+                pattern = re.compile(rf"{re.escape(ns)}[/#]([^/#]+)")
                 match = pattern.search(u)
                 if match:
                     return match.group(1)
@@ -203,14 +218,14 @@ class TripleQueryEngine:
         obj2context: Dict[str, str] = {}
         for triple in self.triples:
             pred = _short(triple.p).lower()
-            
+
             if pred == "hasobject":
                 context = _extract_context(triple.s, namespace)
                 if context:
                     obj2context[triple.o] = context
-                    
+
             elif pred == "inscene":
-                context = _extract_context(triple.o, namespace)  
+                context = _extract_context(triple.o, namespace)
                 if context:
                     obj2context[triple.s] = context
 
@@ -218,15 +233,17 @@ class TripleQueryEngine:
         grouped: DefaultDict[str, TripleList] = defaultdict(list)
         for triple in self.triples:
             # Try direct context extraction first
-            context = _extract_context(triple.s, namespace) or _extract_context(triple.o, namespace)
-            
+            context = _extract_context(triple.s, namespace) or _extract_context(
+                triple.o, namespace
+            )
+
             # If not directly found, use the mapping
             if not context:
                 context = obj2context.get(triple.s) or obj2context.get(triple.o)
-                
+
             if context:
                 grouped[context].append(triple)
-        
+
         return dict(grouped)
 
     def group_by_pattern(
@@ -256,8 +273,11 @@ class TripleQueryEngine:
         if key_by not in {"entity", "predicate"}:
             raise ValueError("key_by must be 'entity' or 'predicate'")
 
-        pattern = re.compile(re.escape(entity_pattern)) if isinstance(entity_pattern, str) else entity_pattern
-        
+        pattern = (
+            re.compile(re.escape(entity_pattern))
+            if isinstance(entity_pattern, str)
+            else entity_pattern
+        )
 
         grouped: DefaultDict[str, TripleList] = defaultdict(list)
 
@@ -339,7 +359,9 @@ class TripleQueryEngine:
         grouped: DefaultDict[str, TripleList] = defaultdict(list)
 
         for triple in self.triples:
-            ent = self._extract_by_pattern(triple.s, entity_pattern) or self._extract_by_pattern(triple.o, entity_pattern)
+            ent = self._extract_by_pattern(
+                triple.s, entity_pattern
+            ) or self._extract_by_pattern(triple.o, entity_pattern)
             if not ent:
                 ent = entity_map.get(triple.s) or entity_map.get(triple.o) or default
             grouped[ent].append(triple)

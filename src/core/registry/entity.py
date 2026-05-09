@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from typing import Dict, Set
 from enum import auto
 
-from enum import Enum, auto
+from enum import Enum
+
+
 class SpatialRole(Enum):
     SURFACE = auto()
     CONTAINER = auto()
@@ -13,13 +15,12 @@ class SpatialRole(Enum):
 
 @dataclass(frozen=True)
 class EntityInfo:
-
     name: str
     type: str | None = None
     spatial_roles: Set[SpatialRole] | None = None
 
-class EntityRegistry:
 
+class EntityRegistry:
     def __init__(self):
         self._entities: Dict[str, EntityInfo] = {}
 
