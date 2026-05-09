@@ -3,6 +3,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from src.core.claims.labels import Verdict, EvidenceStance
+
 from jsonschema import validate, ValidationError
 from datetime import datetime
 
@@ -319,13 +321,9 @@ class AdvancedClaimValidator:
         label = (claim.get("verdict") or {}).get("label")
         evidence = claim.get("evidence") or []
         claim_triples_raw = claim.get("claim_triples")
+        pramana = (claim.get("epistemic") or {}).get("pramana_primary")
 
-        if label and label not in (
-            "supported",
-            "refuted",
-            "not_enough_evidence",
-            "conflicting_evidence",
-        ):
+        if label and label not in [v.value for v in Verdict]:
             result.add_issue(
                 "consistency",
                 "error",
@@ -334,19 +332,37 @@ class AdvancedClaimValidator:
             )
 
         stances = [e.get("stance") for e in evidence if e.get("stance")]
-        if label == "supported" and stances and all(s == "refutes" for s in stances):
+        if label == Verdict.SUPPORTED and stances and all(s == EvidenceStance.REFUTES for s in stances):
             result.add_issue(
                 "consistency",
                 "error",
                 "All evidence stances are 'refutes' but verdict is 'supported'",
                 "evidence[].stance",
             )
-        if label == "refuted" and stances and all(s == "supports" for s in stances):
+        if label == Verdict.REFUTED and stances and all(s == EvidenceStance.SUPPORTS for s in stances):
             result.add_issue(
                 "consistency",
                 "error",
                 "All evidence stances are 'supports' but verdict is 'refuted'",
                 "evidence[].stance",
+            )
+        if label == Verdict.CONFLICTING_EVIDENCE and stances:
+            has_supports = any(s == EvidenceStance.SUPPORTS for s in stances)
+            has_refutes = any(s == EvidenceStance.REFUTES for s in stances)
+            if not (has_supports or has_refutes):
+                result.add_issue(
+                    "consistency",
+                    "warning",
+                    "conflicting_evidence verdict but no supports/refutes stances found in evidence",
+                    "evidence[].stance",
+                )
+
+        if label == Verdict.NOT_ENOUGH_EVIDENCE and pramana == "non_apprehension":
+            result.add_issue(
+                "consistency",
+                "error",
+                "non_apprehension cannot have verdict not_enough_evidence — absence is a definite answer",
+                "verdict.label",
             )
 
         meta_utc = (claim.get("meta") or {}).get("created_utc")

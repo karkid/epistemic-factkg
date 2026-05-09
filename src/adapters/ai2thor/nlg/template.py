@@ -59,6 +59,13 @@ class Ai2ThorTemplate(BaseTemplate):
             normalize=True,
         )
 
+        # Absence: There is no apple in this scene.
+        self._templates["Absence"] = SentenceTemplate(
+            template="There is no {o} in this scene.",
+            fields={"o"},
+            normalize=True,
+        )
+
         # Attribute: The apple's color is red.
         self._templates[PredicateForm.ATTR] = SentenceTemplate(
             template="The {s}'s {p} is {o}.",
@@ -299,3 +306,8 @@ class Ai2ThorTemplate(BaseTemplate):
 
     def render_negation(self, triple: Triple, kind: PredicateForm) -> str:
         return self.render(triple, kind, negation=True)
+
+    def render_absence(self, object_label: str) -> str:
+        """Render an absence claim: 'There is no <object> in this scene.'"""
+        template = self._templates["Absence"]
+        return self._normalize_sentence(template.verbalize(o=object_label))

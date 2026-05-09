@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import unquote
 
 from src.core.ports.dataset.converter import DatasetConverter
-from src.core.claims.labels import CONFIDENCE_WEIGHTS, PramanaLabel
+from src.core.claims.labels import CONFIDENCE_WEIGHTS, Pramana
 from src.utils.time import utc_now_iso
 
 
@@ -91,11 +91,11 @@ class AI2ThorConverter(DatasetConverter):
         else:
             has_ev = bool(evidence.get("evidence_triples"))
         primary = (
-            PramanaLabel.NON_APPREHENSION.value
+            Pramana.NON_APPREHENSION.value
             if not has_ev
-            else PramanaLabel.PERCEPTION.value
+            else Pramana.PERCEPTION.value
         )
-        weight = CONFIDENCE_WEIGHTS.get(PramanaLabel(primary), 0.70)
+        weight = CONFIDENCE_WEIGHTS.get(Pramana(primary), 0.70)
         return primary, [primary], weight
 
     def convert_one(self, raw_record: dict, rec_id: str) -> dict:
@@ -221,7 +221,7 @@ class AI2ThorConverter(DatasetConverter):
         context_id = context.get("context_id")
         source_url = evidence_urls[0] if evidence_urls else None
 
-        if pramana_primary == PramanaLabel.NON_APPREHENSION.value:
+        if pramana_primary == Pramana.NON_APPREHENSION.value:
             stance = "absent"
         elif label == "supported":
             stance = "supports"

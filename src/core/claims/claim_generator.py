@@ -4,7 +4,7 @@ from urllib.parse import unquote
 
 from typing import List, Optional, Sequence, Callable
 
-from src.core.claims.labels import OutputLabels, ReasoningLabels, SourceTypesLabels
+from src.core.claims.labels import Verdict, ClaimStructure, Pramana
 from src.core.claims.types import ClaimCorpus, ClaimInstance
 from src.core.graph.types import Term, Triple, TripleList
 from src.core.nlg.triple_realizer import TripleRealizer
@@ -20,7 +20,7 @@ class ClaimGenerator:
         triples: TripleList,
         source: str = "agent",
         generator: str = "agent",
-        source_type: str = SourceTypesLabels.UNKNOWN,
+        source_type: Optional[str] = None,
         context_type: Optional[str] = None,
         seed: Optional[int] = 42,
         seed_prefix: Optional[str] = "claim",
@@ -217,7 +217,7 @@ class ClaimGenerator:
         return Triple(s=s, p=p, o=o)  # Return original if no corruption worked
 
     def _filter_claims_by_reasoning(
-        self, reasoning: ReasoningLabels, includes_labels: List[OutputLabels]
+        self, reasoning: ClaimStructure, includes_labels: List[Verdict]
     ) -> ClaimCorpus:
         grouped = ClaimCorpus()
         for claim in self.corpus.claims:
@@ -249,7 +249,7 @@ class ClaimGenerator:
         split: Optional[str] = None,
         notes: Optional[str] = None,
         created_utc: Optional[str] = None,
-        source_type: Optional[SourceTypesLabels] = None,
+        source_type: Optional[Pramana] = None,
         evidence_extract: Optional[str] = None,
     ):
         return ClaimInstance.make_instance(
@@ -272,6 +272,116 @@ class ClaimGenerator:
             created_utc=created_utc,
             evidence_extract=evidence_extract,
         )
+
+    def generate_absence(
+        self,
+        *,
+        n_claims: int = 10,
+        add_corruption: bool = False,
+        n_supported: float = 0.5,
+        max_attempts: int = 15,
+        object_universe: Optional[List[str]] = None,
+    ) -> None:
+        """Generate Anupalabdhi (non_apprehension) claims.
+
+        Supported: object type NOT in scene → 'There is no X in this scene.'
+                   evidence_triples=[], stance=absent
+        Refuted:   object type IS in scene  → same text but contradicted by evidence
+                   evidence_triples=[matching triple], stance=refutes
+        """
+        if not self._start_time:
+            self.start_timing()
+
+        # Object types actually present (by subject entity type)
+        present_types: dict[str, list[Triple]] = {}
+        for t in self.triples:
+            ot = self._object_type_from_entity_id(str(t.s))
+            present_types.setdefault(ot, []).append(t)
+
+        # Universe of all possible object types (caller-supplied or fall back to present)
+        universe: List[str] = object_universe if object_universe else list(present_types.keys())
+        absent_types = [ot for ot in universe if ot not in present_types]
+
+        # ---------------- SUPPORTED (genuine absence) ----------------
+        supported_target = int(n_supported * n_claims) if add_corruption else n_claims
+        supported_count = 0
+        attempts = 0
+
+        self._rng.shuffle(absent_types)
+        candidates = list(absent_types)  # copy to cycle through
+
+        while supported_count < supported_target and attempts < supported_target * max_attempts:
+            if not candidates:
+                break
+            obj_type = candidates[attempts % len(candidates)]
+            attempts += 1
+
+            text = self.realizer.realize_absence(obj_type)
+            if not self._is_valid_text(text):
+                self.stats.skipped_empty += 1
+                continue
+
+            record_id = f"{self.seed_prefix}-{self.context_id}-absence-sup-{len(self.corpus.claims):06d}"
+            instance = self._make_instance(
+                rec_id=record_id,
+                claim_text=text,
+                label=Verdict.SUPPORTED,
+                claim_triples=[],
+                structural_reasoning=ClaimStructure.ABSENCE,
+                evidence_triples=[],
+                evidence_urls=[],
+                source_type=Pramana.NON_APPREHENSION,
+                evidence_extract="No sensor evidence found for this object type.",
+            )
+
+            if not self._is_new_claim(instance):
+                continue
+
+            self.corpus.add(instance)
+            self.stats.supported += 1
+            supported_count += 1
+
+        if not add_corruption:
+            return
+
+        # ---------------- REFUTED (object IS present, claim is false) ----------------
+        refuted_target = int((1 - n_supported) * n_claims)
+        refuted_count = 0
+        attempts = 0
+        present_list = list(present_types.keys())
+        self._rng.shuffle(present_list)
+
+        while refuted_count < refuted_target and attempts < refuted_target * max_attempts:
+            if not present_list:
+                break
+            obj_type = present_list[attempts % len(present_list)]
+            attempts += 1
+
+            text = self.realizer.realize_absence(obj_type)
+            if not self._is_valid_text(text):
+                self.stats.skipped_empty += 1
+                continue
+
+            ev_triple = self._rng.choice(present_types[obj_type])
+            record_id = f"{self.seed_prefix}-{self.context_id}-absence-ref-{len(self.corpus.claims):06d}"
+            instance = self._make_instance(
+                rec_id=record_id,
+                claim_text=text,
+                label=Verdict.REFUTED,
+                claim_triples=[],
+                structural_reasoning=ClaimStructure.ABSENCE,
+                evidence_triples=[ev_triple],
+                evidence_urls=[],
+                source_type=Pramana.NON_APPREHENSION,
+                evidence_extract=self.realizer.realize(ev_triple),
+            )
+
+            if not self._is_new_claim(instance):
+                continue
+
+            self.corpus.add(instance)
+            self.stats.refuted += 1
+            refuted_count += 1
 
     def save_to_jsonl(self, file_path: str) -> None:
         self.corpus.save_to_jsonl(file_path)
@@ -336,9 +446,9 @@ class ClaimGenerator:
             instance = self._make_instance(
                 rec_id=record_id,
                 claim_text=text,
-                label=OutputLabels.SUPPORTED,
+                label=Verdict.SUPPORTED,
                 claim_triples=[truth_triple],
-                structural_reasoning=ReasoningLabels.ONE_HOP,
+                structural_reasoning=ClaimStructure.ONE_HOP,
                 evidence_triples=[truth_triple],
                 evidence_urls=[],
                 split=None,
@@ -386,9 +496,9 @@ class ClaimGenerator:
             instance = self._make_instance(
                 rec_id=record_id,
                 claim_text=text,
-                label=OutputLabels.REFUTED,
+                label=Verdict.REFUTED,
                 claim_triples=[claim_triple],
-                structural_reasoning=ReasoningLabels.ONE_HOP,
+                structural_reasoning=ClaimStructure.ONE_HOP,
                 evidence_triples=[truth_triple],
                 evidence_urls=[],
                 evidence_extract=self.realizer.realize(truth_triple),
@@ -447,9 +557,9 @@ class ClaimGenerator:
             instance = self._make_instance(
                 rec_id=record_id,
                 claim_text=text,
-                label=OutputLabels.SUPPORTED,
+                label=Verdict.SUPPORTED,
                 claim_triples=[truth_triple_1, truth_triple_2],
-                structural_reasoning=ReasoningLabels.CONJUNCTION,
+                structural_reasoning=ClaimStructure.CONJUNCTION,
                 evidence_triples=[truth_triple_1, truth_triple_2],
                 evidence_urls=[],
                 split=None,
@@ -527,9 +637,9 @@ class ClaimGenerator:
             instance = self._make_instance(
                 rec_id=record_id,
                 claim_text=text,
-                label=OutputLabels.REFUTED,
+                label=Verdict.REFUTED,
                 claim_triples=[claim_triple_1, claim_triple_2],
-                structural_reasoning=ReasoningLabels.CONJUNCTION,
+                structural_reasoning=ClaimStructure.CONJUNCTION,
                 evidence_triples=[truth_triple_1, truth_triple_2],
                 evidence_urls=[],
                 split=None,
@@ -589,9 +699,9 @@ class ClaimGenerator:
             instance = self._make_instance(
                 rec_id=record_id,
                 claim_text=text,
-                label=OutputLabels.SUPPORTED,
+                label=Verdict.SUPPORTED,
                 claim_triples=[truth_triple],
-                structural_reasoning=ReasoningLabels.NEGATION,
+                structural_reasoning=ClaimStructure.NEGATION,
                 evidence_triples=[truth_triple],
                 evidence_urls=[],
                 split=None,
@@ -642,9 +752,9 @@ class ClaimGenerator:
             instance = self._make_instance(
                 rec_id=record_id,
                 claim_text=text,
-                label=OutputLabels.REFUTED,
+                label=Verdict.REFUTED,
                 claim_triples=[claim_triple],
-                structural_reasoning=ReasoningLabels.NEGATION,
+                structural_reasoning=ClaimStructure.NEGATION,
                 evidence_triples=[truth_triple],
                 evidence_urls=[],
                 split=None,

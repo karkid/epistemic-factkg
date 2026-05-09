@@ -1,6 +1,8 @@
-from src.core.claims.labels import PramanaLabel
+from src.core.claims.labels import Pramana, Verdict, EvidenceStance
 
-_PRAMANA_VALUES = [p.value for p in PramanaLabel]
+_PRAMANA_VALUES = [p.value for p in Pramana]
+_VERDICT_VALUES = [v.value for v in Verdict]
+_STANCE_VALUES = [s.value for s in EvidenceStance] + [None]
 
 CLAIM_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -27,13 +29,7 @@ CLAIM_SCHEMA = {
             "properties": {
                 "label": {
                     "type": ["string", "null"],
-                    "enum": [
-                        "supported",
-                        "refuted",
-                        "not_enough_evidence",
-                        "conflicting_evidence",
-                        None,
-                    ],
+                    "enum": _VERDICT_VALUES + [None],
                 },
                 "justification": {"type": ["string", "null"]},
             },
@@ -80,7 +76,7 @@ CLAIM_SCHEMA = {
             "properties": {
                 "structural": {
                     "type": ["string", "null"],
-                    "enum": ["one_hop", "multi_hop", "conjunction", "negation", None],
+                    "enum": ["one_hop", "multi_hop", "conjunction", "negation", "absence", None],
                 },
                 "strategy": {
                     "type": ["string", "null"],
@@ -141,8 +137,8 @@ CLAIM_SCHEMA = {
                         ],
                     },
                     "stance": {
-                        "type": "string",
-                        "enum": ["supports", "refutes", "absent", "unknown"],
+                        "type": ["string", "null"],
+                        "enum": _STANCE_VALUES,
                     },
                     "source_url": {"type": ["string", "null"]},
                 },

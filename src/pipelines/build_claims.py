@@ -1,7 +1,8 @@
 from typing import Optional
 
 from src.adapters.ai2thor.semantics.semantic_rules import get_preferred_receptacles
-from src.core.claims.labels import SourceTypesLabels
+from src.adapters.ai2thor.ids.object_types import ObjectType
+from src.core.claims.labels import Pramana
 from src.core.claims.claim_generator import ClaimGenerator
 from src.core.claims.types import ClaimCorpus
 from src.adapters.ai2thor.semantics.entity_lexicon import (
@@ -89,7 +90,7 @@ def build_claims(
                 context_type="floorplan",
                 generator="ai2thor-scene-simulator",
                 source="sensor",
-                source_type=SourceTypesLabels.PERCEPTION,
+                source_type=Pramana.PERCEPTION,
                 receptacle_mapper=get_preferred_receptacles,
             )
 
@@ -100,9 +101,13 @@ def build_claims(
             claim_generator.generate_conjunction(
                 n_claims=n_claims, add_corruption=add_corruption
             )
-            # Note: generate_negation might not exist yet, commenting out for safety
             claim_generator.generate_negation(
                 n_claims=n_claims, add_corruption=add_corruption
+            )
+            claim_generator.generate_absence(
+                n_claims=n_claims,
+                add_corruption=add_corruption,
+                object_universe=[ot.value for ot in ObjectType],
             )
 
             # Add to total corpus (don't save individual context files)

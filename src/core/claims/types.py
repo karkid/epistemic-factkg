@@ -67,11 +67,11 @@ class ClaimInstance:
     meta: Meta
 
     def get_schema_layout(self) -> Dict[str, Any]:
-        from src.core.claims.labels import CONFIDENCE_WEIGHTS, PramanaLabel
+        from src.core.claims.labels import CONFIDENCE_WEIGHTS, Pramana
 
         pramana = self.evidence.evidence_source_type
         try:
-            weight = CONFIDENCE_WEIGHTS.get(PramanaLabel(pramana), 0.70)
+            weight = CONFIDENCE_WEIGHTS.get(Pramana(pramana), 0.70)
         except ValueError:
             weight = 0.70
 
@@ -109,7 +109,12 @@ class ClaimInstance:
                     "triples": evidence_triples if evidence_triples else [],
                     "triple_source": "ground_truth",
                     "modality": "simulation_state",
-                    "stance": "supports" if self.label == "supported" else "refutes",
+                    "stance": (
+                        "absent"
+                        if pramana == "non_apprehension" and self.label == "supported"
+                        else "supports" if self.label == "supported"
+                        else "refutes"
+                    ),
                     "source_url": self.evidence.evidence_urls[0]
                     if self.evidence.evidence_urls
                     else None,

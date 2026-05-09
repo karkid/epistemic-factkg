@@ -1,19 +1,28 @@
 from enum import StrEnum
 
 
-class OutputLabels(StrEnum):
+class Verdict(StrEnum):
     SUPPORTED = "supported"
     REFUTED = "refuted"
+    NOT_ENOUGH_EVIDENCE = "not_enough_evidence"
+    CONFLICTING_EVIDENCE = "conflicting_evidence"
 
 
-class ReasoningLabels(StrEnum):
+class EvidenceStance(StrEnum):
+    SUPPORTS = "supports"
+    REFUTES = "refutes"
+    ABSENT = "absent"
+
+
+class ClaimStructure(StrEnum):
     ONE_HOP = "one_hop"
     MULTI_HOP = "multi_hop"
     CONJUNCTION = "conjunction"
     NEGATION = "negation"
+    ABSENCE = "absence"
 
 
-class PramanaLabel(StrEnum):
+class Pramana(StrEnum):
     PERCEPTION = "perception"
     NON_APPREHENSION = "non_apprehension"
     TESTIMONY = "testimony"
@@ -22,21 +31,11 @@ class PramanaLabel(StrEnum):
     POSTULATION_DERIVATION = "postulation_derivation"
 
 
-CONFIDENCE_WEIGHTS: dict[PramanaLabel, float] = {
-    PramanaLabel.PERCEPTION: 0.90,
-    PramanaLabel.TESTIMONY: 0.85,
-    PramanaLabel.NON_APPREHENSION: 0.80,
-    PramanaLabel.COMPARISON_ANALOGY: 0.75,
-    PramanaLabel.INFERENCE: 0.70,
-    PramanaLabel.POSTULATION_DERIVATION: 0.60,
+CONFIDENCE_WEIGHTS: dict[Pramana, float] = {
+    Pramana.PERCEPTION: 0.90,
+    Pramana.TESTIMONY: 0.85,
+    Pramana.NON_APPREHENSION: 0.80,
+    Pramana.COMPARISON_ANALOGY: 0.75,
+    Pramana.INFERENCE: 0.70,
+    Pramana.POSTULATION_DERIVATION: 0.60,
 }
-
-
-class SourceTypesLabels(StrEnum):
-    PERCEPTION = "perception"
-    INFERENCE = "inference"
-    TESTIMONY = "testimony"
-    UNKNOWN = "unknown"
-    COMPARISON_ANALOGY = "comparison_analogy"
-    NON_APPREHENSION = "non_apprehension"
-    POSTULATION_DERIVATION = "postulation_derivation"

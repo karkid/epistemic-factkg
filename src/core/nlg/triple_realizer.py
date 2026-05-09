@@ -84,6 +84,14 @@ class TripleRealizer:
             conj=conj,
         )
 
+    def realize_absence(self, object_type: str) -> str:
+        """Realize an absence claim for a given object type string (e.g. 'Fork')."""
+        if self.normallizer:
+            object_type = self.normallizer(object_type)
+        lex = self.ent_lexicon.get(object_type)
+        label = lex.label if lex else object_type.lower()
+        return self.template.render_absence(label)
+
     def realize_negation(self, triple: Triple) -> str:
         s, p, o = triple.s, triple.p, triple.o
 
