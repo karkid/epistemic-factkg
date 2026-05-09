@@ -32,10 +32,24 @@ class Pramana(StrEnum):
 
 
 CONFIDENCE_WEIGHTS: dict[Pramana, float] = {
-    Pramana.PERCEPTION: 0.90,
-    Pramana.TESTIMONY: 0.85,
-    Pramana.NON_APPREHENSION: 0.80,
-    Pramana.COMPARISON_ANALOGY: 0.75,
-    Pramana.INFERENCE: 0.70,
-    Pramana.POSTULATION_DERIVATION: 0.60,
+    Pramana.PERCEPTION: 0.95,  # Simulator ground truth — exact
+    Pramana.TESTIMONY: 0.80,  # Web sources — reliable but noisy
+    Pramana.NON_APPREHENSION: 0.75,  # Absence reasoning — closed world only
+    Pramana.COMPARISON_ANALOGY: 0.65,  # Analogical/statistical reasoning
+    Pramana.INFERENCE: 0.55,  # Multi-step synthesis — compounds error
+    Pramana.POSTULATION_DERIVATION: 0.40,  # Hypothetical — least reliable
 }
+
+
+def combine_pramana_weights(pramanas: list[str], weights: dict | None = None) -> float:
+    """Diminishing returns combination: 1 - Π(1 - wᵢ).
+
+    Models 'at least one epistemic source is correct'. A single pramana returns
+    its own weight. Multiple pramanas always yield a higher combined weight than
+    any individual, with the strongest source dominating.
+    """
+    w = weights or CONFIDENCE_WEIGHTS
+    complement = 1.0
+    for p in pramanas:
+        complement *= 1.0 - w.get(p, 0.0)
+    return round(1.0 - complement, 4)

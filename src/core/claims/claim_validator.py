@@ -210,10 +210,13 @@ class AdvancedClaimValidator:
             )
 
         if reasoning == "negation":
+            verdict_label = (claim.get("verdict") or {}).get("label")
             has_neg = any(
                 w in text.lower() for w in ("not", "false", "n't", "never", "no ")
             )
-            if not has_neg:
+            # Refuted negation claims have the negation word removed by AI2THOR
+            # corruption — this is expected, not a data quality issue.
+            if not has_neg and verdict_label != "refuted":
                 result.add_issue(
                     "semantic",
                     "warning",
@@ -332,14 +335,22 @@ class AdvancedClaimValidator:
             )
 
         stances = [e.get("stance") for e in evidence if e.get("stance")]
-        if label == Verdict.SUPPORTED and stances and all(s == EvidenceStance.REFUTES for s in stances):
+        if (
+            label == Verdict.SUPPORTED
+            and stances
+            and all(s == EvidenceStance.REFUTES for s in stances)
+        ):
             result.add_issue(
                 "consistency",
                 "error",
                 "All evidence stances are 'refutes' but verdict is 'supported'",
                 "evidence[].stance",
             )
-        if label == Verdict.REFUTED and stances and all(s == EvidenceStance.SUPPORTS for s in stances):
+        if (
+            label == Verdict.REFUTED
+            and stances
+            and all(s == EvidenceStance.SUPPORTS for s in stances)
+        ):
             result.add_issue(
                 "consistency",
                 "error",
@@ -365,6 +376,16 @@ class AdvancedClaimValidator:
                 "verdict.label",
             )
 
+        if pramana == "non_apprehension":
+            has_absent = any(e.get("stance") == EvidenceStance.ABSENT for e in evidence)
+            if not has_absent:
+                result.add_issue(
+                    "consistency",
+                    "error",
+                    "non_apprehension pramana requires at least one evidence item with stance=absent",
+                    "evidence[].stance",
+                )
+
         meta_utc = (claim.get("meta") or {}).get("created_utc")
         if meta_utc:
             try:
@@ -379,7 +400,15 @@ class AdvancedClaimValidator:
 
         provenance = claim.get("provenance") or {}
         dataset = provenance.get("dataset", "")
-        if dataset == "ai2thor" and claim_triples_raw is None:
+        structural = (claim.get("reasoning") or {}).get("structural")
+        # Absence claims (non_apprehension or structural=absence) legitimately have
+        # no claim_triples — the absent object cannot be asserted as a positive triple.
+        if (
+            dataset == "ai2thor"
+            and claim_triples_raw is None
+            and pramana != "non_apprehension"
+            and structural != "absence"
+        ):
             result.add_issue(
                 "consistency",
                 "warning",

@@ -3,7 +3,12 @@ from __future__ import annotations
 import re
 
 from src.core.ports.dataset.converter import DatasetConverter
-from src.core.claims.labels import CONFIDENCE_WEIGHTS, EvidenceStance, Pramana, Verdict
+from src.core.claims.labels import (
+    combine_pramana_weights,
+    EvidenceStance,
+    Pramana,
+    Verdict,
+)
 from src.utils.time import utc_now_iso
 
 
@@ -24,22 +29,49 @@ _ANSWER_TYPE_MAP = {
     "unanswerable": "unanswerable",
 }
 
+# ── Heuristic modality buckets ────────────────────────────────────────────────
+# Pratyaksham (Perception, 0.85–0.95): direct sensory evidence — image/video/audio
+# embedded in AVeriTeC answers (rare but possible for media fact-checks).
 _PERCEPTUAL = {"image", "video", "audio"}
+
+# Shabda (Testimony, 0.80–0.90): textual sources — web pages, PDFs, tables.
+# This is the dominant evidence type in AVeriTeC.
 _TEXTUAL = {"web_text", "pdf", "web_table", "other"}
 
+# ── Heuristic signal: Upamanam (Comparison, 0.70–0.80) ───────────────────────
+# Triggered when the answer text contains numerical/statistical comparison cues
+# (%, rankings, GDP, magnitudes). Kept narrow to avoid false positives.
 _NUMERIC_CUES = re.compile(
     r"\b(%|percent|percentage|largest|smallest|rank|gdp|million|billion|trillion)\b",
     re.IGNORECASE,
 )
 
-# Descending priority: first match becomes pramana_primary
-_PRIMARY_ORDER = [
+# ── Priority order for pramana_primary selection ──────────────────────────────
+# Sorted by specificity/distinctiveness, NOT by confidence weight.
+# NON_APPREHENSION is always excluded — confirmed absence cannot be established
+# from web text; restricted to AI2THOR closed-world records only.
+# Testimony is listed last despite a higher weight (0.80) than
+# comparison_analogy (0.65) or inference (0.55) — it is the default fallback,
+# and the more specific types are more informative as the primary label.
+_DEFAULT_PRIMARY_ORDER: list[Pramana] = [
     Pramana.PERCEPTION,
     Pramana.COMPARISON_ANALOGY,
     Pramana.INFERENCE,
     Pramana.TESTIMONY,
     Pramana.POSTULATION_DERIVATION,
 ]
+
+
+def _build_primary_order(custom_order: list[str] | None = None) -> list[Pramana]:
+    """Return the pramana priority list for pramana_primary selection.
+
+    custom_order: list of pramana string values from config, highest priority
+    first. NON_APPREHENSION is always stripped — not valid for web evidence.
+    When custom_order is None the module default is returned.
+    """
+    if custom_order:
+        return [Pramana(p) for p in custom_order if p != Pramana.NON_APPREHENSION.value]
+    return list(_DEFAULT_PRIMARY_ORDER)
 
 
 def _normalize_label(label) -> Verdict:
@@ -76,32 +108,74 @@ def _infer_pramana(
     src_urls: set[str],
     answer_types: list[str],
     answers_text: str,
+    weights: dict | None = None,
+    primary_order: list[Pramana] | None = None,
 ) -> tuple[str, list[str], float]:
+    """
+    Heuristic Pramana assignment for AVeriTeC records.
+
+    Rules (from research proposal §5, Pramana table):
+
+    PERCEPTION (Pratyaksham, 0.90):
+        Any evidence item uses a perceptual modality (image, video, audio).
+        Rare in AVeriTeC but present in media/image fact-checks.
+
+    TESTIMONY (Shabda, 0.85):
+        Any evidence item uses a textual source (web_text, pdf, web_table).
+        Default for almost all AVeriTeC records — falls back if no other rule fires.
+
+    COMPARISON_ANALOGY (Upamanam, 0.75):
+        Answer text contains numerical/statistical comparison cues (%, GDP, rank…).
+        Captures claims verified by comparing magnitudes against known benchmarks.
+
+    INFERENCE (Anumanam, 0.70):
+        ≥2 abstractive answers AND ≥2 distinct source URLs. Abstractive answers
+        require synthesising information across sources — indicative of multi-hop
+        reasoning rather than direct lookup.
+        Threshold avoids over-assigning inference to simple single-source lookups.
+
+    NON_APPREHENSION (Anupalabdhi): deliberately excluded.
+        Confirmed absence cannot be established from web text alone;
+        this Pramana is restricted to AI2THOR records where the simulator
+        provides a complete, closed-world state.
+
+    POSTULATION_DERIVATION (Arthapatti): no trigger rules yet (status: Limited/Future).
+
+    When multiple types apply, _PRIMARY_ORDER selects the highest-confidence one
+    as pramana_primary; all detected types are recorded in pramana_all.
+    """
     proof_types: set[Pramana] = set()
 
+    # Rule 1 — Perception: direct sensory/media evidence
     if modalities & _PERCEPTUAL:
         proof_types.add(Pramana.PERCEPTION)
 
+    # Rule 2 — Testimony: any textual source (dominant in AVeriTeC)
     if modalities & _TEXTUAL:
         proof_types.add(Pramana.TESTIMONY)
 
+    # Rule 3 — Comparison: numerical/statistical cues in answer text
     if _NUMERIC_CUES.search(answers_text):
         proof_types.add(Pramana.COMPARISON_ANALOGY)
 
-    # Require >=2 abstractive answers AND >=2 distinct sources to avoid saturation
+    # Rule 4 — Inference: multi-source abstractive synthesis
+    # Threshold: >=2 abstractive answers AND >=2 distinct URLs prevents
+    # single-source lookups from being mis-labelled as inference.
     n_abstractive = sum(1 for t in answer_types if t == "abstractive")
     if n_abstractive >= 2 and len(src_urls) >= 2:
         proof_types.add(Pramana.INFERENCE)
 
+    # Fallback: pure-textual records with no other signal → Testimony
     if not proof_types:
         proof_types.add(Pramana.TESTIMONY)
 
+    _order = primary_order if primary_order is not None else _DEFAULT_PRIMARY_ORDER
     sorted_types = sorted(
         proof_types,
-        key=lambda p: _PRIMARY_ORDER.index(p) if p in _PRIMARY_ORDER else 99,
+        key=lambda p: _order.index(p) if p in _order else 99,
     )
     primary = sorted_types[0]
-    weight = CONFIDENCE_WEIGHTS.get(primary, 0.70)
+    weight = combine_pramana_weights([p.value for p in sorted_types], weights)
     return primary.value, [p.value for p in sorted_types], weight
 
 
@@ -123,6 +197,24 @@ def _verdict_to_stance(label: Verdict) -> EvidenceStance | None:
 class AveritecConverter(DatasetConverter):
     """Converts AVeriTeC JSON records to unified v2.0 JSONL."""
 
+    def __init__(self, epistemic_config: dict | None = None):
+        """
+        epistemic_config: optional dict loaded from the `epistemic:` YAML section.
+          confidence_weights:    dict[str, float] — override per-pramana weights
+          pramana_priority_order: list[str]       — override primary selection order
+        Omit (or pass None) to use the defaults from labels.py and _DEFAULT_PRIMARY_ORDER.
+        """
+        cfg = epistemic_config or {}
+        raw_weights = cfg.get("confidence_weights")
+        self._weights: dict | None = (
+            {Pramana(k): float(v) for k, v in raw_weights.items()}
+            if raw_weights
+            else None
+        )
+        self._primary_order: list[Pramana] = _build_primary_order(
+            cfg.get("pramana_priority_order")
+        )
+
     @property
     def dataset_name(self) -> str:
         return "averitec"
@@ -142,7 +234,14 @@ class AveritecConverter(DatasetConverter):
         src_urls = {e["source_url"] for e in evidence_items if e.get("source_url")}
         answer_types = [e["_answer_type"] for e in evidence_items]
         answers_text = " ".join(e["_answer_text"] for e in evidence_items)
-        return _infer_pramana(modalities, src_urls, answer_types, answers_text)
+        return _infer_pramana(
+            modalities,
+            src_urls,
+            answer_types,
+            answers_text,
+            weights=self._weights,
+            primary_order=self._primary_order,
+        )
 
     def _build_evidence(self, rec: dict, rec_id: str) -> list[dict]:
         """Build evidence dicts (with private _answer_* keys for pramana inference)."""
@@ -190,7 +289,12 @@ class AveritecConverter(DatasetConverter):
         answers_text = " ".join(e["_answer_text"] for e in evidence_raw)
 
         pramana_primary, pramana_all, confidence_weight = _infer_pramana(
-            modalities, src_urls, answer_types, answers_text
+            modalities,
+            src_urls,
+            answer_types,
+            answers_text,
+            weights=self._weights,
+            primary_order=self._primary_order,
         )
 
         evidence_out = [

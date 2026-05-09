@@ -4,11 +4,14 @@ Validate one or more unified v2.0 JSONL files.
 Usage
 -----
 python -m src.cli.validate_unified_dataset \\
-    --files data/processed/ai2thor_unified.jsonl data/processed/averitec_train.jsonl \\
-    --out   data/summary/validation.json
+    --files out/unified/epistemic_factkg.jsonl \\
+    --out   out/report/validation.json
 
---schema is optional; defaults to the built-in CLAIM_SCHEMA (src/core/claims/claim_schema.py).
-Pass an external JSON Schema file to override.
+Outputs two files:
+  <out>.json   — machine-readable summary (counters + distributions)
+  <out>.md     — human-readable validation report (tables + GNN readiness)
+
+--schema is optional; defaults to the built-in CLAIM_SCHEMA.
 """
 
 import json
@@ -19,13 +22,13 @@ from typing import Any, Dict, List
 
 from jsonschema import Draft7Validator
 
-from src.utils.time import utc_now_iso
+from src.core.claims.labels import Pramana
 from src.core.claims.claim_schema import CLAIM_SCHEMA
 from src.core.claims.claim_validator import AdvancedClaimValidator
 from src.adapters.ai2thor.validator import AI2ThorValidator
 from src.adapters.averitec.validator import AveritecValidator
+from src.utils.time import utc_now_iso
 
-# Registry: dataset name -> DatasetValidator instance
 _DATASET_VALIDATORS: Dict[str, Any] = {
     "ai2thor": AI2ThorValidator(),
     "averitec": AveritecValidator(),
@@ -60,25 +63,8 @@ def _safe_get(d: dict, path: List[str], default=None):
 
 
 # ---------------------------------------------------------------------------
-# Logic checks (v2.0 field names)
+# Per-record semantic checks
 # ---------------------------------------------------------------------------
-
-
-def _check_stance_consistency(obj: dict) -> List[str]:
-    msgs = []
-    vlabel = _safe_get(obj, ["verdict", "label"])
-    stances = [
-        e.get("stance")
-        for e in (obj.get("evidence") or [])
-        if isinstance(e, dict) and e.get("stance")
-    ]
-    if not stances or vlabel is None:
-        return msgs
-    if vlabel == "supported" and all(s == "refutes" for s in stances):
-        msgs.append("All evidence stances are 'refutes' but verdict is 'supported'.")
-    if vlabel == "refuted" and all(s == "supports" for s in stances):
-        msgs.append("All evidence stances are 'supports' but verdict is 'refuted'.")
-    return msgs
 
 
 def _check_dataset_specific(obj: dict) -> List[str]:
@@ -109,12 +95,24 @@ def summarize_file(
             "schema_invalid": 0,
             "logic_warnings_records": 0,
         },
+        "coverage": {
+            # Populated after loop
+            "zero_evidence_records": 0,
+            "all_evidence_text_null": 0,
+            "evidence_count_sum": 0,  # -> avg evidence per record
+            "claim_triples_null": 0,  # absence-aware: only perception records
+            "claim_triples_count_sum": 0,  # -> avg claim triples per record
+            "evidence_triples_count_sum": 0,  # -> avg evidence triples per record
+            "refuted_absence_records": 0,  # structural=absence + verdict=refuted
+            "refuted_negation_records": 0,  # structural=negation + verdict=refuted
+        },
         "distributions": {
             "verdict_label": Counter(),
             "pramana_primary": Counter(),
             "pramana_all": Counter(),
             "dataset": Counter(),
             "evidence_modality": Counter(),
+            "evidence_stance": Counter(),
             "reasoning_structural": Counter(),
         },
         "schema_errors_top": Counter(),
@@ -127,14 +125,14 @@ def summarize_file(
 
     for line_no, obj in _iter_jsonl(path):
         summary["counts"]["total_records"] += 1
+        evidence = obj.get("evidence") or []
+        pramana = _safe_get(obj, ["epistemic", "pramana_primary"])
 
-        # Distributions
+        # ── Distributions ─────────────────────────────────────────────────
         summary["distributions"]["verdict_label"][
             _safe_get(obj, ["verdict", "label"])
         ] += 1
-        summary["distributions"]["pramana_primary"][
-            _safe_get(obj, ["epistemic", "pramana_primary"])
-        ] += 1
+        summary["distributions"]["pramana_primary"][pramana] += 1
         summary["distributions"]["dataset"][
             _safe_get(obj, ["provenance", "dataset"])
         ] += 1
@@ -145,11 +143,43 @@ def summarize_file(
         for pt in _safe_get(obj, ["epistemic", "pramana_all"], []):
             summary["distributions"]["pramana_all"][pt] += 1
 
-        for e in obj.get("evidence") or []:
+        for e in evidence:
             if isinstance(e, dict):
                 summary["distributions"]["evidence_modality"][e.get("modality")] += 1
+                summary["distributions"]["evidence_stance"][e.get("stance")] += 1
 
-        # JSON Schema validation
+        # ── Coverage metrics ───────────────────────────────────────────────
+        summary["coverage"]["evidence_count_sum"] += len(evidence)
+        if not evidence:
+            summary["coverage"]["zero_evidence_records"] += 1
+        elif all(e.get("text") is None for e in evidence if isinstance(e, dict)):
+            summary["coverage"]["all_evidence_text_null"] += 1
+
+        ct = obj.get("claim_triples")
+        structural = _safe_get(obj, ["reasoning", "structural"])
+        verdict_label = _safe_get(obj, ["verdict", "label"])
+        if (
+            ct is None
+            and pramana != Pramana.NON_APPREHENSION.value
+            and structural != "absence"
+        ):
+            summary["coverage"]["claim_triples_null"] += 1
+
+        # Triple density counters
+        summary["coverage"]["claim_triples_count_sum"] += len(ct or [])
+        for e in evidence:
+            if isinstance(e, dict):
+                summary["coverage"]["evidence_triples_count_sum"] += len(
+                    e.get("triples") or []
+                )
+
+        # Refuted pattern counters
+        if structural == "absence" and verdict_label == "refuted":
+            summary["coverage"]["refuted_absence_records"] += 1
+        if structural == "negation" and verdict_label == "refuted":
+            summary["coverage"]["refuted_negation_records"] += 1
+
+        # ── JSON Schema validation ─────────────────────────────────────────
         schema_errors = sorted(
             schema_validator.iter_errors(obj), key=lambda e: list(e.path)
         )
@@ -175,9 +205,17 @@ def summarize_file(
         else:
             summary["counts"]["schema_valid"] += 1
 
-        # Logic warnings (v2.0 field names + dataset-specific)
+        # ── Logic warnings ─────────────────────────────────────────────────
+        # 1. AdvancedClaimValidator: semantic, quality, and consistency rules
+        #    (excludes schema category — already captured above)
         warnings: List[str] = []
-        warnings += _check_stance_consistency(obj)
+        cv_result = claim_validator.validate_claim_advanced(obj)
+        for issue in cv_result.issues:
+            if issue.category != "schema":
+                warnings.append(f"[{issue.category}:{issue.severity}] {issue.message}")
+
+        # 2. Dataset-specific rules (AI2ThorValidator / AveritecValidator)
+        #    These add checks not covered by AdvancedClaimValidator.
         warnings += _check_dataset_specific(obj)
 
         if warnings:
@@ -193,26 +231,261 @@ def summarize_file(
                     }
                 )
 
-    # Serialize Counters
+    # ── Serialize Counters ─────────────────────────────────────────────────
     for k in list(summary["distributions"]):
         summary["distributions"][k] = dict(summary["distributions"][k])
     summary["schema_errors_top"] = dict(summary["schema_errors_top"].most_common(20))
     summary["logic_warnings_top"] = dict(summary["logic_warnings_top"].most_common(20))
 
+    # ── Dataset-level semantic checks ──────────────────────────────────────
+    total = summary["counts"]["total_records"]
+    dataset_warnings = []
+    if total > 0:
+        for verdict, count in summary["distributions"]["verdict_label"].items():
+            pct = count / total * 100
+            if pct > 70:
+                dataset_warnings.append(
+                    f"Label imbalance: '{verdict}' is {pct:.1f}% of records (>70%)"
+                )
+    summary["dataset_warnings"] = dataset_warnings
+    summary["gnn_readiness"] = _compute_gnn_readiness(summary)
+
     return summary
 
 
+def _compute_gnn_readiness(summary: dict) -> dict:
+    dists = summary.get("distributions", {})
+    counts = summary.get("counts", {})
+    coverage = summary.get("coverage", {})
+    total = counts.get("total_records", 0)
+
+    pramana_dist = dists.get("pramana_primary", {})
+    verdict_dist = dists.get("verdict_label", {})
+    stance_dist = dists.get("evidence_stance", {})
+
+    absence_count = pramana_dist.get(Pramana.NON_APPREHENSION.value, 0)
+    ev_sum = coverage.get("evidence_count_sum", 0)
+    ct_sum = coverage.get("claim_triples_count_sum", 0)
+    ev_tri_sum = coverage.get("evidence_triples_count_sum", 0)
+
+    return {
+        "total_records": total,
+        "verdict_distribution": verdict_dist,
+        "pramana_distribution": pramana_dist,
+        "stance_distribution": stance_dist,
+        "absence_claims": absence_count,
+        "absence_pct": round(absence_count / total * 100, 2) if total else 0,
+        "avg_evidence_per_record": round(ev_sum / total, 2) if total else 0,
+        "avg_claim_triples_per_record": round(ct_sum / total, 2) if total else 0,
+        "avg_evidence_triples_per_record": round(ev_tri_sum / total, 2) if total else 0,
+        "zero_evidence_records": coverage.get("zero_evidence_records", 0),
+        "all_text_null_records": coverage.get("all_evidence_text_null", 0),
+        "claim_triples_null_non_absence": coverage.get("claim_triples_null", 0),
+        "refuted_absence_claims": coverage.get("refuted_absence_records", 0),
+        "refuted_negation_claims": coverage.get("refuted_negation_records", 0),
+        "label_balance_ok": not any(
+            (v / total * 100) > 70 for v in verdict_dist.values() if total
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Pretty print
+# Markdown report
+# ---------------------------------------------------------------------------
+
+
+def _pct(n: int, total: int) -> str:
+    return f"{n / total * 100:.1f}%" if total else "0.0%"
+
+
+def write_validation_report_md(
+    summaries: List[Dict[str, Any]], out_path: Path, generated_utc: str
+) -> None:
+    lines: List[str] = []
+    w = lines.append
+
+    w("# Validation Report")
+    w(f"\nGenerated: {generated_utc}\n")
+
+    # ── Overall summary table ──────────────────────────────────────────────
+    w("## Summary\n")
+    w("| File | Total | Schema Valid | Schema Invalid | Records w/ Warnings |")
+    w("|------|------:|-------------:|---------------:|--------------------:|")
+    for s in summaries:
+        c = s["counts"]
+        total = c["total_records"]
+        fname = Path(s["file"]).name
+        w(
+            f"| `{fname}` "
+            f"| {total:,} "
+            f"| {c['schema_valid']:,} ({_pct(c['schema_valid'], total)}) "
+            f"| {c['schema_invalid']:,} ({_pct(c['schema_invalid'], total)}) "
+            f"| {c['logic_warnings_records']:,} ({_pct(c['logic_warnings_records'], total)}) |"
+        )
+
+    # ── Per-file detail ────────────────────────────────────────────────────
+    for s in summaries:
+        fname = Path(s["file"]).name
+        c = s["counts"]
+        total = c["total_records"]
+        w(f"\n---\n\n## File: `{fname}`\n")
+
+        # Verdict distribution
+        w("### Verdict Distribution\n")
+        w("| Verdict | Count | % |")
+        w("|---------|------:|--:|")
+        for k, v in sorted(
+            s["distributions"]["verdict_label"].items(), key=lambda x: str(x[0])
+        ):
+            w(f"| {k} | {v:,} | {_pct(v, total)} |")
+
+        # Pramana distribution
+        w("\n### Pramana (Epistemic) Distribution\n")
+        w("| Pramana | Count | % |")
+        w("|---------|------:|--:|")
+        for k, v in sorted(
+            s["distributions"]["pramana_primary"].items(), key=lambda x: str(x[0])
+        ):
+            w(f"| {k} | {v:,} | {_pct(v, total)} |")
+
+        # Evidence stance distribution
+        w("\n### Evidence Stance Distribution\n")
+        w("| Stance | Count | % of evidence items |")
+        w("|--------|------:|--------------------:|")
+        ev_total = sum(s["distributions"]["evidence_stance"].values())
+        for k, v in sorted(
+            s["distributions"]["evidence_stance"].items(), key=lambda x: str(x[0])
+        ):
+            w(f"| {k} | {v:,} | {_pct(v, ev_total)} |")
+
+        # Evidence modality
+        w("\n### Evidence Modality Distribution\n")
+        w("| Modality | Count | % of evidence items |")
+        w("|----------|------:|--------------------:|")
+        for k, v in sorted(
+            s["distributions"]["evidence_modality"].items(), key=lambda x: str(x[0])
+        ):
+            w(f"| {k} | {v:,} | {_pct(v, ev_total)} |")
+
+        # Structural reasoning
+        w("\n### Claim Structural Type\n")
+        w("| Structural | Count | % |")
+        w("|------------|------:|--:|")
+        for k, v in sorted(
+            s["distributions"]["reasoning_structural"].items(), key=lambda x: str(x[0])
+        ):
+            w(f"| {k} | {v:,} | {_pct(v, total)} |")
+
+        # Schema errors
+        w("\n### Schema Errors\n")
+        if not s["schema_errors_top"]:
+            w("_No schema errors._\n")
+        else:
+            w("| Count | Error |")
+            w("|------:|-------|")
+            for msg, cnt in s["schema_errors_top"].items():
+                w(f"| {cnt} | {msg} |")
+
+        # Semantic / logic warnings
+        w("\n### Semantic Rule Violations\n")
+        if not s["logic_warnings_top"]:
+            w("_No logic warnings._\n")
+        else:
+            w("| Count | Rule |")
+            w("|------:|------|")
+            for msg, cnt in s["logic_warnings_top"].items():
+                w(f"| {cnt} | {msg} |")
+
+        # Dataset-level warnings
+        if s.get("dataset_warnings"):
+            w("\n### Dataset-Level Warnings\n")
+            for dw in s["dataset_warnings"]:
+                w(f"- **{dw}**")
+            w("")
+
+        # Coverage
+        cov = s.get("coverage", {})
+        gnn = s.get("gnn_readiness", {})
+        w("\n### Coverage Metrics\n")
+        w("| Metric | Value |")
+        w("|--------|------:|")
+        w(f"| Total records | {total:,} |")
+        w(
+            f"| Avg evidence items / record | {gnn.get('avg_evidence_per_record', 0):.2f} |"
+        )
+        w(
+            f"| Records with zero evidence | {cov.get('zero_evidence_records', 0):,} ({_pct(cov.get('zero_evidence_records', 0), total)}) |"
+        )
+        w(
+            f"| Records with all evidence text=null | {cov.get('all_evidence_text_null', 0):,} ({_pct(cov.get('all_evidence_text_null', 0), total)}) |"
+        )
+        w(
+            f"| Non-absence records missing claim_triples | {cov.get('claim_triples_null', 0):,} ({_pct(cov.get('claim_triples_null', 0), total)}) |"
+        )
+
+        # GNN readiness
+        w("\n### GNN Readiness\n")
+        w("| Signal | Value |")
+        w("|--------|------:|")
+        w(
+            f"| Absence claims (non_apprehension) | {gnn.get('absence_claims', 0):,} ({gnn.get('absence_pct', 0):.1f}%) |"
+        )
+        w(
+            f"| Label balance OK (no class > 70%) | {'✓ Yes' if gnn.get('label_balance_ok') else '✗ No'} |"
+        )
+        w(
+            f"| Avg evidence items / record | {gnn.get('avg_evidence_per_record', 0):.2f} |"
+        )
+        w(
+            f"| Avg claim triples / record | {gnn.get('avg_claim_triples_per_record', 0):.2f} |"
+        )
+        w(
+            f"| Avg evidence triples / record | {gnn.get('avg_evidence_triples_per_record', 0):.2f} |"
+        )
+        w(f"| Refuted absence claims | {gnn.get('refuted_absence_claims', 0):,} |")
+        w(f"| Refuted negation claims | {gnn.get('refuted_negation_claims', 0):,} |")
+
+        # Stance edge types for GNN
+        w("\n#### Stance edge-type distribution (GNN edge labels)\n")
+        w("| Stance | Count |")
+        w("|--------|------:|")
+        for k, v in sorted(
+            gnn.get("stance_distribution", {}).items(), key=lambda x: str(x[0])
+        ):
+            w(f"| {k} | {v:,} |")
+
+        # Examples
+        if s["examples"]["schema_invalid"]:
+            w("\n### Example Schema Errors\n")
+            for ex in s["examples"]["schema_invalid"]:
+                w(f"- **line {ex['line']}** `{ex['id']}`")
+                for e in ex["errors"]:
+                    w(f"  - `{e['path']}`: {e['message']}")
+            w("")
+
+        if s["examples"]["warnings"]:
+            w("\n### Example Logic Warnings\n")
+            for ex in s["examples"]["warnings"]:
+                w(f"- **line {ex['line']}** `{ex['id']}`")
+                for warn in ex["warnings"]:
+                    w(f"  - {warn}")
+            w("")
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Pretty print (terminal)
 # ---------------------------------------------------------------------------
 
 
 def pretty_print_summary(s: Dict[str, Any]) -> None:
     c = s["counts"]
-    print("\n" + "=" * 50)
+    total = c["total_records"]
+    print("\n" + "=" * 55)
     print(f"FILE: {s['file']}")
-    print("=" * 50)
-    print(f"Total records:        {c['total_records']:,}")
+    print("=" * 55)
+    print(f"Total records:        {total:,}")
     print(f"Schema valid:         {c['schema_valid']:,}")
     print(f"Schema invalid:       {c['schema_invalid']:,}")
     print(f"Records w/ warnings:  {c['logic_warnings_records']:,}")
@@ -221,23 +494,34 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
     for k, v in sorted(
         s["distributions"]["verdict_label"].items(), key=lambda x: str(x[0])
     ):
-        print(f"  {k}: {v}")
+        print(f"  {str(k):28} {v:>6,}  ({_pct(v, total)})")
 
     print("\n-- Pramana primary --")
     for k, v in sorted(
         s["distributions"]["pramana_primary"].items(), key=lambda x: str(x[0])
     ):
-        print(f"  {k}: {v}")
+        print(f"  {str(k):28} {v:>6,}  ({_pct(v, total)})")
 
-    print("\n-- Dataset --")
-    for k, v in sorted(s["distributions"]["dataset"].items(), key=lambda x: str(x[0])):
-        print(f"  {k}: {v}")
+    print("\n-- Evidence stance --")
+    ev_total = sum(s["distributions"]["evidence_stance"].values())
+    for k, v in sorted(
+        s["distributions"]["evidence_stance"].items(), key=lambda x: str(x[0])
+    ):
+        print(f"  {str(k):28} {v:>6,}  ({_pct(v, ev_total)} of ev items)")
 
     print("\n-- Evidence modality --")
     for k, v in sorted(
         s["distributions"]["evidence_modality"].items(), key=lambda x: str(x[0])
     ):
-        print(f"  {k}: {v}")
+        print(f"  {str(k):28} {v:>6,}  ({_pct(v, ev_total)} of ev items)")
+
+    gnn = s.get("gnn_readiness") or {}
+    cov = s.get("coverage") or {}
+    print("\n-- Coverage --")
+    print(f"  Avg evidence / record:   {gnn.get('avg_evidence_per_record', 0):.2f}")
+    print(f"  Zero-evidence records:   {cov.get('zero_evidence_records', 0):,}")
+    print(f"  All-text-null records:   {cov.get('all_evidence_text_null', 0):,}")
+    print(f"  claim_triples null (non-absence): {cov.get('claim_triples_null', 0):,}")
 
     print("\n-- Top schema errors --")
     if not s["schema_errors_top"]:
@@ -267,6 +551,18 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
             for w in ex["warnings"]:
                 print(f"    - {w}")
 
+    if s.get("dataset_warnings"):
+        print("\n-- Dataset-level warnings --")
+        for w in s["dataset_warnings"]:
+            print(f"  ! {w}")
+
+    if gnn:
+        print("\n-- GNN readiness --")
+        print(
+            f"  Absence claims:  {gnn.get('absence_claims', 0):,}  ({gnn.get('absence_pct', 0):.1f}%)"
+        )
+        print(f"  Label balance OK: {gnn.get('label_balance_ok', '?')}")
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -275,30 +571,12 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Validate unified v2.0 JSONL files against schema + logic checks."
+        description="Validate unified v2.0 JSONL files. Writes .json + .md report."
     )
-    ap.add_argument(
-        "--files",
-        nargs="+",
-        required=True,
-        help="One or more unified v2.0 JSONL files to validate.",
-    )
-    ap.add_argument(
-        "--schema",
-        default=None,
-        help="Path to an external JSON Schema file. Defaults to built-in CLAIM_SCHEMA.",
-    )
-    ap.add_argument(
-        "--out",
-        default="data/summary/validation.json",
-        help="Where to write the summary JSON.",
-    )
-    ap.add_argument(
-        "--max_examples",
-        type=int,
-        default=3,
-        help="Max failing examples to include in the summary.",
-    )
+    ap.add_argument("--files", nargs="+", required=True)
+    ap.add_argument("--schema", default=None)
+    ap.add_argument("--out", default="out/report/validation.json")
+    ap.add_argument("--max_examples", type=int, default=3)
     args = ap.parse_args()
 
     schema = _load_json(args.schema) if args.schema else CLAIM_SCHEMA
@@ -311,17 +589,24 @@ def main() -> None:
         all_summaries.append(s)
         pretty_print_summary(s)
 
+    generated_utc = utc_now_iso()
+
+    # Write JSON
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(
-            {"generated_utc": utc_now_iso(), "summaries": all_summaries},
+            {"generated_utc": generated_utc, "summaries": all_summaries},
             f,
             ensure_ascii=False,
             indent=2,
         )
+    print(f"\nWrote JSON summary to: {out_path}")
 
-    print(f"\nWrote summary to: {args.out}")
+    # Write Markdown report alongside JSON
+    md_path = out_path.with_suffix(".md")
+    write_validation_report_md(all_summaries, md_path, generated_utc)
+    print(f"Wrote Markdown report to:  {md_path}")
 
 
 if __name__ == "__main__":

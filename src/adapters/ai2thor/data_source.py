@@ -10,7 +10,7 @@ from src.core.ports.graph.graph_data_source import GraphDataSource
 from src.utils.exceptions import ConfigurationError, DataSourceError
 
 from src.adapters.ai2thor.config import AI2ThorDataSourceConfig
-from src.adapters.ai2thor.registry.entities import (
+from src.adapters.ai2thor.ids.object_types import (
     CONTAINER_ROLES,
     SURFACE_ROLES,
     HANGING_ROLES,

@@ -198,7 +198,10 @@ Temporary Items
 thor_builds/
 thor_data/
 output/
-out/
+
+# Generated outputs — all reproducible via `just build` / `just run`
+out/*
+!out/.gitkeep
 
 # Visualization outputs
 visualizations/

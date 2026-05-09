@@ -7,12 +7,15 @@ default:
     @just --list
 
 # ── Variables ────────────────────────────────────────────────────────────────
-RAW_AVERITEC_TRAIN := "data/raw/averitec/train.json"
-RAW_AVERITEC_DEV   := "data/raw/averitec/dev.json"
-RAW_AI2THOR_CLAIMS := "data/raw/ai2thor/claims_all.jsonl"
-PROCESSED_DIR      := "data/processed"
-KG_TTL             := "out/knowledge_graph.ttl"
-VIZ_HTML           := "out/visualizer/knowledge_graph.html"
+CONFIG              := "configs/config.yaml"
+AI2THOR_RAW_DIR     := "data/raw/ai2thor"
+AI2THOR_CLAIMS      := AI2THOR_RAW_DIR + "/claims_all.jsonl"
+RAW_AVERITEC_TRAIN  := "data/raw/averitec/train.json"
+RAW_AVERITEC_DEV    := "data/raw/averitec/dev.json"
+KG_TTL              := "out/knowledge_graph.ttl"
+UNIFIED_JSONL       := "out/unified/epistemic_factkg.jsonl"
+VALIDATION_JSON     := "out/report/validation.json"
+REPORT_DIR          := "out/report"
 
 
 # ── Setup ────────────────────────────────────────────────────────────────────
@@ -20,61 +23,52 @@ VIZ_HTML           := "out/visualizer/knowledge_graph.html"
 init:
     uv venv && uv sync && uv pip install -e ".[dev,notebook]"
 
-[doc("Format and lint source code")]
-dev:
-    uv run ruff format . && uv run ruff check .
-
-[doc("Run the test suite")]
-test:
-    uv run pytest tests/ -v --tb=short
-
 
 # ── Build ────────────────────────────────────────────────────────────────────
-[doc("Build the AI2-THOR RDF knowledge graph → out/knowledge_graph.ttl")]
-build-kg:
+[doc("Build KG → generate AI2THOR claims → convert + merge all datasets to unified JSONL")]
+build max_contexts="10" n_claims="2000":
     uv run python -m src.cli.build_rdf \
-        --config configs/ai2thor_default.yaml --out {{KG_TTL}} --verbose
-
-[doc("Generate AI2-THOR claims from the KG → data/raw/ai2thor/claims_all.jsonl")]
-build-claims max_contexts="10" n_claims="2000":
+        --config {{CONFIG}} --out {{KG_TTL}} --verbose
     uv run python -m src.cli.build_claims {{KG_TTL}} \
-        --output-dir data/raw/ai2thor \
+        --output-dir {{AI2THOR_RAW_DIR}} \
         --max-contexts {{max_contexts}} \
         --n-claims {{n_claims}} \
         --verbose
-
-
-# ── Data pipeline ────────────────────────────────────────────────────────────
-[doc("Convert all datasets to unified v2.0 JSONL → data/processed/")]
-convert:
     uv run python -m src.cli.convert_to_unified \
-        --averitec_inputs {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
-        --ai2thor_inputs {{RAW_AI2THOR_CLAIMS}} \
-        --output_dir {{PROCESSED_DIR}}
+        --config {{CONFIG}} \
+        --averitec {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
+        --ai2thor {{AI2THOR_CLAIMS}} \
+        --output {{UNIFIED_JSONL}} \
+        --intermediate_dir out/intermediate
 
-[doc("Validate all processed JSONL files against the v2.0 schema")]
+
+# ── Validate ─────────────────────────────────────────────────────────────────
+[doc("Validate the unified JSONL (schema + semantic + pramana checks for all datasets)")]
 validate:
-    mkdir -p data/summary
+    mkdir -p {{REPORT_DIR}}
     uv run python -m src.cli.validate_unified_dataset \
-        --files \
-            {{PROCESSED_DIR}}/averitec_train.jsonl \
-            {{PROCESSED_DIR}}/averitec_dev.jsonl \
-            {{PROCESSED_DIR}}/ai2thor_claims_all.jsonl \
-        --out data/summary/validation.json
+        --files {{UNIFIED_JSONL}} \
+        --out {{VALIDATION_JSON}}
 
-[doc("Split AI2-THOR by floorplan into train/dev/test. mode: pct | counts | lists")]
-split mode="pct" train_pct="80" dev_pct="10" n_train="6" n_dev="1" n_test="1" seed="13":
-    uv run python -m src.cli.split_ai2thor \
-        --input {{PROCESSED_DIR}}/ai2thor_claims_all.jsonl \
-        --output_dir {{PROCESSED_DIR}} \
-        --mode {{mode}} \
-        --train_pct {{train_pct}} --dev_pct {{dev_pct}} \
-        --n_train_floorplans {{n_train}} \
-        --n_dev_floorplans {{n_dev}} \
-        --n_test_floorplans {{n_test}} \
-        --seed {{seed}}
 
-[doc("Full pipeline: build-claims → convert → validate → split (logs → runs/<RUN_ID>/)")]
+# ── Report ───────────────────────────────────────────────────────────────────
+[doc("Generate dataset report (markdown + charts) from validation output")]
+report:
+    uv run python -m src.cli.build_dataset_report \
+        --summary {{VALIDATION_JSON}} \
+        --out_dir {{REPORT_DIR}} \
+        --title "Epistemic FactKG Dataset Report"
+
+
+# ── Test ─────────────────────────────────────────────────────────────────────
+[doc("Lint (ruff) and run test suite")]
+test:
+    uv run ruff format . && uv run ruff check .
+    uv run pytest tests/ -v --tb=short
+
+
+# ── Full pipeline ─────────────────────────────────────────────────────────────
+[doc("Full pipeline: build → validate → report (logs saved to runs/<RUN_ID>/)")]
 run RUN_ID="" max_contexts="10" n_claims="2000":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -82,25 +76,15 @@ run RUN_ID="" max_contexts="10" n_claims="2000":
     echo "RUN_ID=$RUN_ID"
     mkdir -p "runs/$RUN_ID/logs"
 
-    just build-claims {{max_contexts}} {{n_claims}} | tee "runs/$RUN_ID/logs/build.log"
-    just convert                                   | tee "runs/$RUN_ID/logs/convert.log"
-    just validate                                  | tee "runs/$RUN_ID/logs/validate.log"
-    just split                                     | tee "runs/$RUN_ID/logs/split.log"
+    just build {{max_contexts}} {{n_claims}} 2>&1 | tee "runs/$RUN_ID/logs/build.log"
+    just validate                              2>&1 | tee "runs/$RUN_ID/logs/validate.log"
+    just report                               2>&1 | tee "runs/$RUN_ID/logs/report.log"
 
     echo "Done → runs/$RUN_ID/"
 
 
-# ── Extras ───────────────────────────────────────────────────────────────────
-[doc("Build and open the interactive KG visualization in the browser")]
-viz:
-    rm -rf out/visualizer
-    uv run python -m src.cli.build_viz {{KG_TTL}} --output {{VIZ_HTML}}
-    open {{VIZ_HTML}}
-
-[doc("Generate a dataset report (md + plots) from a run. Usage: just report <RUN_ID>")]
-report RUN_ID:
-    mkdir -p runs/{{RUN_ID}}/report
-    uv run python -m src.cli.build_dataset_report \
-        --summary runs/{{RUN_ID}}/summary/validation.json \
-        --out_dir runs/{{RUN_ID}}/report \
-        --title "Epistemic FactKG — Run {{RUN_ID}}"
+# ── Clean ────────────────────────────────────────────────────────────────────
+[doc("Delete all generated outputs: out/, data/processed/, data/summary/, runs/")]
+clean:
+    rm -rf out/ data/processed/ data/summary/ runs/
+    @echo "Cleaned generated outputs."

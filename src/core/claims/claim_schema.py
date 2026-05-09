@@ -76,7 +76,14 @@ CLAIM_SCHEMA = {
             "properties": {
                 "structural": {
                     "type": ["string", "null"],
-                    "enum": ["one_hop", "multi_hop", "conjunction", "negation", "absence", None],
+                    "enum": [
+                        "one_hop",
+                        "multi_hop",
+                        "conjunction",
+                        "negation",
+                        "absence",
+                        None,
+                    ],
                 },
                 "strategy": {
                     "type": ["string", "null"],

@@ -1,0 +1,542 @@
+[
+  {
+    "claim": "The Kenya judiciary have one magistrate serving over 77,000 people.",
+    "required_reannotation": true,
+    "label": "Supported",
+    "justification": "87000 is significantly different than the claimed 77,000 but since it does say \"over 77,000\" it is technically true. ",
+    "claim_date": "23-8-2020",
+    "speaker": "David Maraga ",
+    "original_claim_url": "https://www.youtube.com/watch?v=xb0LoEBc6_o&feature=youtu.be&t=761",
+    "fact_checking_article": "https://web.archive.org/web/20210127231105/https://africacheck.org/fact-checks/reports/factchecking-kenyas-chief-justice-judiciary-funding-and-backlog-cases",
+    "reporting_source": "Youtube: NTV Kenya",
+    "location_ISO_code": "KE",
+    "claim_types": [
+      "Numerical Claim"
+    ],
+    "fact_checking_strategies": [
+      "Numerical Comparison"
+    ],
+    "questions": [
+      {
+        "question": "How many magistrates worked in Kenya in 2019?",
+        "answers": [
+          {
+            "answer": "546 as of June 2019.",
+            "answer_type": "Extractive",
+            "source_url": "https://web.archive.org/web/20210127231105/https://africacheck.org//sites/default/files/State-of-the-Judiciary-Report-2018-19.pdf",
+            "source_medium": "PDF",
+            "cached_source_url": "https://web.archive.org/web/20210127231105/https://africacheck.org//sites/default/files/State-of-the-Judiciary-Report-2018-19.pdf"
+          }
+        ]
+      },
+      {
+        "question": "What is the population of Kenya?",
+        "answers": [
+          {
+            "answer": "Rounded up to 47.6 million.",
+            "answer_type": "Extractive",
+            "source_url": "https://web.archive.org/web/20210105192026/https://www.knbs.or.ke/?p=5621",
+            "source_medium": "Web text",
+            "cached_source_url": "https://web.archive.org/web/20210105192026/https://www.knbs.or.ke/?p=5621"
+          }
+        ]
+      },
+      {
+        "question": "What is 47.6 million divided by 546?",
+        "answers": [
+          {
+            "answer": "87 179",
+            "answer_type": "Extractive",
+            "source_url": "https://www.online-calculator.com/",
+            "source_medium": "Web table",
+            "cached_source_url": "https://web.archive.org/web/20230417212948/https://www.online-calculator.com/"
+          }
+        ]
+      },
+      {
+        "question": "Does the claim state \"over 77,000\" and therefore accept that 87,179 is over 77,000?",
+        "answers": [
+          {
+            "answer": "No answer could be found.",
+            "answer_type": "Unanswerable",
+            "source_url": "",
+            "source_medium": ""
+          }
+        ]
+      }
+    ],
+    "cached_original_claim_url": "https://web.archive.org/web/20230420110107/https://www.youtube.com/watch?v=xb0LoEBc6_o&feature=youtu.be&t=761"
+  },
+  {
+    "claim": "There is an office of the special assistant to the executive governor of Kano state on graveyards",
+    "required_reannotation": true,
+    "label": "Not Enough Evidence",
+    "justification": "There is not enough evidence to be sure if there is an office of the special assistant as no answer could be found. ",
+    "claim_date": "10-8-2020",
+    "speaker": "@ChidiOdinkalu",
+    "original_claim_url": "https://twitter.com/chidiodinkalu/status/1292815405740941315",
+    "fact_checking_article": "https://web.archive.org/web/20210701082531/https://www.icirnigeria.org/fact-check-claim-on-resignation-of-gandujes-aide-on-graveyard-true-but-tweet-misleading/",
+    "reporting_source": "Twitter",
+    "location_ISO_code": "NG",
+    "claim_types": [
+      "Event/Property Claim"
+    ],
+    "fact_checking_strategies": [
+      "Consultation"
+    ],
+    "questions": [
+      {
+        "question": "Does Kano State of Nigeria have a special assistant position for Graveyards?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://www.nairaland.com/4661350/kano-state-special-assistant-graveyards",
+            "source_medium": "Web text",
+            "boolean_explanation": "However after Yakubu Nagoda's resignation the position is yet to be refilled.",
+            "cached_source_url": "https://web.archive.org/web/20230420124932/https://www.nairaland.com/4661350/kano-state-special-assistant-graveyards"
+          }
+        ]
+      },
+      {
+        "question": "Is there still a special assistant to the executive governor of Kano state on graveyards?",
+        "answers": [
+          {
+            "answer": "No answer could be found.",
+            "answer_type": "Unanswerable",
+            "source_url": "",
+            "source_medium": ""
+          }
+        ]
+      }
+    ],
+    "cached_original_claim_url": "https://web.archive.org/web/20230420124907/https://twitter.com/chidiodinkalu/status/1292815405740941315"
+  },
+  {
+    "claim": "Joe Biden then US former vice president in 2015 pressured the Ukrainian government to fire Viktor Shokin, the top Ukrainian prosecutor, because he was investigating Ukraine’s largest private gas company, Burisma, which had added Biden’s son, Hunter, to its board in 2014.",
+    "required_reannotation": false,
+    "label": "Refuted",
+    "justification": "There is no evidence that Joe BIden pressured the Ukrainian government to fire Viktor Shokin",
+    "claim_date": null,
+    "speaker": "Donald Trump",
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20210708140929/https://www.washingtonpost.com/politics/2019/09/27/quick-guide-trumps-false-claims-about-ukraine-bidens/",
+    "reporting_source": null,
+    "location_ISO_code": "US",
+    "claim_types": [
+      "Event/Property Claim"
+    ],
+    "fact_checking_strategies": [
+      "Written Evidence"
+    ],
+    "questions": [
+      {
+        "question": "Was Victor Shokin investigating Burisma?",
+        "answers": [
+          {
+            "answer": "No",
+            "answer_type": "Boolean",
+            "source_url": "https://www.pbs.org/newshour/show/why-talking-to-ukrainian-officials-disproves-the-trump-narrative-on-biden",
+            "source_medium": "Web text",
+            "boolean_explanation": "In 2015, the U.S. ambassador to Ukraine took the unprecedented step of telling the country it should fire prosecutors who were blocking an investigation of the owner of Burisma, where Hunter Biden was reportedly earning $50,000 a month.",
+            "cached_source_url": "https://web.archive.org/web/20230417121711/https://www.pbs.org/newshour/show/why-talking-to-ukrainian-officials-disproves-the-trump-narrative-on-biden"
+          }
+        ]
+      },
+      {
+        "question": "Was Hunter Biden part of Burisma Board?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://web.archive.org/web/20210620012622/https://twitter.com/anders_aslund/status/1175207735148892160",
+            "source_medium": "Web text",
+            "boolean_explanation": "That Joe Biden's son Hunter was a member of the board of Burisma was only a decoration of no significance.",
+            "cached_source_url": "https://web.archive.org/web/20210620012622/https://twitter.com/anders_aslund/status/1175207735148892160"
+          }
+        ]
+      },
+      {
+        "question": "Why was Victor Shukin fired?",
+        "answers": [
+          {
+            "answer": "In the eyes of many Ukrainians, his biggest failure was that nobody from the former regime was prosecuted for the killing of protesters here on Independence Square.\nParliamentarian Yehor Soboliev was the first official to demand the prosecutor's dismissal.\n\nAnother reason was failure to investigate grand corruption of Yanukovych. Ukrainian prosecutor general's office didn't want to help to provide evidence.",
+            "answer_type": "Abstractive",
+            "source_url": "https://www.pbs.org/newshour/show/why-talking-to-ukrainian-officials-disproves-the-trump-narrative-on-biden",
+            "source_medium": "Web text",
+            "cached_source_url": "https://web.archive.org/web/20230417121711/https://www.pbs.org/newshour/show/why-talking-to-ukrainian-officials-disproves-the-trump-narrative-on-biden"
+          }
+        ]
+      }
+    ],
+    "cached_original_claim_url": null
+  },
+  {
+    "claim": "Moscow, Russia, metro allows free rides to commuters for 30 squats",
+    "required_reannotation": false,
+    "label": "Supported",
+    "justification": "To promote the winter Olympics the Russian Olympics committee with the Moscow officials allowed passengers to board the train when they do squats ",
+    "claim_date": "4-7-2019",
+    "speaker": "Aviator Anil Chopra",
+    "original_claim_url": "https://twitter.com/search?f=tweets&vertical=default&q=At%20Moscow%27s%20metro%20rail%20station%20if%20you%20do%2030%20situps&src=typd",
+    "fact_checking_article": "https://web.archive.org/web/20191201133602/https://www.altnews.in/fact-check-moscow-metro-allows-free-rides-to-commuters-for-30-squats/",
+    "reporting_source": "Twitter",
+    "location_ISO_code": "RU",
+    "claim_types": [
+      "Position Statement"
+    ],
+    "fact_checking_strategies": [
+      "Written Evidence"
+    ],
+    "questions": [
+      {
+        "question": "Does Moscow Russia have a scheme where you get free metro ticket if you do exercise to earn it?",
+        "answers": [
+          {
+            "answer": "In an effort to promote both the then upcoming Winter Olympic Games in Sochi and physical fitness, Moscow city officials and the Russian Olympic Committee are allowing subway riders to pay 30 squats instead of 30 rubles (about 92 cents) for a trip on thetrain.",
+            "answer_type": "Extractive",
+            "source_url": "https://web.archive.org/web/20200425024905/https://www.cbsnews.com/news/price-of-riding-the-moscow-subway-30-squats/",
+            "source_medium": "Web text"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "claim": "Barack Obama said, \"Anybody can buy any weapon, any time without much, if any, regulation. They buy it over the internet. They can buy machine guns.\"",
+    "required_reannotation": false,
+    "label": "Conflicting Evidence/Cherrypicking",
+    "justification": "From the answers and sources the claim is half right as people can buy firearms on the internet but there are regulations in place. ",
+    "claim_date": "30-5-2019",
+    "speaker": "Barack Obama",
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20201108004055/https://www.politifact.com/factchecks/2019/jun/04/barack-obama/barack-obama-wrong-limits-us-gun-laws/",
+    "reporting_source": "Stage interview",
+    "location_ISO_code": "US",
+    "claim_types": [
+      "Quote Verification"
+    ],
+    "fact_checking_strategies": [
+      "Written Evidence",
+      "Consultation"
+    ],
+    "questions": [
+      {
+        "question": "What are the regulations on the sale of weapons in the US?",
+        "answers": [
+          {
+            "answer": "There are about 300 federal and state gun laws that regulate the sale and acquisition of firearms in the United States. When it comes to internet gun sales, the firearm is sent to a gun dealer who holds a federal firearms license. An FBI background check is then conducted before the firearm is transferred to the buyer.",
+            "answer_type": "Extractive",
+            "source_url": "https://townhall.com/tipsheet/mattvespa/2019/06/01/obama-peddles-straight-antigun-trash-in-brazil-n2547233",
+            "source_medium": "Web text"
+          }
+        ]
+      },
+      {
+        "question": "Can firearms be sold on the internet in the US?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://www.gao.gov/assets/gao-18-24.pdf",
+            "source_medium": "PDF",
+            "boolean_explanation": "Potential gun buyers can view firearm advertisements and make\npurchases from the following categories of websites: major retailers,\nonline retailers, online auctions and marketplaces, online classified\nlistings, online forums and social media networks, and Dark Web\nwebsites."
+          }
+        ]
+      },
+      {
+        "question": "Who can buy a machine gun in the US?",
+        "answers": [
+          {
+            "answer": "Contrary to popular belief, it is perfectly legal for a law-abiding American citizen to own/possess a machine gun (sometimes called a full-auto firearm or automatic weapon).\n\nThe absolute easiest way is for someone to get a Federal Firearms License or “FFL” (even a home-based FFL).\n\nDepending on the type of FFL, the FFL-holder can purchase and sell machine guns, regardless of when they were made (more on this below), and they can even legally make their own machine guns or lawfully convert current firearms into full-autos.",
+            "answer_type": "Extractive",
+            "source_url": "https://rocketffl.com/who-can-own-a-full-auto-machine-gun/#",
+            "source_medium": "Web text"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "claim": "In 2018 we had 10 million tourists who came to our country South Africa, which is a huge increase",
+    "required_reannotation": true,
+    "label": "Not Enough Evidence",
+    "justification": "there is no evidence for 2018, so this isn't something that can be confirmed. ",
+    "claim_date": "7-2-2019",
+    "speaker": "Cyril Ramaphosa",
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20210226001653/https://africacheck.org/fact-checks/reports/state-facts-verifying-cyril-ramaphosas-sona2019-claims",
+    "reporting_source": null,
+    "location_ISO_code": "ZA",
+    "claim_types": [
+      "Numerical Claim"
+    ],
+    "fact_checking_strategies": [
+      "Numerical Comparison"
+    ],
+    "questions": [
+      {
+        "question": "What was the total number of tourists in South Africa in 2018 between January to November",
+        "answers": [
+          {
+            "answer": "The total number of tourists was 9, 464, 950",
+            "answer_type": "Abstractive",
+            "source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11",
+            "source_medium": "PDF",
+            "cached_source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11"
+          }
+        ]
+      },
+      {
+        "question": "What number of tourists visited South Africa in 2017",
+        "answers": [
+          {
+            "answer": "9, 293, 618 tourists",
+            "answer_type": "Extractive",
+            "source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11",
+            "source_medium": "PDF",
+            "cached_source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11"
+          }
+        ]
+      },
+      {
+        "question": "Is there data for visitors visiting South Africa during 2018?",
+        "answers": [
+          {
+            "answer": "The data is from January up until November. There is no data for December.",
+            "answer_type": "Abstractive",
+            "source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11",
+            "source_medium": "PDF",
+            "cached_source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11"
+          }
+        ]
+      },
+      {
+        "question": "When was the claim made?",
+        "answers": [
+          {
+            "answer": "07/02/2019",
+            "answer_type": "Extractive",
+            "source_url": "Metadata",
+            "source_medium": "Metadata",
+            "cached_source_url": "Metadata"
+          }
+        ]
+      },
+      {
+        "question": "When will the data for December 2018 be released?",
+        "answers": [
+          {
+            "answer": "EXPECTED RELEASE DATE:\n25 February 2019",
+            "answer_type": "Extractive",
+            "source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11",
+            "source_medium": "PDF",
+            "cached_source_url": "https://web.archive.org/web/20200603191844/http://www.statssa.gov.za/publications/P0351/P0351November2018.pdf#page=11"
+          }
+        ]
+      }
+    ],
+    "cached_original_claim_url": null
+  },
+  {
+    "claim": "Kenyan Singer Ringtone Apoko found dead in a waste bin in Karen, Kenya.",
+    "required_reannotation": false,
+    "label": "Refuted",
+    "justification": "The person who is cliamed to have died on 25th of June 2019 has been reported seen after that date, Q&A state reports are that the person is alive.",
+    "claim_date": "25-6-2019",
+    "speaker": "Achilles Gombya",
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20210720230926/https://africacheck.org/fact-checks/fbchecks/kenyan-gospel-music-star-ringtone-apoko-alive-and-well",
+    "reporting_source": "Facebook",
+    "location_ISO_code": "KE",
+    "claim_types": [
+      "Event/Property Claim"
+    ],
+    "fact_checking_strategies": [
+      "Written Evidence"
+    ],
+    "questions": [
+      {
+        "question": "When was the claim made?",
+        "answers": [
+          {
+            "answer": "25 June 2019",
+            "answer_type": "Extractive",
+            "source_url": "Metadata",
+            "source_medium": "Metadata"
+          }
+        ]
+      },
+      {
+        "question": "Has Kenyan singer Ringtone Apoko made any appearances after June 25th, 2019?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://www.facebook.com/RingtoneSinger/photos/a.329467110516691/1550263555103701/?type=3&theater",
+            "source_medium": "Web text",
+            "boolean_explanation": "Ringtone Apoko appeared on Radio Maisha on the 28th of June 2019."
+          }
+        ]
+      },
+      {
+        "question": "Has Ringtone Apoko been in an accident?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://www.facebook.com/RingtoneSinger/photos/a.329467110516691/1558989150897808/?type=3&theater",
+            "source_medium": "Web text",
+            "boolean_explanation": "Ringtone Apoko was in a car accident on the 9th of July 2019, but confirmed that he was not hurt."
+          }
+        ]
+      },
+      {
+        "question": "Has Ringtone Apoko been in a recent accident?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://www.facebook.com/RingtoneSinger/photos/a.329467110516691/1558989150897808/?type=3&theater",
+            "source_medium": "Web text",
+            "boolean_explanation": "Ringtone Apoko was in a car accident on the 9th of July 2019, but confirmed that he was not hurt."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "claim": "In Kenya, since 2013, county governments have cumulatively received Ksh1.57 trillion worth of equitable share of allocation.",
+    "required_reannotation": false,
+    "label": "Supported",
+    "justification": "From the Q&A it is found that the amount received is correct, as 1.57 falls between 1.514 to 1.611, so the claim is supported. ",
+    "claim_date": "28-6-2019",
+    "speaker": "Wycliffe Oparanya",
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20210720042508/https://africacheck.org/fact-checks/reports/claims-kenyas-counties-fact-checking-2019-state-devolution-address",
+    "reporting_source": "",
+    "location_ISO_code": "KE",
+    "claim_types": [
+      "Numerical Claim"
+    ],
+    "fact_checking_strategies": [
+      "Numerical Comparison"
+    ],
+    "questions": [
+      {
+        "question": "How much was actually received by counties from 2012/12 to 2018/19?",
+        "answers": [
+          {
+            "answer": "The amount actually received by counties is between KSh1.611 trillion and KSh1.514 trillion.",
+            "answer_type": "Abstractive",
+            "source_url": "https://web.archive.org/web/20210720042508/https://drive.google.com/open?id=14pXwwccUuzBpkNdxs4k9XFyYGQO7f8b_",
+            "source_medium": "Web text"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "claim": "A Facebook meme claims  five House Republicans voted with Democrats to create a “firearms registry.”",
+    "required_reannotation": false,
+    "label": "Refuted",
+    "justification": "The evidence showcases that the U.S. is forbidden from creating a firearms registry. ",
+    "claim_date": "1-5-2019",
+    "speaker": null,
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20210127112123/https://www.factcheck.org/2019/07/a-false-claim-about-h-r-8-and-a-firearms-registry/",
+    "reporting_source": "Facebook",
+    "location_ISO_code": "US",
+    "claim_types": [
+      "Position Statement",
+      "Event/Property Claim"
+    ],
+    "fact_checking_strategies": [
+      "Written Evidence",
+      "Consultation"
+    ],
+    "questions": [
+      {
+        "question": "Is the United states allowed to create a gun registry",
+        "answers": [
+          {
+            "answer": "The US is forbidden from a creating a gun registry",
+            "answer_type": "Abstractive",
+            "source_url": "https://web.archive.org/web/20210202200112/https://www.govinfo.gov/content/pkg/STATUTE-100/pdf/STATUTE-100-Pg449.pdf",
+            "source_medium": "PDF"
+          }
+        ]
+      },
+      {
+        "question": "Is the H.R 8 bill tantamount to creating a gun registry",
+        "answers": [
+          {
+            "answer": "the House bill states that “[n]othing in this Act, or any amendment made by this Act, shall be construed to … authorize the establishment, directly or indirectly, of a national firearms registry.”",
+            "answer_type": "Extractive",
+            "source_url": "Metadata",
+            "source_medium": "Metadata"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "claim": "U.S. Rep. Maxine Waters made a violence-inciting remark about President Donald Trump and Vice President Mike Pence saying, \"I say, we knock off Trump and then, go after Pence. We have the power.\"",
+    "required_reannotation": false,
+    "label": "Conflicting Evidence/Cherrypicking",
+    "justification": "U.S. Rep. Maxine Waters was taken out of context. Although she was speaking on the ousting of President Donald Trump, she actually said, \"Knock off the first one, and then go after the second one,\" She did say 'We have the power\" when she said, “We have the power. We have the numbers, but we’ve got to understand our power and we’ve got to use our power,”",
+    "claim_date": "15-12-2018",
+    "speaker": null,
+    "original_claim_url": null,
+    "fact_checking_article": "https://web.archive.org/web/20210603010028/https://www.politifact.com/factchecks/2020/feb/10/viral-image/maxine-waters-remarks-about-trump-and-pence-were-a/",
+    "reporting_source": null,
+    "location_ISO_code": null,
+    "claim_types": [
+      "Quote Verification"
+    ],
+    "fact_checking_strategies": [
+      "Written Evidence"
+    ],
+    "questions": [
+      {
+        "question": "Did U.S. Rep. Maxine Waters  say ''I say, we knock off Trump and then, go after Pence. We have the power.''",
+        "answers": [
+          {
+            "answer": "No",
+            "answer_type": "Boolean",
+            "source_url": "https://web.archive.org/web/20210822144718/https://www.theamericanmirror.com/blog/2018/09/16/newspaper-publishers-association-honors-maxine-waters-with-leadership-award/",
+            "source_medium": "Web text",
+            "boolean_explanation": "“Knock off the first one, and then go after the second one,” she said.",
+            "cached_source_url": "https://web.archive.org/web/20210822144718/https://www.theamericanmirror.com/blog/2018/09/16/newspaper-publishers-association-honors-maxine-waters-with-leadership-award/"
+          }
+        ]
+      },
+      {
+        "question": "What was she referring to when she made this statement?",
+        "answers": [
+          {
+            "answer": "that an ousted President Trump would lead to a President Pence.",
+            "answer_type": "Extractive",
+            "source_url": "https://web.archive.org/web/20210822144718/https://www.theamericanmirror.com/blog/2018/09/16/newspaper-publishers-association-honors-maxine-waters-with-leadership-award/",
+            "source_medium": "Web text",
+            "cached_source_url": "https://web.archive.org/web/20210822144718/https://www.theamericanmirror.com/blog/2018/09/16/newspaper-publishers-association-honors-maxine-waters-with-leadership-award/"
+          }
+        ]
+      },
+      {
+        "question": "Was there any context to the statement she made?",
+        "answers": [
+          {
+            "answer": "Yes",
+            "answer_type": "Boolean",
+            "source_url": "https://web.archive.org/web/20210822144718/https://www.theamericanmirror.com/blog/2018/09/16/newspaper-publishers-association-honors-maxine-waters-with-leadership-award/",
+            "source_medium": "Web text",
+            "boolean_explanation": "She went on to say “We have the power. We have the numbers, but we’ve got to understand our power and we’ve got to use our power,”",
+            "cached_source_url": "https://web.archive.org/web/20210822144718/https://www.theamericanmirror.com/blog/2018/09/16/newspaper-publishers-association-honors-maxine-waters-with-leadership-award/"
+          }
+        ]
+      }
+    ],
+    "cached_original_claim_url": null
+  }
+]

@@ -299,7 +299,9 @@ class ClaimGenerator:
             present_types.setdefault(ot, []).append(t)
 
         # Universe of all possible object types (caller-supplied or fall back to present)
-        universe: List[str] = object_universe if object_universe else list(present_types.keys())
+        universe: List[str] = (
+            object_universe if object_universe else list(present_types.keys())
+        )
         absent_types = [ot for ot in universe if ot not in present_types]
 
         # ---------------- SUPPORTED (genuine absence) ----------------
@@ -310,7 +312,10 @@ class ClaimGenerator:
         self._rng.shuffle(absent_types)
         candidates = list(absent_types)  # copy to cycle through
 
-        while supported_count < supported_target and attempts < supported_target * max_attempts:
+        while (
+            supported_count < supported_target
+            and attempts < supported_target * max_attempts
+        ):
             if not candidates:
                 break
             obj_type = candidates[attempts % len(candidates)]
@@ -351,7 +356,9 @@ class ClaimGenerator:
         present_list = list(present_types.keys())
         self._rng.shuffle(present_list)
 
-        while refuted_count < refuted_target and attempts < refuted_target * max_attempts:
+        while (
+            refuted_count < refuted_target and attempts < refuted_target * max_attempts
+        ):
             if not present_list:
                 break
             obj_type = present_list[attempts % len(present_list)]

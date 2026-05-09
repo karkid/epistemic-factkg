@@ -1,7 +1,9 @@
+"""Generate a dataset report (markdown + charts) from validate_unified_dataset output."""
+
 import argparse
 import json
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -20,29 +22,18 @@ def ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
 
 
-def safe_get(d: Dict[str, Any], keys: List[str], default=None):
-    cur: Any = d
-    for k in keys:
-        if not isinstance(cur, dict) or k not in cur:
-            return default
-        cur = cur[k]
-    return cur
-
-
-def sort_dict_by_value_desc(d: Dict[str, int]) -> List[Tuple[str, int]]:
+def sort_desc(d: Dict[str, int]) -> List[Tuple[str, int]]:
     return sorted(d.items(), key=lambda kv: kv[1], reverse=True)
 
 
 def plot_bar(
     dist: Dict[str, int], title: str, out_path: Path, top_k: Optional[int] = None
 ):
-    items = sort_dict_by_value_desc(dist)
-    if top_k is not None:
+    items = sort_desc(dist)
+    if top_k:
         items = items[:top_k]
-
-    labels = [str(k) for k, _ in items]
+    labels = [str(k) if k is not None else "null" for k, _ in items]
     values = [int(v) for _, v in items]
-
     plt.figure(figsize=(10, 5))
     plt.bar(labels, values)
     plt.title(title)
@@ -52,74 +43,98 @@ def plot_bar(
     plt.close()
 
 
-def md_table_from_dist(title: str, dist: Dict[str, int]) -> str:
-    items = sort_dict_by_value_desc(dist)
-    lines = []
-    lines.append(f"### {title}\n")
-    lines.append("| Category | Count |\n")
-    lines.append("|---|---:|\n")
+def md_table(title: str, dist: Dict[str, int], total: int = 0) -> str:
+    items = sort_desc(dist)
+    lines = [f"### {title}\n\n", "| Category | Count | % |\n", "|---|---:|---:|\n"]
     for k, v in items:
-        lines.append(f"| {k} | {v} |\n")
+        pct = f"{v / total * 100:.1f}" if total else "-"
+        lines.append(f"| {k if k is not None else 'null'} | {v:,} | {pct} |\n")
     lines.append("\n")
     return "".join(lines)
 
 
-def summarize_one(summary: Dict[str, Any]) -> str:
-    file_name = summary.get("file")
-    counts = summary.get("counts", {})
-    dists = summary.get("distributions", {})
+def summarize_one(s: Dict[str, Any]) -> str:
+    counts = s.get("counts", {})
+    dists = s.get("distributions", {})
+    total = counts.get("total_records", 0)
+    file_name = s.get("file", "unknown")
 
-    parts = []
-    parts.append(f"## {file_name}\n\n")
-    parts.append("**Counts**\n\n")
-    parts.append(f"- total_records: {counts.get('total_records', 0)}\n")
-    parts.append(f"- schema_valid: {counts.get('schema_valid', 0)}\n")
-    parts.append(f"- schema_invalid: {counts.get('schema_invalid', 0)}\n")
-    parts.append(f"- warnings_records: {counts.get('warnings_records', 0)}\n\n")
+    parts = [f"## {file_name}\n\n"]
+
+    parts.append("**Record counts**\n\n")
+    parts.append(f"- Total records: {total:,}\n")
+    parts.append(f"- Schema valid: {counts.get('schema_valid', 0):,}\n")
+    parts.append(f"- Schema invalid: {counts.get('schema_invalid', 0):,}\n")
+    parts.append(
+        f"- Records with logic warnings: {counts.get('logic_warnings_records', 0):,}\n\n"
+    )
 
     if dists.get("verdict_label"):
+        parts.append(md_table("Verdict distribution", dists["verdict_label"], total))
+
+    if dists.get("pramana_primary"):
         parts.append(
-            md_table_from_dist("Verdict label distribution", dists["verdict_label"])
-        )
-    if dists.get("epistemic_proof_type"):
-        parts.append(
-            md_table_from_dist(
-                "Epistemic proof type distribution", dists["epistemic_proof_type"]
+            md_table(
+                "Pramana (epistemic) distribution", dists["pramana_primary"], total
             )
-        )
-    if dists.get("context_type"):
-        parts.append(
-            md_table_from_dist("Context type distribution", dists["context_type"])
-        )
-    if dists.get("source_type"):
-        parts.append(
-            md_table_from_dist(
-                "Evidence source_type distribution", dists["source_type"]
-            )
-        )
-    if dists.get("answer_type"):
-        parts.append(
-            md_table_from_dist("Answer type distribution", dists["answer_type"])
         )
 
-    # Errors/warnings top
-    schema_errors_top = summary.get("schema_errors_top") or {}
-    logic_warnings_top = summary.get("logic_warnings_top") or {}
+    if dists.get("evidence_stance"):
+        parts.append(md_table("Evidence stance distribution", dists["evidence_stance"]))
+
+    if dists.get("evidence_modality"):
+        parts.append(
+            md_table("Evidence modality distribution", dists["evidence_modality"])
+        )
+
+    if dists.get("reasoning_structural"):
+        parts.append(
+            md_table(
+                "Claim structure distribution", dists["reasoning_structural"], total
+            )
+        )
+
+    if dists.get("dataset"):
+        parts.append(md_table("Dataset breakdown", dists["dataset"], total))
+
+    schema_errors_top = s.get("schema_errors_top") or {}
+    logic_warnings_top = s.get("logic_warnings_top") or {}
 
     parts.append("### Top schema errors\n\n")
     if not schema_errors_top:
         parts.append("- (none)\n\n")
     else:
-        for k, v in list(schema_errors_top.items())[:20]:
-            parts.append(f"- {v} × {k}\n")
+        for k, v in list(schema_errors_top.items())[:10]:
+            parts.append(f"- {v}x  {k}\n")
         parts.append("\n")
 
     parts.append("### Top logic warnings\n\n")
     if not logic_warnings_top:
         parts.append("- (none)\n\n")
     else:
-        for k, v in list(logic_warnings_top.items())[:20]:
-            parts.append(f"- {v} × {k}\n")
+        for k, v in list(logic_warnings_top.items())[:10]:
+            parts.append(f"- {v}x  {k}\n")
+        parts.append("\n")
+
+    # Dataset-level warnings
+    dw = s.get("dataset_warnings") or []
+    if dw:
+        parts.append("### Dataset-level warnings\n\n")
+        for w in dw:
+            parts.append(f"- **!** {w}\n")
+        parts.append("\n")
+
+    # GNN readiness
+    gnn = s.get("gnn_readiness") or {}
+    if gnn:
+        parts.append("### GNN readiness\n\n")
+        parts.append(
+            f"- Absence claims (non_apprehension): {gnn.get('absence_claims', 0):,} "
+            f"({gnn.get('absence_pct', 0):.1f}%)\n"
+        )
+        balance_ok = gnn.get("label_balance_ok", None)
+        balance_str = "Yes" if balance_ok else "No — imbalanced (>70% one label)"
+        parts.append(f"- Label balance OK: {balance_str}\n")
         parts.append("\n")
 
     return "".join(parts)
@@ -129,20 +144,9 @@ def main():
     ap = argparse.ArgumentParser(
         description="Build dataset report (md + plots) from validation summary JSON."
     )
-    ap.add_argument(
-        "--summary",
-        required=True,
-        help="Path to validation_summary.json produced by validate_unified_dataset",
-    )
-    ap.add_argument(
-        "--out_dir", required=True, help="Output directory for report (md + plots)"
-    )
-    ap.add_argument(
-        "--title", default="Epistemic FactKG Dataset Report", help="Report title"
-    )
-    ap.add_argument(
-        "--top_k_sources", type=int, default=15, help="Top-K for source_type plot"
-    )
+    ap.add_argument("--summary", required=True, help="Path to validation.json")
+    ap.add_argument("--out_dir", required=True, help="Output directory for report")
+    ap.add_argument("--title", default="Epistemic FactKG Dataset Report")
     args = ap.parse_args()
 
     src = load_json(args.summary)
@@ -155,89 +159,52 @@ def main():
     ensure_dir(out_dir)
     ensure_dir(plots_dir)
 
-    # Build plots for each file
-    plot_index_lines = []
+    plot_refs = []
     for s in summaries:
-        file_name = Path(s.get("file", "unknown")).name.replace(".", "_")
+        tag = Path(s.get("file", "unknown")).name.replace(".", "_")
         dists = s.get("distributions", {}) or {}
 
-        # verdict_label
-        if dists.get("verdict_label"):
-            p = plots_dir / f"{file_name}__verdict_label.png"
-            plot_bar(dists["verdict_label"], f"{s.get('file')} — verdict_label", p)
-            plot_index_lines.append(
-                f"- {s.get('file')} verdict_label: plots/{p.name}\n"
-            )
+        for dist_key, label in [
+            ("verdict_label", "Verdict distribution"),
+            ("pramana_primary", "Pramana distribution"),
+            ("evidence_stance", "Evidence stance distribution"),
+            ("evidence_modality", "Evidence modality"),
+        ]:
+            if dists.get(dist_key):
+                p = plots_dir / f"{tag}__{dist_key}.png"
+                plot_bar(dists[dist_key], f"{s.get('file')} — {label}", p)
+                plot_refs.append(f"- [{label}](plots/{p.name})\n")
 
-        # epistemic_proof_type
-        if dists.get("epistemic_proof_type"):
-            p = plots_dir / f"{file_name}__epistemic_proof_type.png"
-            plot_bar(
-                dists["epistemic_proof_type"],
-                f"{s.get('file')} — epistemic_proof_type",
-                p,
-            )
-            plot_index_lines.append(
-                f"- {s.get('file')} epistemic_proof_type: plots/{p.name}\n"
-            )
+    md_path = out_dir / "summary.md"
+    md = []
+    md.append(f"# {args.title}\n\n")
+    md.append(f"- Generated (UTC): {now_utc_iso()}\n")
+    md.append(f"- Source: `{args.summary}`\n\n")
 
-        # source_type (top-k)
-        if dists.get("source_type"):
-            p = plots_dir / f"{file_name}__source_type.png"
-            plot_bar(
-                dists["source_type"],
-                f"{s.get('file')} — source_type (top {args.top_k_sources})",
-                p,
-                top_k=args.top_k_sources,
-            )
-            plot_index_lines.append(f"- {s.get('file')} source_type: plots/{p.name}\n")
+    if plot_refs:
+        md.append("## Charts\n\n")
+        md.extend(plot_refs)
+        md.append("\n")
 
-        # answer_type
-        if dists.get("answer_type"):
-            p = plots_dir / f"{file_name}__answer_type.png"
-            plot_bar(dists["answer_type"], f"{s.get('file')} — answer_type", p)
-            plot_index_lines.append(f"- {s.get('file')} answer_type: plots/{p.name}\n")
-
-    # Build markdown report
-    md_path = out_dir / "dataset_report.md"
-    md_parts = []
-    md_parts.append(f"# {args.title}\n\n")
-    md_parts.append(f"- Generated (UTC): {now_utc_iso()}\n")
-    md_parts.append(f"- Source summary: `{args.summary}`\n\n")
-
-    md_parts.append("## Plots\n\n")
-    if plot_index_lines:
-        md_parts.extend(plot_index_lines)
-        md_parts.append("\n")
-        md_parts.append(
-            "> Note: image links are relative paths. Open `dataset_report.md` from the report folder.\n\n"
-        )
-    else:
-        md_parts.append("- (no plots generated)\n\n")
-
-    md_parts.append("## Detailed summaries\n\n")
+    md.append("## Detailed summaries\n\n")
     for s in summaries:
-        md_parts.append(summarize_one(s))
+        md.append(summarize_one(s))
 
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write("".join(md_parts))
+        f.write("".join(md))
 
-    # Also write a small manifest
     manifest = {
         "generated_utc": now_utc_iso(),
         "input_summary": args.summary,
-        "outputs": {
-            "report_md": str(md_path),
-            "plots_dir": str(plots_dir),
-        },
+        "report_md": str(md_path),
+        "plots_dir": str(plots_dir),
         "n_files": len(summaries),
     }
     with open(out_dir / "report_manifest.json", "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
-    print(f"✅ Wrote report: {md_path}")
-    print(f"✅ Wrote plots:  {plots_dir}")
-    print(f"✅ Wrote manifest: {out_dir / 'report_manifest.json'}")
+    print(f"Wrote report: {md_path}")
+    print(f"Wrote plots:  {plots_dir}")
 
 
 if __name__ == "__main__":

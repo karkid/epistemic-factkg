@@ -22,13 +22,20 @@ def load_ai2thor_config(path: str | Path) -> AI2ThorDataSourceConfig:
     if not isinstance(raw, dict):
         raise ConfigurationError(f"Invalid config format in {p}: expected dict")
 
-    scenes = raw.get("scenes")
-    if not scenes or not isinstance(scenes, list):
-        raise ConfigurationError("Config must contain non-empty 'scenes' list")
+    # AI2THOR settings live under the `ai2thor:` key.
+    ai2thor = raw.get("ai2thor")
+    if not isinstance(ai2thor, dict):
+        raise ConfigurationError(
+            f"Config {p} must have an 'ai2thor:' section with at least a 'scenes' list"
+        )
 
-    controller_raw: Dict[str, Any] = raw.get("controller", {}) or {}
-    kg_policy: Dict[str, bool] = raw.get("knowledge_graph_policy", {}) or {}
-    performance: Dict[str, Any] = raw.get("performance", {}) or {}
+    scenes = ai2thor.get("scenes")
+    if not scenes or not isinstance(scenes, list):
+        raise ConfigurationError("ai2thor.scenes must be a non-empty list")
+
+    controller_raw: Dict[str, Any] = ai2thor.get("controller", {}) or {}
+    kg_policy: Dict[str, bool] = ai2thor.get("knowledge_graph_policy", {}) or {}
+    performance: Dict[str, Any] = ai2thor.get("performance", {}) or {}
 
     # keep only actual controller kwargs (strip comments, None)
     controller_settings = {

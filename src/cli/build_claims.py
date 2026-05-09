@@ -1,14 +1,136 @@
 #!/usr/bin/env python3
-"""
-CLI for building semantic claims from a knowledge graph TTL file.
-"""
+"""Build semantic claims from a knowledge graph TTL file."""
+
+from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict, List, Optional
 
-from src.pipelines.result import BuildClaimsResult, BuildClaimsResultSummary
-from src.pipelines.build_claims import build_claims
+from src.adapters.ai2thor.semantics.semantic_rules import get_preferred_receptacles
+from src.adapters.ai2thor.ids.object_types import ObjectType
+from src.core.claims.labels import Pramana
+from src.core.claims.claim_generator import ClaimGenerator
+from src.core.claims.types import ClaimCorpus
+from src.adapters.ai2thor.semantics.entity_lexicon import (
+    create_ai2thor_object_type_lexicon,
+)
+from src.adapters.ai2thor.semantics.predicate_lexicon import create_predicate_lexicon
+from src.adapters.ai2thor.nlg.template import Ai2ThorTemplate
+from src.core.nlg.triple_realizer import TripleRealizer
+from src.core.graph.types import TripleList
+from src.infra.rdf.io.ttl import load_triples_from_ttl
+from src.infra.rdf.query.engine import TripleQueryEngine
+from src.infra.rdf.formatter import ai2thor_object_type_from_entity_id
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class BuildClaimsResult:
+    ttl_path: str
+    total_triples: int
+    contexts: List[str]
+    context_triples: Dict[str, TripleList]
+    claim_corpus: ClaimCorpus
+    output_files: List[str]
+
+
+def build_claims(
+    ttl_path: str,
+    output_dir: str = "out",
+    max_contexts: Optional[int] = None,
+    n_claims: int = 500,
+    add_corruption: bool = True,
+    verbose: bool = False,
+) -> BuildClaimsResult:
+    if verbose:
+        print(f"Loading triples from: {ttl_path}")
+
+    triples = load_triples_from_ttl(ttl_path)
+    query_engine = TripleQueryEngine(triples)
+
+    if verbose:
+        print(f"Loaded {len(triples)} triples")
+
+    group_by_context = query_engine.group_by_namespace(namespace="contexts")
+    contexts = sorted(group_by_context.keys())
+
+    if max_contexts and max_contexts > 0:
+        contexts = contexts[:max_contexts]
+
+    if verbose:
+        print(f"Processing {len(contexts)} contexts: {contexts}")
+
+    pred_lex = create_predicate_lexicon()
+    ent_lex = create_ai2thor_object_type_lexicon()
+    realizer = TripleRealizer(
+        template=Ai2ThorTemplate(predicate_lexicon=pred_lex),
+        pred_lexicon=pred_lex,
+        ent_lexicon=ent_lex,
+        normallizer=ai2thor_object_type_from_entity_id,
+    )
+
+    total_corpus = ClaimCorpus()
+
+    for context in contexts:
+        if verbose:
+            print(f"Processing context: {context}")
+
+        context_triples = group_by_context[context]
+        claim_generator = ClaimGenerator(
+            realizer=realizer,
+            context_id=context,
+            triples=context_triples,
+            context_type="floorplan",
+            generator="ai2thor-scene-simulator",
+            source="sensor",
+            source_type=Pramana.PERCEPTION,
+            receptacle_mapper=get_preferred_receptacles,
+        )
+
+        claim_generator.generate_one_hop(
+            n_claims=n_claims, add_corruption=add_corruption
+        )
+        claim_generator.generate_conjunction(
+            n_claims=n_claims, add_corruption=add_corruption
+        )
+        claim_generator.generate_negation(
+            n_claims=n_claims, add_corruption=add_corruption
+        )
+        claim_generator.generate_absence(
+            n_claims=n_claims,
+            add_corruption=add_corruption,
+            object_universe=[ot.value for ot in ObjectType],
+        )
+
+        total_corpus.claims.extend(claim_generator.corpus.claims)
+
+        if verbose:
+            print(
+                f"Generated {len(claim_generator.corpus.claims)} claims for {context}"
+            )
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_file = str(out_dir / "claims_all.jsonl")
+    total_corpus.save_to_jsonl(output_file)
+
+    if verbose:
+        print(f"Total claims: {len(total_corpus.claims)}")
+        print(f"Saved to: {output_file}")
+
+    return BuildClaimsResult(
+        ttl_path=ttl_path,
+        total_triples=len(triples),
+        contexts=contexts,
+        context_triples=group_by_context,
+        claim_corpus=total_corpus,
+        output_files=[output_file],
+    )
 
 
 def main():
@@ -16,77 +138,45 @@ def main():
         description="Build semantic claims from a knowledge graph TTL file",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-
+    parser.add_argument("ttl_path", help="Path to the TTL file")
+    parser.add_argument("--output-dir", "-o", default="out", help="Output directory")
     parser.add_argument(
-        "ttl_path", help="Path to the TTL file containing the knowledge graph"
+        "--max-contexts", type=int, default=None, help="Max contexts to process"
     )
-
     parser.add_argument(
-        "--output-dir", "-o", default="out", help="Directory to save claim JSONL files"
+        "--n-claims", type=int, default=500, help="Claims per generation method"
     )
-
     parser.add_argument(
-        "--max-contexts",
-        type=int,
-        default=None,
-        help="Maximum number of contexts to process (default: all)",
+        "--no-corruption", action="store_true", help="Disable corrupted claims"
     )
-
-    parser.add_argument(
-        "--n-claims",
-        type=int,
-        default=500,
-        help="Number of claims to generate per method",
-    )
-
-    parser.add_argument(
-        "--no-corruption",
-        action="store_true",
-        help="Disable corrupted claim generation",
-    )
-
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose output"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true")
 
     args = parser.parse_args()
 
-    # Validate input file
     ttl_path = Path(args.ttl_path)
     if not ttl_path.exists():
         print(f"Error: TTL file not found: {ttl_path}", file=sys.stderr)
         sys.exit(1)
 
-    # Create output directory
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     try:
-        result: BuildClaimsResult = build_claims(
+        result = build_claims(
             ttl_path=str(ttl_path),
-            output_dir=str(output_dir),
+            output_dir=args.output_dir,
             max_contexts=args.max_contexts,
             n_claims=args.n_claims,
             add_corruption=not args.no_corruption,
             verbose=args.verbose,
         )
 
-        summary = BuildClaimsResultSummary()
-        summary.add_result(result)
-        summary.print_summary(logger_func=print, show_files=args.verbose)
-        print("=" * 80)
+        print("=" * 60)
         print("Build Claims: SUCCESS")
-        print("=" * 80)
-        print(f"Input TTL      : {result.ttl_path}")
-        print(f"Total Triples  : {result.total_triples}")
-        print(f"Contexts       : {len(result.contexts)} ({', '.join(result.contexts)})")
-        print(f"Total Claims   : {len(result.claim_corpus.claims)}")
-        print(f"Output Files   : {len(result.output_files)}")
-
-        for output_file in result.output_files:
-            print(f"  - {output_file}")
-
-        print("=" * 80)
+        print(f"Input TTL    : {result.ttl_path}")
+        print(f"Triples      : {result.total_triples}")
+        print(f"Contexts     : {len(result.contexts)}")
+        print(f"Total claims : {len(result.claim_corpus.claims)}")
+        for f in result.output_files:
+            print(f"  -> {f}")
+        print("=" * 60)
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

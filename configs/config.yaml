@@ -1,0 +1,86 @@
+# Epistemic FactKG — pipeline configuration
+#
+# Shared sections (read by all converters):
+#   epistemic:   confidence weights and pramana priority order
+#
+# Dataset-specific sections:
+#   ai2thor:     simulator controller, KG policy, scene list, generation params
+
+# ── Shared: epistemic weights and pramana priority ────────────────────────────
+epistemic:
+  # Confidence weights per pramana type.
+  # Used by combine_pramana_weights() to compute the confidence_weight scalar.
+  # Intentionally does NOT match pramana_priority_order — see note below.
+  confidence_weights:
+    perception:             0.95   # Simulator ground truth — exact
+    testimony:              0.80   # Web sources — reliable but noisy
+    non_apprehension:       0.75   # Absence reasoning — closed world only
+    comparison_analogy:     0.65   # Analogical/statistical reasoning
+    inference:              0.55   # Multi-step synthesis — compounds error
+    postulation_derivation: 0.40   # Hypothetical — least reliable
+
+  # Priority order for pramana_primary when multiple types are detected.
+  # Sorted by specificity, NOT by confidence weight.
+  # testimony is listed last despite higher weight (0.80) — it is the
+  # default fallback; comparison_analogy/inference are more distinctive.
+  pramana_priority_order:
+    - perception
+    - comparison_analogy
+    - inference
+    - testimony
+    - postulation_derivation
+
+# ── AI2THOR-specific ──────────────────────────────────────────────────────────
+ai2thor:
+  controller:
+    width: 600
+    height: 600
+    fieldOfView: 90
+    # you can add more ai2thor Controller kwargs here
+
+  knowledge_graph_policy:
+    include_position: false
+    include_rotation: false
+
+    include_isOpen: true
+    include_isToggled: true
+    include_isMoving: false
+    include_isPickedUp: false
+    include_isFilledWithLiquid: false
+    include_isCooked: false
+    include_isSliced: false
+    include_isBroken: true
+    include_isDirty: true
+    include_isUsedUp: false
+
+    include_temperature: true
+    include_mass: true
+    include_salientMaterials: true
+
+  generation:
+    n_claims: 2000
+    max_contexts: 10
+    add_corruption: true
+
+  output:
+    claims_filename: claims_all.jsonl
+
+  performance:
+    cleanup_between_scenes: true
+
+  scenes:
+    # Kitchens
+    - "FloorPlan3"
+    - "FloorPlan15"
+
+    # Living Rooms
+    - "FloorPlan203"
+    - "FloorPlan215"
+
+    # Bedrooms
+    - "FloorPlan303"
+    - "FloorPlan320"
+
+    # Bathrooms
+    - "FloorPlan403"
+    - "FloorPlan420"

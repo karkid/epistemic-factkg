@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from src.core.ontology.base import BaseOntology
-from src.core.registry.entity import EntityRegistry
-from src.core.registry.relation import RelationRegistry
+from src.core.ontology import BaseOntology
+from src.core.registry import EntityRegistry, RelationRegistry
 from src.infra.rdf.namespaces import NamespaceConfig, NamespaceManager
 
 

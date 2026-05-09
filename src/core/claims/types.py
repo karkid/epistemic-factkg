@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 
 from src.core.graph.types import Triple, TripleList
+from src.core.claims.labels import EvidenceStance, Pramana, Verdict
 from src.utils.io import write_jsonl
 from src.utils.time import utc_now_iso
 
@@ -67,7 +68,7 @@ class ClaimInstance:
     meta: Meta
 
     def get_schema_layout(self) -> Dict[str, Any]:
-        from src.core.claims.labels import CONFIDENCE_WEIGHTS, Pramana
+        from src.core.claims.labels import CONFIDENCE_WEIGHTS
 
         pramana = self.evidence.evidence_source_type
         try:
@@ -110,10 +111,12 @@ class ClaimInstance:
                     "triple_source": "ground_truth",
                     "modality": "simulation_state",
                     "stance": (
-                        "absent"
-                        if pramana == "non_apprehension" and self.label == "supported"
-                        else "supports" if self.label == "supported"
-                        else "refutes"
+                        EvidenceStance.ABSENT.value
+                        if pramana == Pramana.NON_APPREHENSION.value
+                        and self.label == Verdict.SUPPORTED.value
+                        else EvidenceStance.SUPPORTS.value
+                        if self.label == Verdict.SUPPORTED.value
+                        else EvidenceStance.REFUTES.value
                     ),
                     "source_url": self.evidence.evidence_urls[0]
                     if self.evidence.evidence_urls
