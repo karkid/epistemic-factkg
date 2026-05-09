@@ -19,3 +19,4 @@ class AI2ThorDataSourceConfig:
     controller: AI2ThorControllerConfig = field(default_factory=AI2ThorControllerConfig)
     knowledge_graph_policy: Dict[str, bool] = field(default_factory=dict)
     performance: Dict[str, Any] = field(default_factory=dict)
+    randomizer: Dict[str, Any] = field(default_factory=dict)

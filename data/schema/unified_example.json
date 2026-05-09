@@ -1,0 +1,136 @@
+[
+  {
+    "schema_version": "2.0",
+    "id": "ai2thor-FloorPlan1-000001",
+    "claim": "The apple is on top of the table in the kitchen.",
+    "verdict": {
+      "label": "supported",
+      "justification": "Sensor observation confirms Apple_1 has onTopOf relation to DiningTable_1."
+    },
+    "epistemic": {
+      "pramana_primary": "perception",
+      "pramana_all": ["perception"],
+      "confidence_weight": 0.90,
+      "assignment_method": "rule_based"
+    },
+    "claim_triples": [
+      ["Apple_1", "onTopOf", "DiningTable_1"]
+    ],
+    "reasoning": {
+      "structural": "one_hop",
+      "strategy": "direct_observation"
+    },
+    "evidence": [
+      {
+        "evidence_id": "ai2thor-FloorPlan1-000001-e0",
+        "text": "Sensor state: Apple_1 onTopOf DiningTable_1 = true",
+        "triples": [
+          ["Apple_1", "onTopOf", "DiningTable_1"]
+        ],
+        "triple_source": "ground_truth",
+        "modality": "simulation_state",
+        "stance": "supports",
+        "source_url": "ai2thor://scene/FloorPlan1"
+      }
+    ],
+    "provenance": {
+      "dataset": "ai2thor",
+      "split": "train",
+      "context_id": "FloorPlan1"
+    },
+    "meta": {
+      "schema_version": "2.0",
+      "created_utc": "2026-05-09T10:00:00Z"
+    }
+  },
+
+  {
+    "schema_version": "2.0",
+    "id": "ai2thor-FloorPlan1-000002",
+    "claim": "The knife is inside the fridge.",
+    "verdict": {
+      "label": "refuted",
+      "justification": "Full sensor scan of Fridge_1 found no Knife object. The claim is contradicted by absence."
+    },
+    "epistemic": {
+      "pramana_primary": "non_apprehension",
+      "pramana_all": ["non_apprehension"],
+      "confidence_weight": 0.80,
+      "assignment_method": "rule_based"
+    },
+    "claim_triples": [
+      ["Knife_1", "inside", "Fridge_1"]
+    ],
+    "reasoning": {
+      "structural": "one_hop",
+      "strategy": "absence_detection"
+    },
+    "evidence": [
+      {
+        "evidence_id": "ai2thor-FloorPlan1-000002-e0",
+        "text": "Full sensor scan of Fridge_1 contents: no Knife object found.",
+        "triples": [],
+        "triple_source": "ground_truth",
+        "modality": "simulation_state",
+        "stance": "absent",
+        "source_url": "ai2thor://scene/FloorPlan1"
+      }
+    ],
+    "provenance": {
+      "dataset": "ai2thor",
+      "split": "train",
+      "context_id": "FloorPlan1"
+    },
+    "meta": {
+      "schema_version": "2.0",
+      "created_utc": "2026-05-09T10:00:00Z"
+    }
+  },
+
+  {
+    "schema_version": "2.0",
+    "id": "averitec-train-000001",
+    "claim": "The Eiffel Tower was completed in 1887.",
+    "verdict": {
+      "label": "refuted",
+      "justification": "Construction began in 1887 but the tower was completed in March 1889."
+    },
+    "epistemic": {
+      "pramana_primary": "testimony",
+      "pramana_all": ["testimony", "inference"],
+      "confidence_weight": 0.85,
+      "assignment_method": "heuristic"
+    },
+    "claim_triples": null,
+    "reasoning": null,
+    "evidence": [
+      {
+        "evidence_id": "averitec-train-000001-q1-a1",
+        "text": "When was the Eiffel Tower completed? The Eiffel Tower construction started in January 1887 and was completed in March 1889, in time for the 1889 World Fair.",
+        "triples": null,
+        "triple_source": null,
+        "modality": "web_text",
+        "stance": "refutes",
+        "source_url": "https://en.wikipedia.org/wiki/Eiffel_Tower"
+      },
+      {
+        "evidence_id": "averitec-train-000001-q2-a1",
+        "text": "What year did Eiffel Tower construction begin? Construction of the Eiffel Tower began on 28 January 1887.",
+        "triples": null,
+        "triple_source": null,
+        "modality": "web_text",
+        "stance": "refutes",
+        "source_url": "https://www.history.com/topics/landmarks/eiffel-tower"
+      }
+    ],
+    "provenance": {
+      "dataset": "averitec",
+      "split": "train",
+      "context_id": "schlichtkrull2023averitec"
+    },
+    "meta": {
+      "schema_version": "2.0",
+      "created_utc": "2026-05-09T10:00:00Z"
+    }
+  }
+]

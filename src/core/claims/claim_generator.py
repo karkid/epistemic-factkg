@@ -4,7 +4,7 @@ from urllib.parse import unquote
 
 from typing import Any, Dict, List, Optional, Sequence, Callable
 
-from src.core.claims.lables import OutputLabels, ReasoningLabels, SourceTypesLabels
+from src.core.claims.labels import OutputLabels, ReasoningLabels, SourceTypesLabels
 from src.core.claims.types import ClaimCorpus, ClaimInstance
 from src.core.graph.types import Term, Triple, TripleList
 from src.core.nlg.triple_realizer import TripleRealizer
@@ -40,6 +40,7 @@ class ClaimGenerator:
         self.stats.corpus = self.corpus
         self.receptacle_mapper = receptacle_mapper
         self._start_time: Optional[float] = None
+        self._seen_layouts: set[str] = set()
 
     def _random_triple(self, triples: Sequence[Triple]) -> Triple:
         return self._rng.choice(list(triples))
@@ -218,10 +219,10 @@ class ClaimGenerator:
     
     def _is_new_claim(self, claim_instance: ClaimInstance) -> bool:
         claim_layout = claim_instance.get_schema_layout_json()
-        for ci in self.corpus.claims:
-            if ci.get_schema_layout_json() == claim_layout:
-                self.stats.duplicate_claims_filtered += 1
-                return False
+        if claim_layout in self._seen_layouts:
+            self.stats.duplicate_claims_filtered += 1
+            return False
+        self._seen_layouts.add(claim_layout)
         return True
 
     def _make_instance(self,
@@ -378,8 +379,12 @@ class ClaimGenerator:
                         split= None,
                         notes = "corrupted"
             )
-            self.corpus.add(instance)
 
+            if not self._is_new_claim(instance):
+                attempts += 1
+                continue
+
+            self.corpus.add(instance)
             self.stats.refuted += 1
             refuted_count += 1
             attempts += 1
@@ -430,7 +435,6 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "recorded",
-                        source_type=SourceTypesLabels.INFERENCE,
                         evidence_extract=text
             )
 
@@ -442,12 +446,12 @@ class ClaimGenerator:
             self.stats.supported += 1
             supported_count += 1
             attempts += 1
-        
+
         if not add_corruption:
             return
-        
+
         # ---------------- REFUTED ----------------
-        refuted_target = int(n_supported * n_claims) if add_corruption else n_claims
+        refuted_target = int((1 - n_supported) * n_claims) if add_corruption else n_claims
         refuted_attempts_budget = refuted_target * max_refuted_attempts
 
         refuted_count = 0
@@ -502,7 +506,6 @@ class ClaimGenerator:
                         evidence_urls=[],
                         split= None,
                         notes = "corrupted",
-                        source_type=SourceTypesLabels.INFERENCE,
                         evidence_extract=self.realizer.realize_conjunction(truth_triple_1, truth_triple_2)
             )
 
@@ -537,8 +540,6 @@ class ClaimGenerator:
         attempts = 0
 
         while boolean_triples and supported_count < supported_target and attempts < supported_attempts_budget:
-            if not boolean_triples:
-                break
             truth_triple = self._random_triple(boolean_triples)
             text = self.realizer.realize(truth_triple)
 
@@ -575,19 +576,14 @@ class ClaimGenerator:
             return
         
         # ---------------- REFUTED ----------------
-        boolean_triples = [t for t in self.triples if self._is_boolean_object(t.o) ]
+        boolean_triples = [t for t in self.triples if self._is_boolean_object(t.o)]
 
-        refuted_target = int(n_supported * n_claims) if add_corruption else n_claims
+        refuted_target = int((1 - n_supported) * n_claims) if add_corruption else n_claims
         refuted_attempts_budget = refuted_target * max_refuted_attempts
 
         refuted_count = 0
         attempts = 0
         while boolean_triples and refuted_count < refuted_target and attempts < refuted_attempts_budget:
-            # Glass is breakable.
-            # Negate Glass is not breakable => refuted claim with evidence Glass is breakable
-            if not boolean_triples:
-                break
-
             truth_triple = self._random_triple(boolean_triples)
             claim_triple = Triple(s=truth_triple.s, p=truth_triple.p, o=self._flip_bool(truth_triple.o))
             text = self.realizer.realize(claim_triple)

@@ -7,6 +7,8 @@ from typing import Dict, Any, List, Tuple, Optional
 
 from jsonschema import Draft7Validator
 
+from src.utils.time import utc_now_iso
+
 # ----------------------------
 # Helpers
 # ----------------------------
@@ -21,9 +23,6 @@ def iter_jsonl(path: str):
             if not line:
                 continue
             yield i, json.loads(line)
-
-def now_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
 
 def safe_get(d: Dict[str, Any], path: List[str], default=None):
     cur = d
@@ -138,7 +137,7 @@ def check_date_formats(obj: Dict[str, Any]) -> List[str]:
 def summarize_file(path: str, schema_validator: Draft7Validator, max_examples: int = 3) -> Dict[str, Any]:
     summary = {
         "file": path,
-        "generated_utc": now_iso(),
+        "generated_utc": utc_now_iso(),
         "counts": {
             "total_records": 0,
             "schema_valid": 0,
@@ -148,6 +147,7 @@ def summarize_file(path: str, schema_validator: Draft7Validator, max_examples: i
         "distributions": {
             "verdict_label": Counter(),
             "epistemic_proof_type": Counter(),
+            "epistemic_proof_types_multi": Counter(),
             "context_type": Counter(),
             "source_type": Counter(),
             "answer_type": Counter()
@@ -163,19 +163,17 @@ def summarize_file(path: str, schema_validator: Draft7Validator, max_examples: i
     for line_no, obj in iter_jsonl(path):
         summary["counts"]["total_records"] += 1
 
-        # distributions
+        # distributions — v2.0 field names
         summary["distributions"]["verdict_label"][safe_get(obj, ["verdict", "label"])] += 1
-        summary["distributions"]["epistemic_proof_type"][safe_get(obj, ["epistemic", "primary_proof_type"])] += 1
-        summary["distributions"]["context_type"][safe_get(obj, ["context", "context_type"])] += 1
+        summary["distributions"]["epistemic_proof_type"][safe_get(obj, ["epistemic", "pramana_primary"])] += 1
+        summary["distributions"]["context_type"][safe_get(obj, ["provenance", "dataset"])] += 1
 
-
-        summary["distributions"]["epistemic_proof_types_multi"] = Counter()
-        # multiple proof types (if list present)
-        for pt in safe_get(obj, ["epistemic", "proof_types"], []):
-            summary["distributions"]["epistemic_proof_type"][pt] += 1
+        # all pramana labels (multi-label list)
+        for pt in safe_get(obj, ["epistemic", "pramana_all"], []):
+            summary["distributions"]["epistemic_proof_types_multi"][pt] += 1
 
         # source types
-        for e in (obj.get("evidence_items") or []):
+        for e in (obj.get("evidence") or []):
             if isinstance(e, dict):
                 summary["distributions"]["source_type"][e.get("source_type")] += 1
 
@@ -295,7 +293,7 @@ def main():
         pretty_print_summary(s)
 
     out_obj = {
-        "generated_utc": now_iso(),
+        "generated_utc": utc_now_iso(),
         "summaries": all_summaries
     }
     

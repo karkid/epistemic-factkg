@@ -1,91 +1,209 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "EpistemicFactKG Unified Claim v2.0",
+    "description": "Unified schema for Pramana-labelled fact verification claims. Supports AI2THOR (simulation, structured triples) and AVeriTeC (real-world text, unstructured evidence). GNN models unify at the epistemic layer via pramana_primary.",
     "type": "object",
-    "required": ["id", "claim", "verdict", "epistemic", "context", "meta"],
+    "required": ["schema_version", "id", "claim", "verdict", "epistemic", "evidence", "provenance", "meta"],
     "additionalProperties": false,
 
+    "definitions": {
+        "pramana_type": {
+            "type": "string",
+            "enum": [
+                "perception",
+                "non_apprehension",
+                "comparison_analogy",
+                "testimony",
+                "inference",
+                "postulation_derivation"
+            ],
+            "description": "Six Pramana categories. Confidence midpoints: perception=0.90, non_apprehension=0.80, testimony=0.85, comparison_analogy=0.75, inference=0.70, postulation_derivation=0.60"
+        },
+        "triple": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "[subject, predicate, object]"
+        }
+    },
+
     "properties": {
-        "id": {"type": "string"},
-        "claim": {"type": "string"},
+        "schema_version": {
+            "type": "string",
+            "const": "2.0"
+        },
+
+        "id": {
+            "type": "string",
+            "description": "Stable unique identifier. Format: {dataset}-{split}-{index} e.g. averitec-train-000001, ai2thor-FloorPlan1-001"
+        },
+
+        "claim": {
+            "type": "string",
+            "description": "The natural language claim to be verified."
+        },
 
         "verdict": {
             "type": "object",
-            "required": ["label", "justification", "annotator_confidence"],
+            "required": ["label", "justification"],
+            "additionalProperties": false,
             "properties": {
                 "label": {
                     "type": ["string", "null"],
-                    "enum": [
-                        "supported",
-                        "refuted",
-                        "not_enough_evidence",
-                        "conflicting_evidence",
-                        "cherrypicking",
-                        null
-                    ]
+                    "enum": ["supported", "refuted", "not_enough_evidence", "conflicting_evidence", null],
+                    "description": "Verification outcome. 'not_enough_evidence' is AVeriTeC-specific (insufficient textual sources). 'non_apprehension' is an epistemic category, not a verdict label."
                 },
-                "justification": {"type": ["string", "null"]},
-                "annotator_confidence": {"type": ["number", "null"]}
+                "justification": {
+                    "type": ["string", "null"],
+                    "description": "Human-readable explanation of the verdict."
+                }
             }
         },
 
         "epistemic": {
             "type": "object",
-            "required": ["proof_types", "primary_proof_type", "proof_type_rationale", "proof_confidence"],
+            "required": ["pramana_primary", "pramana_all", "confidence_weight", "assignment_method"],
+            "additionalProperties": false,
+            "description": "Pramana-based epistemic classification. pramana_primary is the GNN unification point — all records share this regardless of source dataset.",
             "properties": {
-                "proof_types": {
+                "pramana_primary": {
+                    "$ref": "#/definitions/pramana_type",
+                    "description": "Dominant Pramana category. Used as the shared EpistemicNode type in the GNN graph."
+                },
+                "pramana_all": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string",
-                        "enum": [
-                        "perception",
-                        "inference",
-                        "testimony",
-                        "comparison_analogy",
-                        "postulation_derivation",
-                        "non_apprehension"
-                        ]
-                    }     
+                    "items": {"$ref": "#/definitions/pramana_type"},
+                    "description": "All applicable Pramana categories (multi-label). Sorted by PRIMARY_ORDER."
                 },
-                "primary_proof_type": {
+                "confidence_weight": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Epistemic reliability prior used as edge weight in GNN. Derived from pramana_primary midpoint: perception=0.90, testimony=0.85, non_apprehension=0.80, comparison_analogy=0.75, inference=0.70, postulation_derivation=0.60"
+                },
+                "assignment_method": {
                     "type": "string",
-                    "enum": [
-                        "perception",
-                        "inference",
-                        "testimony",
-                        "comparison_analogy",
-                        "postulation_derivation",
-                        "non_apprehension"
-                    ]
-                },
-                "proof_type_rationale": {"type": ["string", "null"]},
-                "proof_confidence": {"type": ["number", "null"]}
+                    "enum": ["heuristic", "rule_based", "annotated"],
+                    "description": "How the Pramana label was assigned. 'heuristic'=auto converter logic, 'rule_based'=deterministic rules from simulation, 'annotated'=human."
+                }
             }
         },
 
-        "claim_meta": {"type": ["object", "null"]},
-        "claim_triples": {"type": ["array", "null"]},
-        "reasoning": {"type": ["object", "null"]},
-        "qa": {"type": ["array", "null"]},
-        "evidence_items": {"type": ["array", "null"]},
+        "claim_triples": {
+            "type": ["array", "null"],
+            "items": {"$ref": "#/definitions/triple"},
+            "description": "Structured [subject, predicate, object] triples representing the claim. Populated for AI2THOR (ground-truth simulation state). Null for AVeriTeC. Used to build EntityNodes and predicate edges in the GNN."
+        },
 
-        "context": {
-            "type": "object",
-            "required": ["context_id", "context_type", "generator"],
+        "reasoning": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "description": "Claim generation metadata. Populated for AI2THOR. Null for AVeriTeC.",
             "properties": {
-                "context_id": {"type": ["string", "null"]},
-                "context_type": {"type": "string"},
-                "generator": {"type": "string"},
-                "split": {"type": ["string", "null"]}
+                "structural": {
+                    "type": ["string", "null"],
+                    "enum": ["one_hop", "multi_hop", "conjunction", "negation", null],
+                    "description": "How the claim was constructed relative to the knowledge graph."
+                },
+                "strategy": {
+                    "type": ["string", "null"],
+                    "enum": [
+                        "direct_observation",
+                        "absence_detection",
+                        "spatial_reasoning",
+                        "written_evidence",
+                        "numerical_comparison",
+                        "multi_source_synthesis",
+                        "action_testing",
+                        null
+                    ],
+                    "description": "Verification strategy required to resolve the claim."
+                }
+            }
+        },
+
+        "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Evidence items supporting or refuting the claim. For AI2THOR: one item per sensor observation with ground-truth triples. For AVeriTeC: one item per QA answer (text flattened from question+answer).",
+            "items": {
+                "type": "object",
+                "required": ["evidence_id", "text", "triples", "triple_source", "modality", "stance"],
+                "additionalProperties": false,
+                "properties": {
+                    "evidence_id": {
+                        "type": "string",
+                        "description": "Stable unique ID. Format: {claim_id}-e{n} for AI2THOR, {claim_id}-q{n}-a{n} for AVeriTeC."
+                    },
+                    "text": {
+                        "type": ["string", "null"],
+                        "description": "Natural language evidence text. For AVeriTeC: concatenated QA answer text. For AI2THOR: human-readable description of sensor observation."
+                    },
+                    "triples": {
+                        "type": ["array", "null"],
+                        "items": {"$ref": "#/definitions/triple"},
+                        "description": "Structured triples for this evidence item. Populated for AI2THOR (ground_truth). Null for AVeriTeC unless extraction is run (extracted)."
+                    },
+                    "triple_source": {
+                        "type": ["string", "null"],
+                        "enum": ["ground_truth", "extracted", null],
+                        "description": "'ground_truth'=from simulation state (AI2THOR), 'extracted'=from NLP extraction on text, null=no triples."
+                    },
+                    "modality": {
+                        "type": "string",
+                        "enum": ["simulation_state", "web_text", "pdf", "web_table", "image", "video", "audio", "other"],
+                        "description": "Source medium of the evidence."
+                    },
+                    "stance": {
+                        "type": "string",
+                        "enum": ["supports", "refutes", "absent", "unknown"],
+                        "description": "'absent' is used exclusively for Anupalabdhi (non_apprehension) claims where the sensor confirmed the object/property does not exist."
+                    },
+                    "source_url": {
+                        "type": ["string", "null"],
+                        "description": "URL or URI of the evidence source. e.g. 'ai2thor://scene/FloorPlan1' or a web URL."
+                    }
+                }
+            }
+        },
+
+        "provenance": {
+            "type": "object",
+            "required": ["dataset", "split", "context_id"],
+            "additionalProperties": false,
+            "description": "Origin of the record. Used for dataset analysis and ablation studies, not by the GNN model.",
+            "properties": {
+                "dataset": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+$",
+                    "description": "Source dataset or simulator identifier. Use lowercase letters, digits, underscores only. e.g. ai2thor, averitec, fever, habitat."
+                },
+                "split": {
+                    "type": ["string", "null"],
+                    "enum": ["train", "dev", "test", null]
+                },
+                "context_id": {
+                    "type": ["string", "null"],
+                    "description": "Scene ID for AI2THOR (e.g. 'FloorPlan1') or corpus ID for AVeriTeC (e.g. 'schlichtkrull2023averitec')."
+                }
             }
         },
 
         "meta": {
             "type": "object",
-            "required": ["created_utc", "notes"],
+            "required": ["schema_version", "created_utc"],
+            "additionalProperties": false,
             "properties": {
-                "created_utc": {"type": "string"},
-                "notes": {"type": ["string", "null"]}
+                "schema_version": {
+                    "type": "string",
+                    "const": "2.0"
+                },
+                "created_utc": {
+                    "type": "string",
+                    "description": "ISO 8601 UTC timestamp of record creation."
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 import json
 import re
-from datetime import datetime, timezone
+
+from src.utils.time import utc_now_iso
 
 LABEL_MAP = {
     "supported": "supported",
@@ -122,9 +123,6 @@ def pick_primary(proof_types):
     return proof_types[0] if proof_types else None
 
 
-def now_utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
 def normalize_label(label):
     if not label:
         return "not_enough_evidence"
@@ -168,97 +166,6 @@ def source_type_from_medium(source_medium):
     if "image" in sm or "jpeg" in sm or "png" in sm:
         return "image"
     return "other"
-
-
-# def infer_proof_types(label, claim_types, strategies, qa_out, evidence_items):
-#     proof_types = set()
-
-#     # 1) non-apprehension
-#     if label == "not_enough_evidence":
-#         proof_types.add("non_apprehension")
-
-#     # evidence modality
-#     src_types = { (e.get("source_type") or "").lower() for e in (evidence_items or []) }
-
-#     # 2) perception
-#     if src_types & PERCEPTUAL_SOURCES:
-#         proof_types.add("perception")
-
-#     # 3) testimony (textual evidence)
-#     if src_types & TEXTUAL_SOURCES:
-#         proof_types.add("testimony")
-
-#     # 4) comparison/analogy
-#     ct = " ".join([str(c).lower() for c in (claim_types or [])])
-#     st = " ".join([str(s).lower() for s in (strategies or [])])
-#     if ("numerical" in ct) or ("numerical_comparison" in st) or ("numerical comparison" in st):
-#         proof_types.add("comparison_analogy")
-
-#     # heuristic numeric cues in answers
-#     for q in (qa_out or []):
-#         for a in (q.get("answers") or []):
-#             ans = a.get("answer") or ""
-#             if NUMERIC_CUES.search(str(ans)):
-#                 proof_types.add("comparison_analogy")
-#                 break
-
-#     # 5) inference (multi-hop QA / abstractive synthesis)
-#     n_q = len(qa_out or [])
-#     if n_q >= 2:
-#         proof_types.add("inference")
-#     else:
-#         # single question: still inference if abstractive + multiple sources
-#         ans_types = []
-#         src_urls = set()
-#         for q in (qa_out or []):
-#             for a in (q.get("answers") or []):
-#                 ans_types.append(a.get("answer_type"))
-#                 if a.get("source_url"):
-#                     src_urls.add(a.get("source_url"))
-#         if ("abstractive" in ans_types) and (len(src_urls) >= 2):
-#             proof_types.add("inference")
-
-#     # optional: remove testimony if only non-apprehension and no evidence
-#     if (proof_types == {"non_apprehension"}) and not evidence_items:
-#         pass
-
-#     return sorted(proof_types)
-
-
-# def infer_epistemic_proof_type(label, claim_types, strategies, speaker, reporting_source):
-#     """
-#     - testimony = if speaker OR reporting_source exists
-#     - comparison_analogy = if claim is numerical OR strategy contains numerical comparison
-#     - non_apprehension = if label is not_enough_evidence
-#     - inference = fallback
-#     """
-#     if label == "not_enough_evidence":
-#         return "non_apprehension"
-#     ct = " ".join([str(c).lower() for c in (claim_types or [])])
-#     st = " ".join([str(s).lower() for s in (strategies or [])])
-#     if "numerical" in ct or "numerical comparison" in st:
-#         return "comparison_analogy"
-#     if speaker or reporting_source:
-#         return "testimony"
-#     return "inference"
-
-# def infer_epistemic_from_evidence(label, claim_types, strategies, evidence_items):
-#     if label == "not_enough_evidence":
-#         return "non_apprehension"
-
-#     # evidence modality-based perception
-#     src_types = " ".join([str(e.get("source_type", "")).lower() for e in (evidence_items or [])])
-#     if ("image" in src_types) or ("video" in src_types):
-#         return "perception"
-
-#     ct = " ".join([str(c).lower() for c in (claim_types or [])])
-#     st = " ".join([str(s).lower() for s in (strategies or [])])
-
-#     if "numerical" in ct or "numerical comparison" in st:
-#         return "comparison_analogy"
-
-#     # default: Averitec is mainly testimony (web/pdfs/tables)
-#     return "testimony"
 
 
 def to_snake_list(xs):
@@ -365,7 +272,7 @@ def convert_one(rec, rec_id):
             "split": rec.get("split")
         },
         "meta": {
-            "created_utc": now_utc_iso(),
+            "created_utc": utc_now_iso(),
             "notes": None
         }
     }

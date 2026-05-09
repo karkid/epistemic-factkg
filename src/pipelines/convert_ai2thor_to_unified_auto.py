@@ -1,14 +1,9 @@
 import json
 import argparse
 import re
-from datetime import datetime, timezone
 from typing import Dict, Any, List, Tuple, Optional
 
-# -----------------------
-# Utility
-# -----------------------
-def now_utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+from src.utils.time import utc_now_iso
 
 def read_jsonl(path: str) -> List[Dict[str, Any]]:
     items = []
@@ -78,8 +73,6 @@ def classify_claim_type(predicate: str, obj_value: str) -> str:
 
     # Spatial
     if pred in {"inside", "ontopof", "near", "in", "on"}:
-        return "Spatial"
-    if pred in {"onTopOf".lower(), "inside".lower(), "near".lower()}:
         return "Spatial"
 
     # State / Perceptual / Property / Affordance
@@ -170,11 +163,10 @@ def make_proof_rationale(evidence_source: str, evidence_source_type: str, predic
 def make_proof_confidence(evidence_source: str, evidence_source_type: str, predicate: str) -> float:
     pred = predicate.lower()
     if evidence_source == "sensor" and evidence_source_type == "perception":
-        # You can tune this; simple heuristic:
         if pred in {"ontopof", "inside", "near"}:
             return 0.95
-        return 1.0
-    return 0.8
+        return 0.90
+    return 0.80
 
 # -----------------------
 # Main conversion
@@ -209,7 +201,7 @@ def convert_one(ai2: Dict[str, Any], split: Optional[str] = None) -> Dict[str, A
     proof_rationale = make_proof_rationale(evidence_source, evidence_source_type, predicate)
     proof_conf = make_proof_confidence(evidence_source, evidence_source_type, predicate)
 
-    created_utc = meta.get("created_utc") or now_utc_iso()
+    created_utc = meta.get("created_utc") or utc_now_iso()
     context_id = context.get("context_id")
     source_url = evidence_urls[0] if evidence_urls else (f"ai2thor://scene/{context_id}" if context_id else None)
 

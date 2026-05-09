@@ -132,13 +132,14 @@ class AI2THORDataSource(GraphDataSource):
     def _load_thor_room_metadata(self, graph_id: str) -> Dict[str, Any]:
         try:
             self.controller.reset(scene=graph_id)
+            rz_cfg = self.config.randomizer
             randomizer = SceneRandomizer(
                             controller=self.controller,
                             scene_id=graph_id,
-                            seed=123,
-                            randomize_receptacles=True,
-                            max_objects_per_receptacle=2,
-                            use_semantic_rules=True,
+                            seed=rz_cfg.get("seed", 123),
+                            randomize_receptacles=rz_cfg.get("randomize_receptacles", True),
+                            max_objects_per_receptacle=rz_cfg.get("max_objects_per_receptacle", 2),
+                            use_semantic_rules=rz_cfg.get("use_semantic_rules", True),
                         )
             
 
@@ -227,8 +228,7 @@ class AI2THORDataSource(GraphDataSource):
             if isinstance(value, bool):
                 props[prop] = value
             elif isinstance(value, (int, float)):
-                if value >0.9:
-                    props[prop] = value
+                props[prop] = value
             else:
                 props[prop] = ", ".join(map(str, value)) if isinstance(value, list) else value
 

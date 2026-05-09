@@ -4,7 +4,7 @@ from typing import Optional
 import re
 
 from src.adapters.ai2thor.semantics.semantic_rules import get_preferred_receptacles
-from src.core.claims.lables import SourceTypesLabels
+from src.core.claims.labels import SourceTypesLabels
 from src.core.claims.claim_generator import ClaimGenerator
 from src.core.claims.types import ClaimCorpus
 from src.adapters.ai2thor.semantics.entity_lexicon import create_ai2thor_object_type_lexicon
@@ -95,7 +95,6 @@ def build_claims(
                 receptacle_mapper=get_preferred_receptacles
             )
             
-            print("Corruption enabled:", add_corruption)
             # Generate different types of claims
             claim_generator.generate_one_hop(n_claims=n_claims, add_corruption=add_corruption)
             claim_generator.generate_conjunction(n_claims=n_claims, add_corruption=add_corruption)
@@ -116,9 +115,6 @@ def build_claims(
         if verbose:
             print(f"Total claims generated: {len(total_corpus.claims)}")
             print(f"All claims saved to: {consolidated_output_file}")
-            # Use the last claim_generator for summary (this might not be ideal, but gives us some stats)
-            if 'claim_generator' in locals():
-                claim_generator.print_generation_summary()
             print(f"Output files: {output_files}")
 
         return BuildClaimsResult(
