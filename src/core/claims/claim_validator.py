@@ -216,7 +216,8 @@ class AdvancedClaimValidator:
     def _validate_consistency(self, claim: dict, result: ClaimValidationResult):
         label = (claim.get("verdict") or {}).get("label")
         evidence = claim.get("evidence") or []
-        claim_triples = claim.get("claim_triples") or []
+        claim_triples_raw = claim.get("claim_triples")
+        claim_triples = claim_triples_raw or []
 
         if label and label not in ("supported", "refuted", "not_enough_evidence",
                                    "conflicting_evidence"):
@@ -242,10 +243,10 @@ class AdvancedClaimValidator:
 
         provenance = claim.get("provenance") or {}
         dataset = provenance.get("dataset", "")
-        if dataset == "ai2thor" and claim_triples is None:
+        if dataset == "ai2thor" and claim_triples_raw is None:
             result.add_issue("consistency", "warning",
                              "AI2THOR record missing claim_triples", "claim_triples")
-        if dataset == "averitec" and claim_triples is not None:
+        if dataset == "averitec" and claim_triples_raw is not None:
             result.add_issue("consistency", "info",
                              "AVeriTeC record unexpectedly has claim_triples", "claim_triples")
 

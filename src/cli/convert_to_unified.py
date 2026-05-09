@@ -1,12 +1,10 @@
 import argparse
-import os
 from pathlib import Path
 
-from src.pipelines.convert_averitec_json import convert_averitec_file
-from src.pipelines.convert_ai2thor_to_unified_auto import convert_ai2thor_file
+from src.pipelines.convert_to_unified import CONVERTERS, convert_to_unified
 
 
-def infer_split_from_filename(path: Path):
+def _infer_split(path: Path) -> str | None:
     name = path.stem.lower()
     if "train" in name:
         return "train"
@@ -17,40 +15,27 @@ def infer_split_from_filename(path: Path):
     return None
 
 
-def out_name(dataset: str, in_path: Path) -> str:
-    # <dataset>_<file_stem>.jsonl
+def _out_name(dataset: str, in_path: Path) -> str:
     return f"{dataset}_{in_path.stem}.jsonl"
 
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Convert Averitec + AI2-THOR to unified JSONL into an output directory."
+        description="Convert any registered dataset to unified v2.0 JSONL."
     )
-
-    ap.add_argument("--output_dir", required=True, help="Output folder, e.g., data/processed/")
-
-    # Multiple inputs per dataset
+    ap.add_argument("--output_dir", required=True, help="Output folder, e.g. data/processed/")
     ap.add_argument(
-        "--averitec_inputs",
-        nargs="*",
-        default=[],
-        help="One or more Averitec JSON files (top-level list). Example: train.json dev.json"
+        "--averitec_inputs", nargs="*", default=[],
+        help="AVeriTeC JSON files (top-level list). Example: train.json dev.json",
     )
     ap.add_argument(
-        "--ai2thor_inputs",
-        nargs="*",
-        default=[],
-        help="One or more AI2-THOR JSONL files. Example: raw.jsonl"
+        "--ai2thor_inputs", nargs="*", default=[],
+        help="AI2THOR JSONL files. Example: claims_all.jsonl",
     )
-
-    # Split handling
     ap.add_argument(
-        "--split_mode",
-        choices=["infer", "none"],
-        default="infer",
-        help="How to set split: infer from filename (train/dev/test) or keep as-is/None."
+        "--split_mode", choices=["infer", "none"], default="infer",
+        help="How to set split: 'infer' from filename or 'none'.",
     )
-
     args = ap.parse_args()
 
     out_dir = Path(args.output_dir)
@@ -58,39 +43,29 @@ def main():
 
     total = 0
 
-    # ---- Averitec ----
-    for in_file in args.averitec_inputs:
+    inputs = [("averitec", p) for p in args.averitec_inputs] + \
+             [("ai2thor", p) for p in args.ai2thor_inputs]
+
+    for dataset, in_file in inputs:
         in_path = Path(in_file)
         if not in_path.exists():
-            raise FileNotFoundError(f"Averitec input not found: {in_path}")
+            raise FileNotFoundError(f"{dataset} input not found: {in_path}")
 
-        split = infer_split_from_filename(in_path) if args.split_mode == "infer" else None
-        if split is None:
-            # Averitec converter needs split_name for stable ids, so default safely:
+        split = _infer_split(in_path) if args.split_mode == "infer" else None
+        if dataset == "averitec" and split is None:
             split = "train"
 
-        out_path = out_dir / out_name("averitec", in_path)
-        convert_averitec_file(infile=str(in_path), outfile=str(out_path), split_name=split)
-        print(f"✅ Averitec: {in_path} -> {out_path} (split={split})")
-        total += 1
-
-    # ---- AI2-THOR ----
-    for in_file in args.ai2thor_inputs:
-        in_path = Path(in_file)
-        if not in_path.exists():
-            raise FileNotFoundError(f"AI2-THOR input not found: {in_path}")
-
-        split = infer_split_from_filename(in_path) if args.split_mode == "infer" else None
-
-        out_path = out_dir / out_name("ai2thor", in_path)
-        convert_ai2thor_file(infile=str(in_path), outfile=str(out_path), split=split)
-        print(f"✅ AI2-THOR: {in_path} -> {out_path} (split={split})")
+        out_path = out_dir / _out_name(dataset, in_path)
+        n = convert_to_unified(dataset, str(in_path), str(out_path), split=split)
+        print(f"[{dataset}] {in_path.name} -> {out_path.name}  ({n} records, split={split})")
         total += 1
 
     if total == 0:
-        print("⚠️ No inputs provided. Use --averitec_inputs and/or --ai2thor_inputs.")
+        available = sorted(CONVERTERS)
+        print(f"No inputs provided. Use --averitec_inputs / --ai2thor_inputs.")
+        print(f"Registered datasets: {available}")
     else:
-        print(f"\n🎉 Done. Converted {total} file(s). Outputs in: {out_dir}")
+        print(f"\nDone. Converted {total} file(s) -> {out_dir}")
 
 
 if __name__ == "__main__":
