@@ -4,15 +4,11 @@ from __future__ import annotations
 import json
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 
 from src.core.graph.types import Triple, TripleList
 from src.utils.io import write_jsonl
-
-def utc_now_iso() -> str:
-    """Return current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+from src.utils.time import utc_now_iso
 
 @dataclass(frozen=True, slots=True)
 class Evidence:
@@ -72,26 +68,59 @@ class ClaimInstance:
     meta: Meta
 
     def get_schema_layout(self) -> Dict[str, Any]:
+        from src.core.claims.labels import CONFIDENCE_WEIGHTS, PramanaLabel
+
+        pramana = self.evidence.evidence_source_type
+        try:
+            weight = CONFIDENCE_WEIGHTS.get(PramanaLabel(pramana), 0.70)
+        except ValueError:
+            weight = 0.70
+
+        structural = self.reasoning.structural
+        structural_v2 = structural.replace("-", "_") if structural else None
+
+        evidence_triples = [(t.s, t.p, t.o) for t in self.evidence.evidence_triples]
+        claim_triples = [(t.s, t.p, t.o) for t in self.claim.claim_triples]
+
         return {
+            "schema_version": "2.0",
             "id": self.rec_id,
-            "label": self.label,
             "claim": self.claim.text,
-            "claim_triples": [(t.s, t.p, t.o) for t in self.claim.claim_triples],
-            "reasoning": {"structural": self.reasoning.structural},
-            "evidence": {
-                "evidence_triples": [(t.s, t.p, t.o) for t in self.evidence.evidence_triples],
-                "evidence_source": self.evidence.evidence_source,
-                "evidence_source_type": self.evidence.evidence_source_type,
-                "evidence_urls": list(self.evidence.evidence_urls),
-                "extract": self.evidence.evidence_extract,
+            "verdict": {
+                "label": self.label,
+                "justification": self.evidence.evidence_extract,
             },
-            "context": {
-                "context_id": self.context.context_id,
-                "context_type": self.context.context_type,
-                "generator": self.context.generator,
+            "epistemic": {
+                "pramana_primary": pramana,
+                "pramana_all": [pramana],
+                "confidence_weight": weight,
+                "assignment_method": "rule_based",
+            },
+            "claim_triples": claim_triples if claim_triples else None,
+            "reasoning": {
+                "structural": structural_v2,
+                "strategy": None,
+            } if structural_v2 else None,
+            "evidence": [
+                {
+                    "evidence_id": f"{self.rec_id}-e0",
+                    "text": self.evidence.evidence_extract,
+                    "triples": evidence_triples if evidence_triples else [],
+                    "triple_source": "ground_truth",
+                    "modality": "simulation_state",
+                    "stance": "supports" if self.label == "supported" else "refutes",
+                    "source_url": self.evidence.evidence_urls[0] if self.evidence.evidence_urls else None,
+                }
+            ],
+            "provenance": {
+                "dataset": "ai2thor",
                 "split": self.context.split,
+                "context_id": self.context.context_id,
             },
-            "meta": {"created_utc": self.meta.created_utc, "notes": self.meta.notes},
+            "meta": {
+                "schema_version": "2.0",
+                "created_utc": self.meta.created_utc,
+            },
         }
     
     def get_schema_layout_json(self) -> str:

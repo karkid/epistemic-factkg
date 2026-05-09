@@ -7,8 +7,8 @@ class OutputLabels(StrEnum):
 
 
 class ReasoningLabels(StrEnum):
-    ONE_HOP = "one-hop"
-    MULTI_HOP = "multi-hop"
+    ONE_HOP = "one_hop"
+    MULTI_HOP = "multi_hop"
     CONJUNCTION = "conjunction"
     NEGATION = "negation"
 

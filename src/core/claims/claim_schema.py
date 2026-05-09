@@ -1,154 +1,153 @@
+from src.core.claims.labels import PramanaLabel, SourceTypesLabels
+
+_PRAMANA_VALUES = [p.value for p in PramanaLabel]
+
 CLAIM_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
 
     "required": [
+        "schema_version",
         "id",
-        "label",
         "claim",
-        "claim_triples",
-        "reasoning",
+        "verdict",
+        "epistemic",
         "evidence",
-        "context",
+        "provenance",
         "meta"
     ],
 
+    "additionalProperties": False,
+
     "properties": {
 
-        "id": {
-            "type": "string"
-        },
-
-        "label": {
+        "schema_version": {
             "type": "string",
-            "enum": ["supported", "refuted"]
+            "const": "2.0"
         },
 
-        "claim": {
-            "type": "string"
+        "id": {"type": "string"},
+
+        "claim": {"type": "string"},
+
+        "verdict": {
+            "type": "object",
+            "required": ["label", "justification"],
+            "additionalProperties": False,
+            "properties": {
+                "label": {
+                    "type": ["string", "null"],
+                    "enum": ["supported", "refuted", "not_enough_evidence", "conflicting_evidence", None]
+                },
+                "justification": {"type": ["string", "null"]}
+            }
         },
 
-        "claim_triples": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-                "type": "array",
-                "minItems": 3,
-                "maxItems": 3,
-                "items": {
-                    "type": "string"
+        "epistemic": {
+            "type": "object",
+            "required": ["pramana_primary", "pramana_all", "confidence_weight", "assignment_method"],
+            "additionalProperties": False,
+            "properties": {
+                "pramana_primary": {"type": "string", "enum": _PRAMANA_VALUES},
+                "pramana_all": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string", "enum": _PRAMANA_VALUES}
+                },
+                "confidence_weight": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+                "assignment_method": {
+                    "type": "string",
+                    "enum": ["heuristic", "rule_based", "annotated"]
                 }
             }
         },
 
+        "claim_triples": {
+            "type": ["array", "null"],
+            "items": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {"type": "string"}
+            }
+        },
+
         "reasoning": {
-            "type": "object",
-            "required": ["structural"],
+            "type": ["object", "null"],
+            "additionalProperties": False,
             "properties": {
                 "structural": {
-                    "type": "string",
+                    "type": ["string", "null"],
+                    "enum": ["one_hop", "multi_hop", "conjunction", "negation", None]
+                },
+                "strategy": {
+                    "type": ["string", "null"],
                     "enum": [
-                        "one-hop",
-                        "conjunction",
-                        "negation",
-                        "multi-hop"
+                        "direct_observation", "absence_detection", "spatial_reasoning",
+                        "written_evidence", "numerical_comparison",
+                        "multi_source_synthesis", "action_testing", None
                     ]
                 }
             }
         },
 
         "evidence": {
-            "type": "object",
-
-            "required": [
-                "evidence_triples",
-                "evidence_source",
-                "evidence_source_type",
-                "evidence_urls",
-                "extract",
-            ],
-
-            "properties": {
-
-                "evidence_triples": {
-                    "type": "array",
-                    "items": {
-                        "type": "array",
-                        "minItems": 3,
-                        "maxItems": 3,
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["evidence_id", "text", "triples", "triple_source", "modality", "stance"],
+                "additionalProperties": False,
+                "properties": {
+                    "evidence_id": {"type": "string"},
+                    "text": {"type": ["string", "null"]},
+                    "triples": {
+                        "type": ["array", "null"],
                         "items": {
-                            "type": "string"
+                            "type": "array",
+                            "minItems": 3,
+                            "maxItems": 3,
+                            "items": {"type": "string"}
                         }
-                    }
-                },
-
-                "evidence_source": {
-                    "type": "string"
-                },
-
-                "evidence_source_type": {
-                    "type": "string"
-                },
-
-                "evidence_urls": {
-                    "type": "array",
-                    "items": {
+                    },
+                    "triple_source": {
+                        "type": ["string", "null"],
+                        "enum": ["ground_truth", "extracted", None]
+                    },
+                    "modality": {
                         "type": "string",
-                        "format": "uri"
-                    }
-                },
-                "extract": {
-                    "type": ["string", "null"]
-                },
+                        "enum": [
+                            "simulation_state", "web_text", "pdf", "web_table",
+                            "image", "video", "audio", "other"
+                        ]
+                    },
+                    "stance": {
+                        "type": "string",
+                        "enum": ["supports", "refutes", "absent", "unknown"]
+                    },
+                    "source_url": {"type": ["string", "null"]}
+                }
             }
         },
 
-        "context": {
+        "provenance": {
             "type": "object",
-
-            "required": [
-                "context_id",
-                "context_type",
-                "generator"
-            ],
-
+            "required": ["dataset", "split", "context_id"],
+            "additionalProperties": False,
             "properties": {
-
-                "context_id": {
-                    "type": "string"
-                },
-
-                "context_type": {
-                    "type": "string"
-                },
-
-                "generator": {
-                    "type": "string"
-                },
-
-                "split": {
-                    "type": ["string", "null"]
-                }
+                "dataset": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+                "split": {"type": ["string", "null"], "enum": ["train", "dev", "test", None]},
+                "context_id": {"type": ["string", "null"]}
             }
         },
 
         "meta": {
             "type": "object",
-
-            "required": [
-                "created_utc"
-            ],
-
+            "required": ["schema_version", "created_utc"],
+            "additionalProperties": False,
             "properties": {
-
-                "created_utc": {
-                    "type": "string",
-                    "format": "date-time"
-                },
-
-                "notes": {
-                    "type": ["string", "null"]
-                }
+                "schema_version": {"type": "string", "const": "2.0"},
+                "created_utc": {"type": "string"}
             }
         }
     }
