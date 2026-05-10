@@ -58,7 +58,7 @@ _DEFAULT_PRIMARY_ORDER: list[Pramana] = [
     Pramana.COMPARISON_ANALOGY,
     Pramana.INFERENCE,
     Pramana.TESTIMONY,
-    Pramana.POSTULATION_DERIVATION,
+    # POSTULATION_DERIVATION excluded per ADR-011 (no trigger rules; insufficient training samples)
 ]
 
 
@@ -83,10 +83,26 @@ def _normalize_label(label) -> Verdict:
     )
 
 
-def _medium_to_modality(source_medium) -> str:
+def _medium_to_modality(
+    source_medium,
+    source_url: str = "",
+    answer_type: str = "",
+) -> str:
     if not source_medium:
-        return "other"
-    sm = str(source_medium).strip().lower().replace(" ", "_")
+        # Empty medium: unanswerable if the annotator found nothing; else other
+        return "unanswerable" if answer_type == "unanswerable" else "other"
+
+    sm_raw = str(source_medium).strip()
+    sm = sm_raw.lower().replace(" ", "_")
+
+    if sm == "metadata":
+        # Annotator's own knowledge or derived calculation — not a web source
+        return "annotator_knowledge"
+
+    if sm == "other":
+        # AVeriTeC "Other": calculator/search tool with a real URL → web_text
+        return "web_text" if source_url else "other"
+
     for key, mod in (
         ("web_table", "web_table"),
         ("web_text", "web_text"),
@@ -159,10 +175,12 @@ def _infer_pramana(
         proof_types.add(Pramana.COMPARISON_ANALOGY)
 
     # Rule 4 — Inference: multi-source abstractive synthesis
-    # Threshold: >=2 abstractive answers AND >=2 distinct URLs prevents
-    # single-source lookups from being mis-labelled as inference.
+    # Threshold: >=1 abstractive answer AND >=2 distinct URLs.
+    # The URL guard prevents single-source lookups from being mis-labelled.
+    # Lowered from >=2 abstractive: one synthesised answer across multiple sources
+    # is genuine inference — the strict double requirement excluded too many records.
     n_abstractive = sum(1 for t in answer_types if t == "abstractive")
-    if n_abstractive >= 2 and len(src_urls) >= 2:
+    if n_abstractive >= 1 and len(src_urls) >= 2:
         proof_types.add(Pramana.INFERENCE)
 
     # Fallback: pure-textual records with no other signal → Testimony
@@ -255,9 +273,12 @@ class AveritecConverter(DatasetConverter):
                 evidence_id = f"{rec_id}-q{qi}-a{ai}"
                 ans_text = str(a.get("answer") or "").strip()
                 source_medium = a.get("source_medium")
-                modality = _medium_to_modality(source_medium)
+                source_url = str(a.get("source_url") or "").strip()
                 ans_type_key = str(a.get("answer_type") or "").strip().lower()
                 ans_type = _ANSWER_TYPE_MAP.get(ans_type_key, "unanswerable")
+                modality = _medium_to_modality(
+                    source_medium, source_url=source_url, answer_type=ans_type
+                )
                 text = f"{qtext} {ans_text}".strip() if qtext else ans_text
 
                 items.append(

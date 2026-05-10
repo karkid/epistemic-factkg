@@ -28,7 +28,6 @@ epistemic:
     - comparison_analogy
     - inference
     - testimony
-    - postulation_derivation
 
 # ── AI2THOR-specific ──────────────────────────────────────────────────────────
 ai2thor:
@@ -58,9 +57,17 @@ ai2thor:
     include_salientMaterials: true
 
   generation:
-    n_claims: 2000
+    # Per-type targets — ADR-012 (revised for 10 scenes).
+    # perception: (20+20+20) × 10 = 600 AI2THOR + ~508 AVeriTeC image/video ≈ 1,100 total
+    # non_apprehension: 150 × 10 × 0.5 corruption rate = ~750 — minimum viable for GNN
+    # Keeping one_hop/conjunction/negation low: perception is already strong from AVeriTeC.
     max_contexts: 10
+    n_one_hop: 10          # perception          — 10 × 2 (corruption) × 10 = 200
+    n_conjunction: 10      # perception          — 10 × 2 (corruption) × 10 = 200
+    n_negation: 10         # perception          — 10 × 2 (corruption) × 10 = 200
+    n_absence: 150         # non_apprehension    — 150 × 10 × 0.5 ≈ 750
     add_corruption: true
+    # comparison_analogy and inference generators: deferred (ADR-012 future work)
 
   output:
     claims_filename: claims_all.jsonl
@@ -69,18 +76,20 @@ ai2thor:
     cleanup_between_scenes: true
 
   scenes:
-    # Kitchens
+    # Kitchens (3)
+    - "FloorPlan1"
     - "FloorPlan3"
     - "FloorPlan15"
 
-    # Living Rooms
+    # Living Rooms (3)
+    - "FloorPlan201"
     - "FloorPlan203"
     - "FloorPlan215"
 
-    # Bedrooms
+    # Bedrooms (2)
     - "FloorPlan303"
     - "FloorPlan320"
 
-    # Bathrooms
+    # Bathrooms (2)
     - "FloorPlan403"
     - "FloorPlan420"

@@ -153,8 +153,19 @@
                     },
                     "modality": {
                         "type": "string",
-                        "enum": ["simulation_state", "web_text", "pdf", "web_table", "image", "video", "audio", "other"],
-                        "description": "Source medium of the evidence."
+                        "enum": [
+                            "simulation_state",
+                            "web_text",
+                            "pdf",
+                            "web_table",
+                            "image",
+                            "video",
+                            "audio",
+                            "annotator_knowledge",
+                            "unanswerable",
+                            "other"
+                        ],
+                        "description": "Source medium of the evidence. 'annotator_knowledge': fact-checker's own reasoning or calculation (AVeriTeC Metadata). 'unanswerable': question investigated but no answer found (AVeriTeC Unanswerable answer_type)."
                     },
                     "stance": {
                         "type": "string",

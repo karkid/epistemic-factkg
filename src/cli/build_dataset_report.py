@@ -140,6 +140,119 @@ def summarize_one(s: Dict[str, Any]) -> str:
     return "".join(parts)
 
 
+def plot_horizontal_bar_with_target(
+    dist: Dict[str, int],
+    targets: Dict[str, int],
+    title: str,
+    out_path: Path,
+):
+    """Horizontal bar chart with actual vs target annotations (for Pramana distribution)."""
+    labels = list(dist.keys())
+    actual_vals = [dist[k] for k in labels]
+    target_vals = [targets.get(k, 0) for k in labels]
+
+    y = range(len(labels))
+    plt.figure(figsize=(9, max(4, len(labels) * 0.8)))
+    plt.barh(list(y), actual_vals, label="Actual", color="#4c72b0")
+    plt.barh(list(y), target_vals, label="ADR-012 Target", color="#dd8452", alpha=0.5)
+    plt.yticks(list(y), labels)
+    plt.xlabel("Count")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
+def plot_pie(dist: Dict[str, int], title: str, out_path: Path):
+    labels = list(dist.keys())
+    values = [dist[k] for k in labels]
+    plt.figure(figsize=(6, 6))
+    plt.pie(values, labels=labels, autopct="%1.1f%%", startangle=140)
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
+def summarize_training(
+    tv: Dict[str, Any], plots_dir: Path, plot_refs: List[str]
+) -> str:
+    """Generate the training dataset section for the report markdown."""
+    total = tv.get("total_records", 0)
+    pramana_dist = tv.get("pramana_distribution", {})
+    pramana_targets = {
+        k: v["target"] for k, v in tv.get("pramana_vs_targets", {}).items()
+    }
+    verdict_dist = tv.get("verdict_distribution", {})
+    source_dist = tv.get("source_distribution", {})
+    warnings = tv.get("warnings", [])
+    passed = tv.get("pass", False)
+    postulation_count = tv.get("postulation_derivation_count", 0)
+
+    # Plot 1: Pramana actual vs target (horizontal bar)
+    if pramana_dist and pramana_targets:
+        p = plots_dir / "training_pramana_distribution.png"
+        plot_horizontal_bar_with_target(
+            pramana_dist,
+            pramana_targets,
+            "Training — Pramana distribution vs ADR-012 targets",
+            p,
+        )
+        plot_refs.append(f"- [Training: Pramana vs targets](plots/{p.name})\n")
+
+    # Plot 2: Source split pie
+    if source_dist:
+        p = plots_dir / "training_source_split.png"
+        plot_pie(source_dist, "Training — Source split (AI2THOR vs AVeriTeC)", p)
+        plot_refs.append(f"- [Training: Source split](plots/{p.name})\n")
+
+    # Plot 3: Verdict distribution bar
+    if verdict_dist:
+        p = plots_dir / "training_verdict_distribution.png"
+        plot_bar(verdict_dist, "Training — Verdict distribution", p)
+        plot_refs.append(f"- [Training: Verdict distribution](plots/{p.name})\n")
+
+    parts = ["## Training Dataset (ADR-011 / ADR-012)\n\n"]
+    status = "PASS" if passed else "FAIL"
+    parts.append(
+        f"**Validation status:** {status}  |  **Total records:** {total:,}  |  `postulation_derivation`: {postulation_count}\n\n"
+    )
+
+    # Source split table
+    parts.append("### Source split\n\n| Source | Count | % |\n|---|---:|---:|\n")
+    for src, count in sorted(source_dist.items()):
+        pct = f"{count / total * 100:.1f}" if total else "-"
+        parts.append(f"| {src} | {count:,} | {pct} |\n")
+    parts.append("\n")
+
+    # Pramana vs targets
+    pv = tv.get("pramana_vs_targets", {})
+    parts.append("### Pramana distribution vs ADR-012 targets\n\n")
+    parts.append(
+        "| Pramana | Actual | Target | Delta | % |\n|---|---:|---:|---:|---:|\n"
+    )
+    for pramana in sorted(pv.keys()):
+        info = pv[pramana]
+        delta_str = f"{info['delta']:+d}"
+        parts.append(
+            f"| {pramana} | {info['actual']:,} | {info['target']:,} | {delta_str} | {info['pct']} |\n"
+        )
+    parts.append("\n")
+
+    # Verdict distribution
+    if verdict_dist:
+        parts.append(md_table("Verdict distribution", verdict_dist, total))
+
+    if warnings:
+        parts.append("### Warnings\n\n")
+        for w in warnings:
+            parts.append(f"- **!** {w}\n")
+        parts.append("\n")
+
+    return "".join(parts)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Build dataset report (md + plots) from validation summary JSON."
@@ -147,6 +260,11 @@ def main():
     ap.add_argument("--summary", required=True, help="Path to validation.json")
     ap.add_argument("--out_dir", required=True, help="Output directory for report")
     ap.add_argument("--title", default="Epistemic FactKG Dataset Report")
+    ap.add_argument(
+        "--training-summary",
+        default=None,
+        help="Optional path to training_validation.json (adds training section + plots)",
+    )
     args = ap.parse_args()
 
     src = load_json(args.summary)
@@ -159,7 +277,7 @@ def main():
     ensure_dir(out_dir)
     ensure_dir(plots_dir)
 
-    plot_refs = []
+    plot_refs: List[str] = []
     for s in summaries:
         tag = Path(s.get("file", "unknown")).name.replace(".", "_")
         dists = s.get("distributions", {}) or {}
@@ -175,6 +293,13 @@ def main():
                 plot_bar(dists[dist_key], f"{s.get('file')} — {label}", p)
                 plot_refs.append(f"- [{label}](plots/{p.name})\n")
 
+    training_md: Optional[str] = None
+    if args.training_summary:
+        tv_path = Path(args.training_summary)
+        if tv_path.exists():
+            tv = load_json(str(tv_path))
+            training_md = summarize_training(tv, plots_dir, plot_refs)
+
     md_path = out_dir / "summary.md"
     md = []
     md.append(f"# {args.title}\n\n")
@@ -185,6 +310,9 @@ def main():
         md.append("## Charts\n\n")
         md.extend(plot_refs)
         md.append("\n")
+
+    if training_md:
+        md.append(training_md)
 
     md.append("## Detailed summaries\n\n")
     for s in summaries:

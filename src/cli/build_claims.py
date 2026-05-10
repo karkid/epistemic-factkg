@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import yaml
+
 from src.adapters.ai2thor.semantics.semantic_rules import get_preferred_receptacles
 from src.adapters.ai2thor.ids.object_types import ObjectType
 from src.core.claims.labels import Pramana
@@ -28,6 +30,26 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+_CONFIG_DEFAULTS = {
+    "max_contexts": 10,
+    "n_one_hop": 20,
+    "n_conjunction": 20,
+    "n_negation": 20,
+    "n_absence": 60,
+    "add_corruption": True,
+}
+
+
+def _load_generation_config(config_path: str) -> dict:
+    """Load ai2thor.generation section from config.yaml, merging with defaults."""
+    try:
+        with open(config_path, "r") as f:
+            cfg = yaml.safe_load(f)
+        gen = cfg.get("ai2thor", {}).get("generation", {})
+        return {**_CONFIG_DEFAULTS, **gen}
+    except Exception:
+        return dict(_CONFIG_DEFAULTS)
+
 
 @dataclass(frozen=True)
 class BuildClaimsResult:
@@ -43,7 +65,10 @@ def build_claims(
     ttl_path: str,
     output_dir: str = "out",
     max_contexts: Optional[int] = None,
-    n_claims: int = 500,
+    n_one_hop: int = 20,
+    n_conjunction: int = 20,
+    n_negation: int = 20,
+    n_absence: int = 60,
     add_corruption: bool = True,
     verbose: bool = False,
 ) -> BuildClaimsResult:
@@ -64,6 +89,10 @@ def build_claims(
 
     if verbose:
         print(f"Processing {len(contexts)} contexts: {contexts}")
+        print(
+            f"Per-context targets: one_hop={n_one_hop}, conjunction={n_conjunction}, "
+            f"negation={n_negation}, absence={n_absence}"
+        )
 
     pred_lex = create_predicate_lexicon()
     ent_lex = create_ai2thor_object_type_lexicon()
@@ -93,16 +122,16 @@ def build_claims(
         )
 
         claim_generator.generate_one_hop(
-            n_claims=n_claims, add_corruption=add_corruption
+            n_claims=n_one_hop, add_corruption=add_corruption
         )
         claim_generator.generate_conjunction(
-            n_claims=n_claims, add_corruption=add_corruption
+            n_claims=n_conjunction, add_corruption=add_corruption
         )
         claim_generator.generate_negation(
-            n_claims=n_claims, add_corruption=add_corruption
+            n_claims=n_negation, add_corruption=add_corruption
         )
         claim_generator.generate_absence(
-            n_claims=n_claims,
+            n_claims=n_absence,
             add_corruption=add_corruption,
             object_universe=[ot.value for ot in ObjectType],
         )
@@ -141,10 +170,36 @@ def main():
     parser.add_argument("ttl_path", help="Path to the TTL file")
     parser.add_argument("--output-dir", "-o", default="out", help="Output directory")
     parser.add_argument(
+        "--config",
+        default="configs/config.yaml",
+        help="Path to config.yaml (reads ai2thor.generation defaults)",
+    )
+    parser.add_argument(
         "--max-contexts", type=int, default=None, help="Max contexts to process"
     )
     parser.add_argument(
-        "--n-claims", type=int, default=500, help="Claims per generation method"
+        "--n-one-hop",
+        type=int,
+        default=None,
+        help="Claims per context for one_hop (perception)",
+    )
+    parser.add_argument(
+        "--n-conjunction",
+        type=int,
+        default=None,
+        help="Claims per context for conjunction (perception)",
+    )
+    parser.add_argument(
+        "--n-negation",
+        type=int,
+        default=None,
+        help="Claims per context for negation (perception)",
+    )
+    parser.add_argument(
+        "--n-absence",
+        type=int,
+        default=None,
+        help="Claims per context for absence (non_apprehension)",
     )
     parser.add_argument(
         "--no-corruption", action="store_true", help="Disable corrupted claims"
@@ -158,13 +213,29 @@ def main():
         print(f"Error: TTL file not found: {ttl_path}", file=sys.stderr)
         sys.exit(1)
 
+    cfg = _load_generation_config(args.config)
+
+    max_contexts = (
+        args.max_contexts if args.max_contexts is not None else cfg["max_contexts"]
+    )
+    n_one_hop = args.n_one_hop if args.n_one_hop is not None else cfg["n_one_hop"]
+    n_conjunction = (
+        args.n_conjunction if args.n_conjunction is not None else cfg["n_conjunction"]
+    )
+    n_negation = args.n_negation if args.n_negation is not None else cfg["n_negation"]
+    n_absence = args.n_absence if args.n_absence is not None else cfg["n_absence"]
+    add_corruption = not args.no_corruption
+
     try:
         result = build_claims(
             ttl_path=str(ttl_path),
             output_dir=args.output_dir,
-            max_contexts=args.max_contexts,
-            n_claims=args.n_claims,
-            add_corruption=not args.no_corruption,
+            max_contexts=max_contexts,
+            n_one_hop=n_one_hop,
+            n_conjunction=n_conjunction,
+            n_negation=n_negation,
+            n_absence=n_absence,
+            add_corruption=add_corruption,
             verbose=args.verbose,
         )
 

@@ -27,12 +27,14 @@ When multiple Pramana apply, confidence is combined via diminishing returns:
 ```bash
 just init      # Install dependencies
 
-just run       # Full pipeline: build → validate → report (logs → runs/<RUN_ID>/)
+just run       # Full pipeline: build → validate → filter → validate-training → report (logs → runs/<RUN_ID>/)
 
 # Or step by step:
-just build     # KG + AI2-THOR claims + convert all datasets to unified JSONL
-just validate  # Schema + semantic + Pramana checks
-just report    # Dataset report (markdown + charts)
+just build             # KG + AI2-THOR claims + convert all datasets to unified JSONL
+just validate          # Schema + semantic + Pramana checks
+just filter            # Filter unified JSONL to GNN training set (ADR-011)
+just validate-training # Validate training set against ADR-012 targets
+just report            # Dataset report (markdown + charts + training section)
 ```
 
 ## Installation
@@ -105,13 +107,15 @@ epistemic-factkg/
 ## Key Commands
 
 ```bash
-just init      # Install dependencies
-just build     # KG + claims + convert all datasets to unified JSONL
-just validate  # Schema + semantic + Pramana checks
-just report    # Dataset report (markdown + charts)
-just test      # ruff format + lint + pytest
-just run       # Full pipeline with timestamped logs → runs/<RUN_ID>/
-just clean     # Delete all generated outputs (out/, data/processed/, runs/)
+just init              # Install dependencies
+just build             # KG + claims + convert all datasets to unified JSONL
+just validate          # Schema + semantic + Pramana checks
+just filter            # Filter unified JSONL to GNN training set (ADR-011)
+just validate-training # Validate training set against ADR-012 targets
+just report            # Dataset report (markdown + charts + training section)
+just test              # ruff format + lint + pytest
+just run               # Full pipeline with timestamped logs → runs/<RUN_ID>/
+just clean             # Delete all generated outputs (out/, data/processed/, runs/)
 ```
 
 ## Documentation

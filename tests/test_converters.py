@@ -275,18 +275,30 @@ class TestAveritecConverter:
         assert primary == Pramana.PERCEPTION.value
         assert Pramana.TESTIMONY.value in all_p
 
-    def test_pramana_inference_requires_two_abstractive_two_urls(self):
-        # Only 1 abstractive — should NOT be inference
+    def test_pramana_inference_requires_one_abstractive_two_urls(self):
+        # 1 abstractive + 2 URLs — should be inference (threshold: >=1 abstractive, >=2 urls)
         p1, _, _ = _infer_pramana(
             {"web_text"}, {"url1", "url2"}, ["abstractive"], "text"
         )
-        assert p1 != Pramana.INFERENCE.value
+        assert p1 == Pramana.INFERENCE.value
 
-        # 2 abstractive + 2 URLs — should be inference
+        # 2 abstractive + 2 URLs — still inference
         p2, _, _ = _infer_pramana(
             {"web_text"}, {"url1", "url2"}, ["abstractive", "abstractive"], "text"
         )
         assert p2 == Pramana.INFERENCE.value
+
+        # 1 abstractive + only 1 URL — NOT inference (URL guard prevents single-source)
+        p3, _, _ = _infer_pramana(
+            {"web_text"}, {"url1"}, ["abstractive"], "text"
+        )
+        assert p3 != Pramana.INFERENCE.value
+
+        # 0 abstractive + 2 URLs — NOT inference
+        p4, _, _ = _infer_pramana(
+            {"web_text"}, {"url1", "url2"}, ["extractive", "extractive"], "text"
+        )
+        assert p4 != Pramana.INFERENCE.value
 
     def test_pramana_numeric_cue_triggers_comparison_analogy(self):
         p, _, _ = _infer_pramana(

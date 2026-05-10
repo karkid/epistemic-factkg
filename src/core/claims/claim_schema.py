@@ -140,6 +140,8 @@ CLAIM_SCHEMA = {
                             "image",
                             "video",
                             "audio",
+                            "annotator_knowledge",
+                            "unanswerable",
                             "other",
                         ],
                     },

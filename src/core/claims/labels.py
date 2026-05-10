@@ -41,6 +41,23 @@ CONFIDENCE_WEIGHTS: dict[Pramana, float] = {
 }
 
 
+TRAINING_PRAMANA: frozenset[str] = frozenset(
+    {
+        Pramana.PERCEPTION,
+        Pramana.TESTIMONY,
+        Pramana.NON_APPREHENSION,
+        Pramana.COMPARISON_ANALOGY,
+        Pramana.INFERENCE,
+    }
+)
+
+
+def is_training_record(record: dict) -> bool:
+    """True if record's pramana_primary is included in GNN training (ADR-011)."""
+    pramana = record.get("epistemic", {}).get("pramana_primary", "")
+    return pramana in TRAINING_PRAMANA
+
+
 def combine_pramana_weights(pramanas: list[str], weights: dict | None = None) -> float:
     """Diminishing returns combination: 1 - Π(1 - wᵢ).
 
