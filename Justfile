@@ -27,8 +27,24 @@ init:
 
 
 # ── Build ────────────────────────────────────────────────────────────────────
-[doc("Build KG → generate AI2THOR claims → convert + merge all datasets to unified JSONL")]
-build max_contexts="10":
+[doc("Convert frozen AI2THOR claims + AVeriTeC to unified JSONL (no simulator needed)")]
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "{{AI2THOR_CLAIMS}}" ]; then
+        echo "Error: {{AI2THOR_CLAIMS}} not found. Run 'just rebuild' to generate it." >&2
+        exit 1
+    fi
+    uv run python -m src.cli.convert_to_unified \
+        --config {{CONFIG}} \
+        --averitec {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
+        --ai2thor {{AI2THOR_CLAIMS}} \
+        --output {{UNIFIED_JSONL}} \
+        --intermediate_dir out/intermediate
+
+
+[doc("Re-generate AI2THOR claims from scratch via simulator, then convert all datasets to unified JSONL")]
+rebuild max_contexts="10":
     uv run python -m src.cli.build_rdf \
         --config {{CONFIG}} --out {{KG_TTL}} --verbose
     uv run python -m src.cli.build_claims {{KG_TTL}} \
@@ -92,14 +108,14 @@ test:
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 [doc("Full pipeline: build → validate → filter → validate-training → report (logs saved to runs/<RUN_ID>/)")]
-run RUN_ID="" max_contexts="10":
+run RUN_ID="":
     #!/usr/bin/env bash
     set -euo pipefail
     RUN_ID="${RUN_ID:-$(date -u +"%Y-%m-%d_%H-%M-%S")}"
     echo "RUN_ID=$RUN_ID"
     mkdir -p "runs/$RUN_ID/logs"
 
-    just build {{max_contexts}}      2>&1 | tee "runs/$RUN_ID/logs/build.log"
+    just build                       2>&1 | tee "runs/$RUN_ID/logs/build.log"
     just validate                    2>&1 | tee "runs/$RUN_ID/logs/validate.log"
     just filter                      2>&1 | tee "runs/$RUN_ID/logs/filter.log"
     just validate-training           2>&1 | tee "runs/$RUN_ID/logs/validate-training.log"
