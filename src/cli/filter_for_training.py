@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Filter unified JSONL to GNN training records — excludes postulation_derivation (ADR-011)."""
+"""Filter unified JSONL to GNN training records.
+
+Excludes:
+- postulation_derivation Pramana (ADR-011)
+- conflicting_evidence verdict (ADR-015)
+"""
 
 from __future__ import annotations
 
@@ -9,7 +14,9 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from src.core.claims.labels import TRAINING_PRAMANA, is_training_record
+from src.core.claims.labels import TRAINING_PRAMANA, Verdict, is_training_record
+
+EXCLUDED_VERDICTS: frozenset[str] = frozenset({Verdict.CONFLICTING_EVIDENCE})
 
 
 def main():
@@ -35,6 +42,7 @@ def main():
     kept = 0
     excluded = 0
     excluded_by_pramana: dict[str, int] = defaultdict(int)
+    excluded_by_verdict: dict[str, int] = defaultdict(int)
 
     with (
         open(in_path, "r", encoding="utf-8") as fin,
@@ -47,6 +55,12 @@ def main():
             try:
                 record = json.loads(line)
             except json.JSONDecodeError:
+                continue
+
+            verdict = record.get("verdict", {}).get("label", "")
+            if verdict in EXCLUDED_VERDICTS:
+                excluded_by_verdict[verdict] += 1
+                excluded += 1
                 continue
 
             if is_training_record(record):
@@ -65,11 +79,17 @@ def main():
     print(f"Total records  : {total:,}")
     print(f"Kept           : {kept:,}  ({kept / total * 100:.1f}%)")
     print(f"Excluded       : {excluded:,}  ({excluded / total * 100:.1f}%)")
-    if excluded_by_pramana and args.verbose:
-        print("Excluded by pramana:")
-        for p, n in sorted(excluded_by_pramana.items()):
-            print(f"  {p}: {n:,}")
-    print(f"Training pramana types: {sorted(TRAINING_PRAMANA)}")
+    if args.verbose:
+        if excluded_by_verdict:
+            print("Excluded by verdict (ADR-015):")
+            for v, n in sorted(excluded_by_verdict.items()):
+                print(f"  {v}: {n:,}")
+        if excluded_by_pramana:
+            print("Excluded by pramana (ADR-011):")
+            for p, n in sorted(excluded_by_pramana.items()):
+                print(f"  {p}: {n:,}")
+    print(f"Training pramana types : {sorted(TRAINING_PRAMANA)}")
+    print(f"Excluded verdict types : {sorted(EXCLUDED_VERDICTS)}")
     print("=" * 60)
 
 

@@ -289,9 +289,7 @@ class TestAveritecConverter:
         assert p2 == Pramana.INFERENCE.value
 
         # 1 abstractive + only 1 URL — NOT inference (URL guard prevents single-source)
-        p3, _, _ = _infer_pramana(
-            {"web_text"}, {"url1"}, ["abstractive"], "text"
-        )
+        p3, _, _ = _infer_pramana({"web_text"}, {"url1"}, ["abstractive"], "text")
         assert p3 != Pramana.INFERENCE.value
 
         # 0 abstractive + 2 URLs — NOT inference

@@ -18,6 +18,10 @@ VALIDATION_JSON     := "out/report/validation.json"
 REPORT_DIR          := "out/report"
 TRAINING_JSONL      := "out/training/epistemic_factkg_training.jsonl"
 TRAINING_VALIDATION := "out/report/training_validation.json"
+GRAPH_DATASET       := "out/graphs/graph_dataset.pt"
+SPLITS_DIR          := "out/splits"
+CHECKPOINTS_DIR     := "out/checkpoints"
+RESULTS_DIR         := "out/results"
 
 
 # ── Setup ────────────────────────────────────────────────────────────────────
@@ -97,6 +101,107 @@ report:
         --out_dir {{REPORT_DIR}} \
         --training-summary {{TRAINING_VALIDATION}} \
         --title "Epistemic FactKG Dataset Report"
+
+
+# ── GNN pipeline ─────────────────────────────────────────────────────────────
+[doc("Build PyG HeteroData graph dataset from filtered training JSONL")]
+build-graph:
+    mkdir -p out/graphs
+    uv run python -m src.cli.build_graph_dataset \
+        --input {{TRAINING_JSONL}} \
+        --output {{GRAPH_DATASET}} \
+        --embed-cache out/graphs/embed_cache.pkl \
+        --verbose
+
+
+[doc("Generate deterministic train/val/test split index files (ADR-009)")]
+split:
+    mkdir -p {{SPLITS_DIR}}
+    uv run python -m src.cli.split_dataset \
+        --input {{TRAINING_JSONL}} \
+        --output-dir {{SPLITS_DIR}} \
+        --seed 42 \
+        --verbose
+
+
+[doc("Train EpistemicHGNN (Pathway A — heuristic Pramana prior)")]
+train:
+    mkdir -p {{CHECKPOINTS_DIR}}
+    uv run python -m src.cli.train_gnn \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --checkpoint-dir {{CHECKPOINTS_DIR}} \
+        --epochs 50 \
+        --lr 1e-3 \
+        --batch-size 32 \
+        --device cpu \
+        --verbose
+
+
+[doc("Run Phase 5 ablation training — Runs A, B, D (Run C=full already done in Phase 4)")]
+ablation:
+    mkdir -p {{CHECKPOINTS_DIR}}
+    @echo "=== Run B: no-stance edges, epistemic present (primary test) ==="
+    uv run python -m src.cli.train_gnn \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --checkpoint-dir {{CHECKPOINTS_DIR}} \
+        --no-stance-edges --run-name no-stance \
+        --epochs 50 --verbose
+    @echo "=== Run A: no-stance edges, no epistemic (text-only floor) ==="
+    uv run python -m src.cli.train_gnn \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --checkpoint-dir {{CHECKPOINTS_DIR}} \
+        --no-stance-edges --no-epistemic --run-name no-stance-no-epistemic \
+        --epochs 50 --verbose
+    @echo "=== Run D: Pathway B — modality-learned Pramana ==="
+    uv run python -m src.cli.train_gnn \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --checkpoint-dir {{CHECKPOINTS_DIR}} \
+        --use-modality-learning --aux-loss-weight 0.1 --run-name pathway-b \
+        --epochs 50 --verbose
+
+
+[doc("Run Phase 6 evaluation on all 4 ablation runs (test set)")]
+evaluate:
+    mkdir -p {{RESULTS_DIR}}
+    @echo "=== Evaluating Run C: full graph ==="
+    uv run python -m src.cli.evaluate_gnn \
+        --checkpoint {{CHECKPOINTS_DIR}}/best_model.pt \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --output {{RESULTS_DIR}}/full
+    @echo "=== Evaluating Run B: no-stance, epistemic present ==="
+    uv run python -m src.cli.evaluate_gnn \
+        --checkpoint {{CHECKPOINTS_DIR}}/no-stance/best_model.pt \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --no-stance-edges \
+        --output {{RESULTS_DIR}}/no-stance
+    @echo "=== Evaluating Run A: no-stance, no epistemic ==="
+    uv run python -m src.cli.evaluate_gnn \
+        --checkpoint {{CHECKPOINTS_DIR}}/no-stance-no-epistemic/best_model.pt \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --no-stance-edges --no-epistemic \
+        --output {{RESULTS_DIR}}/no-stance-no-epistemic
+    @echo "=== Evaluating Run D: Pathway B ==="
+    uv run python -m src.cli.evaluate_gnn \
+        --checkpoint {{CHECKPOINTS_DIR}}/pathway-b/best_model.pt \
+        --dataset {{GRAPH_DATASET}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --use-modality-learning \
+        --output {{RESULTS_DIR}}/pathway-b
 
 
 # ── Test ─────────────────────────────────────────────────────────────────────
