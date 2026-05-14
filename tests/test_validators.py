@@ -15,7 +15,7 @@ from src.adapters.ai2thor.validator import AI2ThorValidator
 from src.adapters.averitec.converter import AveritecConverter
 from src.adapters.averitec.validator import AveritecValidator
 from src.core.claims.claim_validator import AdvancedClaimValidator
-from src.core.claims.labels import EvidenceStance, Pramana, Verdict
+from src.core.claims.labels import EvidenceStance, EvidenceType, Pramana, Verdict
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -56,7 +56,7 @@ class TestAI2ThorValidator:
     def test_absence_claim_with_non_empty_triples_is_flagged(self):
         val = AI2ThorValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.NON_APPREHENSION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
             "evidence": [
                 {"stance": EvidenceStance.ABSENT.value, "triples": [["s", "p", "o"]]}
             ],
@@ -69,7 +69,7 @@ class TestAI2ThorValidator:
     def test_non_apprehension_without_absent_stance_is_flagged(self):
         val = AI2ThorValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.NON_APPREHENSION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
             "evidence": [{"stance": EvidenceStance.SUPPORTS.value, "triples": []}],
             "claim_triples": None,
             "reasoning": {"structural": "one_hop"},
@@ -80,7 +80,7 @@ class TestAI2ThorValidator:
     def test_perception_record_missing_claim_triples_is_flagged(self):
         val = AI2ThorValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.PERCEPTION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.PERCEPTION.value]},
             "evidence": [
                 {"stance": EvidenceStance.SUPPORTS.value, "triples": [["s", "p", "o"]]}
             ],
@@ -94,7 +94,7 @@ class TestAI2ThorValidator:
         """Non-apprehension absence claims legitimately have claim_triples=None."""
         val = AI2ThorValidator()
         ok = {
-            "epistemic": {"pramana_primary": Pramana.NON_APPREHENSION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
             "evidence": [{"stance": EvidenceStance.ABSENT.value, "triples": []}],
             "claim_triples": None,
             "reasoning": {"structural": "absence"},
@@ -103,11 +103,11 @@ class TestAI2ThorValidator:
         assert not any("missing claim_triples" in m for m in msgs)
 
     def test_refuted_absence_claim_missing_claim_triples_is_not_flagged(self):
-        """Refuted absence claims (structural=absence, pramana=perception) have
+        """Refuted absence claims (structural=absence, perception) have
         claim_triples=None because an absent object can't be a positive triple."""
         val = AI2ThorValidator()
         ok = {
-            "epistemic": {"pramana_primary": Pramana.PERCEPTION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.PERCEPTION.value]},
             "evidence": [
                 {"stance": EvidenceStance.REFUTES.value, "triples": [["s", "p", "o"]]}
             ],
@@ -118,10 +118,10 @@ class TestAI2ThorValidator:
         msgs = val.check(ok)
         assert not any("missing claim_triples" in m for m in msgs)
 
-    def test_invalid_pramana_is_flagged(self):
+    def test_invalid_evidence_type_is_flagged(self):
         val = AI2ThorValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.TESTIMONY.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.TESTIMONY.value]},
             "evidence": [
                 {"stance": EvidenceStance.SUPPORTS.value, "triples": [["s", "p", "o"]]}
             ],
@@ -129,12 +129,12 @@ class TestAI2ThorValidator:
             "reasoning": {"structural": "one_hop"},
         }
         msgs = val.check(bad)
-        assert any("unexpected pramana_primary" in m for m in msgs)
+        assert any("unexpected evidence_type" in m for m in msgs)
 
     def test_missing_reasoning_is_flagged(self):
         val = AI2ThorValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.PERCEPTION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.PERCEPTION.value]},
             "evidence": [
                 {"stance": EvidenceStance.SUPPORTS.value, "triples": [["s", "p", "o"]]}
             ],
@@ -160,7 +160,7 @@ class TestAdvancedClaimValidator:
             "claim": "The bowl is open.",  # negation word removed by corruption
             "verdict": {"label": "refuted"},
             "reasoning": {"structural": "negation"},
-            "epistemic": {"pramana_primary": Pramana.PERCEPTION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.PERCEPTION.value]},
             "evidence": [
                 {
                     "stance": EvidenceStance.REFUTES.value,
@@ -188,7 +188,7 @@ class TestAdvancedClaimValidator:
             "claim": "The bowl is open.",  # missing negation word, NOT refuted
             "verdict": {"label": "supported"},
             "reasoning": {"structural": "negation"},
-            "epistemic": {"pramana_primary": Pramana.PERCEPTION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.PERCEPTION.value]},
             "evidence": [
                 {
                     "stance": EvidenceStance.SUPPORTS.value,
@@ -217,7 +217,7 @@ class TestAdvancedClaimValidator:
             "claim": "There is no bowl in the room.",
             "verdict": {"label": "refuted"},
             "reasoning": {"structural": "absence"},
-            "epistemic": {"pramana_primary": Pramana.PERCEPTION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.PERCEPTION.value]},
             "evidence": [
                 {
                     "stance": EvidenceStance.REFUTES.value,

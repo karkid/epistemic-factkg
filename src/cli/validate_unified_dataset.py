@@ -1,5 +1,5 @@
 """
-Validate one or more unified v2.0 JSONL files.
+Validate one or more unified v3.0 JSONL files.
 
 Usage
 -----
@@ -22,7 +22,7 @@ from typing import Any, Dict, List
 
 from jsonschema import Draft7Validator
 
-from src.core.claims.labels import Pramana
+from src.core.claims.labels import EvidenceType
 from src.core.claims.claim_schema import CLAIM_SCHEMA
 from src.core.claims.claim_validator import AdvancedClaimValidator
 from src.adapters.ai2thor.validator import AI2ThorValidator
@@ -108,8 +108,7 @@ def summarize_file(
         },
         "distributions": {
             "verdict_label": Counter(),
-            "pramana_primary": Counter(),
-            "pramana_all": Counter(),
+            "evidence_types_all": Counter(),
             "dataset": Counter(),
             "evidence_modality": Counter(),
             "evidence_stance": Counter(),
@@ -126,22 +125,21 @@ def summarize_file(
     for line_no, obj in _iter_jsonl(path):
         summary["counts"]["total_records"] += 1
         evidence = obj.get("evidence") or []
-        pramana = _safe_get(obj, ["epistemic", "pramana_primary"])
+        evidence_types_all = _safe_get(obj, ["epistemic", "evidence_types_all"], [])
+        is_absence = EvidenceType.NON_APPREHENSION.value in evidence_types_all
 
         # ── Distributions ─────────────────────────────────────────────────
         summary["distributions"]["verdict_label"][
             _safe_get(obj, ["verdict", "label"])
         ] += 1
-        summary["distributions"]["pramana_primary"][pramana] += 1
+        for et in evidence_types_all:
+            summary["distributions"]["evidence_types_all"][et] += 1
         summary["distributions"]["dataset"][
             _safe_get(obj, ["provenance", "dataset"])
         ] += 1
         summary["distributions"]["reasoning_structural"][
             _safe_get(obj, ["reasoning", "structural"])
         ] += 1
-
-        for pt in _safe_get(obj, ["epistemic", "pramana_all"], []):
-            summary["distributions"]["pramana_all"][pt] += 1
 
         for e in evidence:
             if isinstance(e, dict):
@@ -160,7 +158,7 @@ def summarize_file(
         verdict_label = _safe_get(obj, ["verdict", "label"])
         if (
             ct is None
-            and pramana != Pramana.NON_APPREHENSION.value
+            and not is_absence
             and structural != "absence"
         ):
             summary["coverage"]["claim_triples_null"] += 1
@@ -259,11 +257,11 @@ def _compute_gnn_readiness(summary: dict) -> dict:
     coverage = summary.get("coverage", {})
     total = counts.get("total_records", 0)
 
-    pramana_dist = dists.get("pramana_primary", {})
+    evidence_type_dist = dists.get("evidence_types_all", {})
     verdict_dist = dists.get("verdict_label", {})
     stance_dist = dists.get("evidence_stance", {})
 
-    absence_count = pramana_dist.get(Pramana.NON_APPREHENSION.value, 0)
+    absence_count = evidence_type_dist.get(EvidenceType.NON_APPREHENSION.value, 0)
     ev_sum = coverage.get("evidence_count_sum", 0)
     ct_sum = coverage.get("claim_triples_count_sum", 0)
     ev_tri_sum = coverage.get("evidence_triples_count_sum", 0)
@@ -271,7 +269,7 @@ def _compute_gnn_readiness(summary: dict) -> dict:
     return {
         "total_records": total,
         "verdict_distribution": verdict_dist,
-        "pramana_distribution": pramana_dist,
+        "evidence_type_distribution": evidence_type_dist,
         "stance_distribution": stance_dist,
         "absence_claims": absence_count,
         "absence_pct": round(absence_count / total * 100, 2) if total else 0,
@@ -339,12 +337,12 @@ def write_validation_report_md(
         ):
             w(f"| {k} | {v:,} | {_pct(v, total)} |")
 
-        # Pramana distribution
-        w("\n### Pramana (Epistemic) Distribution\n")
-        w("| Pramana | Count | % |")
-        w("|---------|------:|--:|")
+        # Evidence type distribution
+        w("\n### Evidence Type Distribution\n")
+        w("| Evidence Type | Count | % |")
+        w("|--------------|------:|--:|")
         for k, v in sorted(
-            s["distributions"]["pramana_primary"].items(), key=lambda x: str(x[0])
+            s["distributions"]["evidence_types_all"].items(), key=lambda x: str(x[0])
         ):
             w(f"| {k} | {v:,} | {_pct(v, total)} |")
 
@@ -496,9 +494,9 @@ def pretty_print_summary(s: Dict[str, Any]) -> None:
     ):
         print(f"  {str(k):28} {v:>6,}  ({_pct(v, total)})")
 
-    print("\n-- Pramana primary --")
+    print("\n-- Evidence types (claim-level union) --")
     for k, v in sorted(
-        s["distributions"]["pramana_primary"].items(), key=lambda x: str(x[0])
+        s["distributions"]["evidence_types_all"].items(), key=lambda x: str(x[0])
     ):
         print(f"  {str(k):28} {v:>6,}  ({_pct(v, total)})")
 

@@ -6,7 +6,7 @@ from typing import Iterator
 
 class DatasetConverter(ABC):
     """
-    Port interface for converting any source dataset into unified v2.0 JSONL.
+    Port interface for converting any source dataset into unified v3.0 JSONL.
 
     Implement one subclass per dataset (AVeriTeC, FEVER, etc.) or simulation
     source (AI2THOR, Habitat, etc.) and place it in src/adapters/{source_name}/.
@@ -19,7 +19,6 @@ class DatasetConverter(ABC):
             return "averitec"
 
         def convert_one(self, raw: dict, rec_id: str) -> dict: ...
-        def infer_pramana(self, raw: dict) -> tuple[str, list[str], float]: ...
     """
 
     @property
@@ -47,19 +46,6 @@ class DatasetConverter(ABC):
         -------
         dict
             A dict that passes validation against data/schema/unified_schema.json.
-        """
-
-    @abstractmethod
-    def infer_pramana(self, raw_record: dict) -> tuple[str, list[str], float]:
-        """
-        Infer Pramana labels for a raw source record.
-
-        Returns
-        -------
-        tuple of (pramana_primary, pramana_all, confidence_weight)
-            pramana_primary  : str  — single dominant label
-            pramana_all      : list[str] — all applicable labels, sorted
-            confidence_weight: float — epistemic prior for GNN edge weight
         """
 
     def iter_records(self, in_path: str) -> Iterator[tuple[int, dict]]:

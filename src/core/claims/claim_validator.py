@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from src.core.claims.labels import Verdict, EvidenceStance
+from src.core.claims.labels import Verdict, EvidenceStance, EvidenceType
 
 from jsonschema import validate, ValidationError
 from datetime import datetime
@@ -324,7 +324,8 @@ class AdvancedClaimValidator:
         label = (claim.get("verdict") or {}).get("label")
         evidence = claim.get("evidence") or []
         claim_triples_raw = claim.get("claim_triples")
-        pramana = (claim.get("epistemic") or {}).get("pramana_primary")
+        evidence_types_all = (claim.get("epistemic") or {}).get("evidence_types_all", [])
+        is_absence = EvidenceType.NON_APPREHENSION.value in evidence_types_all
 
         if label and label not in [v.value for v in Verdict]:
             result.add_issue(
@@ -368,7 +369,7 @@ class AdvancedClaimValidator:
                     "evidence[].stance",
                 )
 
-        if label == Verdict.NOT_ENOUGH_EVIDENCE and pramana == "non_apprehension":
+        if label == Verdict.NOT_ENOUGH_EVIDENCE and is_absence:
             result.add_issue(
                 "consistency",
                 "error",
@@ -376,13 +377,13 @@ class AdvancedClaimValidator:
                 "verdict.label",
             )
 
-        if pramana == "non_apprehension":
+        if is_absence:
             has_absent = any(e.get("stance") == EvidenceStance.ABSENT for e in evidence)
             if not has_absent:
                 result.add_issue(
                     "consistency",
                     "error",
-                    "non_apprehension pramana requires at least one evidence item with stance=absent",
+                    "non_apprehension evidence type requires at least one evidence item with stance=absent",
                     "evidence[].stance",
                 )
 
@@ -406,7 +407,7 @@ class AdvancedClaimValidator:
         if (
             dataset == "ai2thor"
             and claim_triples_raw is None
-            and pramana != "non_apprehension"
+            and not is_absence
             and structural != "absence"
         ):
             result.add_issue(

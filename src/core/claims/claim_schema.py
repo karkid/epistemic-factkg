@@ -1,6 +1,6 @@
-from src.core.claims.labels import Pramana, Verdict, EvidenceStance
+from src.core.claims.labels import EvidenceType, Verdict, EvidenceStance
 
-_PRAMANA_VALUES = [p.value for p in Pramana]
+_EVIDENCE_TYPE_VALUES = [p.value for p in EvidenceType]
 _VERDICT_VALUES = [v.value for v in Verdict]
 _STANCE_VALUES = [s.value for s in EvidenceStance] + [None]
 
@@ -19,12 +19,12 @@ CLAIM_SCHEMA = {
     ],
     "additionalProperties": False,
     "properties": {
-        "schema_version": {"type": "string", "const": "2.0"},
+        "schema_version": {"type": "string", "const": "3.0"},
         "id": {"type": "string"},
         "claim": {"type": "string"},
         "verdict": {
             "type": "object",
-            "required": ["label", "justification"],
+            "required": ["label", "justification", "derivation_method"],
             "additionalProperties": False,
             "properties": {
                 "label": {
@@ -32,32 +32,24 @@ CLAIM_SCHEMA = {
                     "enum": _VERDICT_VALUES + [None],
                 },
                 "justification": {"type": ["string", "null"]},
+                "derivation_method": {
+                    "type": "string",
+                    "enum": ["aggregated_from_evidence", "annotated"],
+                },
             },
         },
         "epistemic": {
             "type": "object",
-            "required": [
-                "pramana_primary",
-                "pramana_all",
-                "confidence_weight",
-                "assignment_method",
-            ],
+            "required": ["evidence_types_all", "assignment_method"],
             "additionalProperties": False,
             "properties": {
-                "pramana_primary": {"type": "string", "enum": _PRAMANA_VALUES},
-                "pramana_all": {
+                "evidence_types_all": {
                     "type": "array",
-                    "minItems": 1,
-                    "items": {"type": "string", "enum": _PRAMANA_VALUES},
-                },
-                "confidence_weight": {
-                    "type": ["number", "null"],
-                    "minimum": 0.0,
-                    "maximum": 1.0,
+                    "items": {"type": "string", "enum": _EVIDENCE_TYPE_VALUES},
                 },
                 "assignment_method": {
                     "type": "string",
-                    "enum": ["heuristic", "rule_based", "annotated"],
+                    "enum": ["heuristic", "rule_based", "annotated", "llm_generated"],
                 },
             },
         },
@@ -112,6 +104,9 @@ CLAIM_SCHEMA = {
                     "triple_source",
                     "modality",
                     "stance",
+                    "evidence_types",
+                    "source_id",
+                    "inference_strength",
                 ],
                 "additionalProperties": False,
                 "properties": {
@@ -149,6 +144,16 @@ CLAIM_SCHEMA = {
                         "type": ["string", "null"],
                         "enum": _STANCE_VALUES,
                     },
+                    "evidence_types": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": _EVIDENCE_TYPE_VALUES},
+                    },
+                    "source_id": {"type": "string"},
+                    "inference_strength": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
                     "source_url": {"type": ["string", "null"]},
                 },
             },
@@ -171,7 +176,7 @@ CLAIM_SCHEMA = {
             "required": ["schema_version", "created_utc"],
             "additionalProperties": False,
             "properties": {
-                "schema_version": {"type": "string", "const": "2.0"},
+                "schema_version": {"type": "string", "const": "3.0"},
                 "created_utc": {"type": "string"},
             },
         },

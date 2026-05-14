@@ -4,9 +4,8 @@ from urllib.parse import unquote
 
 from src.core.ports.dataset.converter import DatasetConverter
 from src.core.claims.labels import (
-    combine_pramana_weights,
     EvidenceStance,
-    Pramana,
+    EvidenceType,
     Verdict,
 )
 from src.utils.time import utc_now_iso
@@ -80,8 +79,7 @@ def _make_justification(
 
 
 def _label_to_stance(label: Verdict | None) -> str | None:
-    """
-    Derive evidence stance from verdict for AI2THOR records.
+    """Derive evidence stance from verdict for AI2THOR records.
 
     Heuristic: AI2THOR claims have a single decisive evidence item whose
     stance mirrors the verdict directly.  For absence claims the stance is
@@ -94,8 +92,32 @@ def _label_to_stance(label: Verdict | None) -> str | None:
     return None
 
 
+_STRATEGY_EVIDENCE_TYPES: dict[str, list[str]] = {
+    "direct_observation": [EvidenceType.PERCEPTION.value],
+    "absence_detection": [EvidenceType.PERCEPTION.value, EvidenceType.NON_APPREHENSION.value],
+    "spatial_reasoning": [EvidenceType.PERCEPTION.value, EvidenceType.COMPARISON_ANALOGY.value],
+    "action_testing": [EvidenceType.PERCEPTION.value, EvidenceType.INFERENCE.value],
+}
+
+
+def _infer_evidence_types(strategy: str | None, has_ev_triples: bool) -> list[str]:
+    """Return evidence_types for a single AI2THOR evidence item based on strategy.
+
+    Strategy mapping (labeling guide):
+      direct_observation  → [perception]
+      absence_detection   → [perception, non_apprehension]
+      spatial_reasoning   → [perception, comparison_analogy]
+      action_testing      → [perception, inference]
+
+    Fallback: has triples → [perception]; no triples → [non_apprehension].
+    """
+    if strategy in _STRATEGY_EVIDENCE_TYPES:
+        return _STRATEGY_EVIDENCE_TYPES[strategy]
+    return [EvidenceType.PERCEPTION.value] if has_ev_triples else [EvidenceType.NON_APPREHENSION.value]
+
+
 class AI2ThorConverter(DatasetConverter):
-    """Converts AI2THOR JSONL records to unified v2.0 JSONL.
+    """Converts AI2THOR JSONL records to unified v3.0 JSONL.
 
     Handles two source formats:
     - Legacy dict format: evidence is a dict with evidence_triples, evidence_source, etc.
@@ -105,29 +127,6 @@ class AI2ThorConverter(DatasetConverter):
     @property
     def dataset_name(self) -> str:
         return "ai2thor"
-
-    def infer_pramana(self, raw_record: dict) -> tuple[str, list[str], float]:
-        """
-        Assign Pramana type for AI2THOR records.
-
-        Heuristic (from research proposal §5, Pramana table):
-        - PERCEPTION (0.90): default for all AI2THOR claims — the simulator
-          provides direct sensor observations of object properties and spatial
-          relations, corresponding to Pratyaksham (direct sensory knowledge).
-        - NON_APPREHENSION (0.80): assigned when there are no evidence triples,
-          meaning the claim asserts the *absence* of an object or state —
-          corresponds to Anupalabdhi (knowledge from confirmed absence).
-          Only reliable here because the simulator gives complete world state.
-        """
-        evidence = raw_record.get("evidence") or {}
-        if isinstance(evidence, list):
-            has_ev = any(e.get("triples") for e in evidence if isinstance(e, dict))
-        else:
-            has_ev = bool(evidence.get("evidence_triples"))
-
-        primary = Pramana.PERCEPTION if has_ev else Pramana.NON_APPREHENSION
-        weight = combine_pramana_weights([primary.value])
-        return primary.value, [primary.value], weight
 
     def convert_one(self, raw_record: dict, rec_id: str) -> dict:
         evidence = raw_record.get("evidence") or {}
@@ -146,15 +145,11 @@ class AI2ThorConverter(DatasetConverter):
         first = claim_triples[0] if claim_triples else ["", "unknown_relation", ""]
         predicate = first[1] if len(first) == 3 else "unknown_relation"
 
-        pramana_primary, pramana_all, confidence_weight = self.infer_pramana(raw)
-
         ev_out = []
         for ev in evidence:
             decoded_triples = _convert_triples(ev.get("triples") or [])
-            strategy = ev.get("strategy") or _classify_strategy(
-                predicate, decoded_triples
-            )
-            # Stance must be a valid EvidenceStance value or None — never "unknown"
+            ev_strategy = ev.get("strategy") or _classify_strategy(predicate, decoded_triples)
+            evidence_types = _infer_evidence_types(ev_strategy, bool(decoded_triples))
             raw_stance = ev.get("stance")
             stance = (
                 raw_stance if raw_stance in {s.value for s in EvidenceStance} else None
@@ -167,9 +162,16 @@ class AI2ThorConverter(DatasetConverter):
                     "triple_source": ev.get("triple_source", "ground_truth"),
                     "modality": ev.get("modality", "simulation_state"),
                     "stance": stance,
+                    "evidence_types": evidence_types,
+                    "source_id": "ai2thor_simulation",
+                    "inference_strength": 1.0,
                     "source_url": ev.get("source_url"),
                 }
             )
+
+        evidence_types_all = sorted(
+            {t for ev in ev_out for t in ev.get("evidence_types", [])}
+        )
 
         reasoning = raw.get("reasoning") or {}
         structural = reasoning.get("structural")
@@ -193,17 +195,16 @@ class AI2ThorConverter(DatasetConverter):
         meta = raw.get("meta") or {}
 
         return {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "id": oid,
             "claim": raw.get("claim", "").strip(),
             "verdict": {
                 "label": label.value if label else None,
                 "justification": justification,
+                "derivation_method": "annotated",
             },
             "epistemic": {
-                "pramana_primary": pramana_primary,
-                "pramana_all": pramana_all,
-                "confidence_weight": confidence_weight,
+                "evidence_types_all": evidence_types_all,
                 "assignment_method": "rule_based",
             },
             "claim_triples": claim_triples if claim_triples else None,
@@ -217,7 +218,7 @@ class AI2ThorConverter(DatasetConverter):
                 "context_id": provenance.get("context_id"),
             },
             "meta": {
-                "schema_version": "2.0",
+                "schema_version": "3.0",
                 "created_utc": meta.get("created_utc") or utc_now_iso(),
             },
         }
@@ -242,8 +243,8 @@ class AI2ThorConverter(DatasetConverter):
         first = claim_triples[0] if claim_triples else ["", "unknown_relation", ""]
         predicate = first[1] if len(first) == 3 else "unknown_relation"
 
-        pramana_primary, pramana_all, confidence_weight = self.infer_pramana(raw)
         strategy = _classify_strategy(predicate, ev_triples)
+        evidence_types = _infer_evidence_types(strategy, bool(ev_triples))
         justification = _make_justification(label, predicate, claim_triples, ev_triples)
 
         structural = reasoning.get("structural")
@@ -252,23 +253,22 @@ class AI2ThorConverter(DatasetConverter):
 
         # Absence claims (non_apprehension) use the ABSENT stance — the absence
         # of evidence triples IS the evidence.  All other stances mirror the verdict.
-        if pramana_primary == Pramana.NON_APPREHENSION.value:
+        if EvidenceType.NON_APPREHENSION.value in evidence_types:
             stance = EvidenceStance.ABSENT.value
         else:
             stance = _label_to_stance(label)
 
         return {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "id": oid,
             "claim": raw.get("claim", "").strip(),
             "verdict": {
                 "label": label.value if label else None,
                 "justification": justification,
+                "derivation_method": "annotated",
             },
             "epistemic": {
-                "pramana_primary": pramana_primary,
-                "pramana_all": pramana_all,
-                "confidence_weight": confidence_weight,
+                "evidence_types_all": evidence_types,
                 "assignment_method": "rule_based",
             },
             "claim_triples": claim_triples if claim_triples else None,
@@ -283,6 +283,9 @@ class AI2ThorConverter(DatasetConverter):
                     "triple_source": "ground_truth",
                     "modality": "simulation_state",
                     "stance": stance,
+                    "evidence_types": evidence_types,
+                    "source_id": "ai2thor_simulation",
+                    "inference_strength": 1.0,
                     "source_url": evidence_urls[0] if evidence_urls else None,
                 }
             ],
@@ -292,7 +295,7 @@ class AI2ThorConverter(DatasetConverter):
                 "context_id": context.get("context_id"),
             },
             "meta": {
-                "schema_version": "2.0",
+                "schema_version": "3.0",
                 "created_utc": meta.get("created_utc") or utc_now_iso(),
             },
         }

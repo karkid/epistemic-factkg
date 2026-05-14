@@ -16,6 +16,7 @@ from src.adapters.averitec.converter import AveritecConverter, _infer_pramana
 from src.core.claims.labels import (
     combine_pramana_weights,
     EvidenceStance,
+    EvidenceType,
     Pramana,
     Verdict,
 )
@@ -61,7 +62,7 @@ class TestAI2ThorConverter:
 
     def test_schema_version(self, ai2thor_converted):
         for r in ai2thor_converted:
-            assert r["schema_version"] == "2.0"
+            assert r["schema_version"] == "3.0"
 
     def test_required_top_level_fields(self, ai2thor_converted):
         required = {
@@ -81,19 +82,29 @@ class TestAI2ThorConverter:
         for r in ai2thor_converted:
             assert r["verdict"]["label"] in valid
 
-    def test_pramana_is_enum_value(self, ai2thor_converted):
-        valid = {p.value for p in Pramana}
+    def test_verdict_has_derivation_method_annotated(self, ai2thor_converted):
         for r in ai2thor_converted:
-            assert r["epistemic"]["pramana_primary"] in valid
+            assert r["verdict"]["derivation_method"] == "annotated", (
+                f"{r['id']}: expected derivation_method=annotated"
+            )
 
-    def test_ai2thor_pramana_limited_to_perception_and_non_apprehension(
+    def test_evidence_types_all_are_valid(self, ai2thor_converted):
+        valid = {p.value for p in EvidenceType}
+        for r in ai2thor_converted:
+            for et in r["epistemic"]["evidence_types_all"]:
+                assert et in valid, (
+                    f"{r['id']}: unexpected evidence_type {et!r}"
+                )
+
+    def test_ai2thor_evidence_types_limited_to_perception_and_non_apprehension(
         self, ai2thor_converted
     ):
-        allowed = {Pramana.PERCEPTION.value, Pramana.NON_APPREHENSION.value}
+        allowed = {EvidenceType.PERCEPTION.value, EvidenceType.NON_APPREHENSION.value}
         for r in ai2thor_converted:
-            assert r["epistemic"]["pramana_primary"] in allowed, (
-                f"{r['id']}: unexpected pramana {r['epistemic']['pramana_primary']!r}"
-            )
+            for et in r["epistemic"]["evidence_types_all"]:
+                assert et in allowed, (
+                    f"{r['id']}: unexpected evidence_type {et!r}"
+                )
 
     def test_dataset_provenance(self, ai2thor_converted):
         for r in ai2thor_converted:
@@ -107,6 +118,27 @@ class TestAI2ThorConverter:
                     f"{r['id']}: invalid stance {ev.get('stance')!r}"
                 )
 
+    def test_evidence_items_have_v3_fields(self, ai2thor_converted):
+        for r in ai2thor_converted:
+            for ev in r.get("evidence") or []:
+                assert "evidence_types" in ev, f"{r['id']}: missing evidence_types"
+                assert "source_id" in ev, f"{r['id']}: missing source_id"
+                assert "inference_strength" in ev, f"{r['id']}: missing inference_strength"
+
+    def test_evidence_source_id_is_ai2thor_simulation(self, ai2thor_converted):
+        for r in ai2thor_converted:
+            for ev in r.get("evidence") or []:
+                assert ev["source_id"] == "ai2thor_simulation", (
+                    f"{r['id']}: unexpected source_id {ev['source_id']!r}"
+                )
+
+    def test_evidence_inference_strength_is_1(self, ai2thor_converted):
+        for r in ai2thor_converted:
+            for ev in r.get("evidence") or []:
+                assert ev["inference_strength"] == 1.0, (
+                    f"{r['id']}: expected IS=1.0, got {ev['inference_strength']}"
+                )
+
     def test_refuted_claims_have_refutes_stance(self, ai2thor_converted):
         for r in ai2thor_converted:
             if r["verdict"]["label"] == Verdict.REFUTED.value:
@@ -117,9 +149,14 @@ class TestAI2ThorConverter:
 
     def test_supported_perception_claims_have_supports_stance(self, ai2thor_converted):
         for r in ai2thor_converted:
-            p = r["epistemic"]["pramana_primary"]
+            ets = r["epistemic"]["evidence_types_all"]
             v = r["verdict"]["label"]
-            if v == Verdict.SUPPORTED.value and p == Pramana.PERCEPTION.value:
+            is_absence = EvidenceType.NON_APPREHENSION.value in ets
+            if (
+                v == Verdict.SUPPORTED.value
+                and EvidenceType.PERCEPTION.value in ets
+                and not is_absence
+            ):
                 stances = [e.get("stance") for e in r.get("evidence") or []]
                 assert EvidenceStance.SUPPORTS.value in stances, (
                     f"{r['id']}: perception+supported but no supports stance"
@@ -129,7 +166,7 @@ class TestAI2ThorConverter:
         absence = [
             r
             for r in ai2thor_converted
-            if r["epistemic"]["pramana_primary"] == Pramana.NON_APPREHENSION.value
+            if EvidenceType.NON_APPREHENSION.value in r["epistemic"]["evidence_types_all"]
         ]
         assert len(absence) >= 1, "No absence claims in fixture"
         for r in absence:
@@ -166,8 +203,8 @@ class TestAI2ThorConverter:
 
     def test_reasoning_strategy_set_on_non_absence(self, ai2thor_converted):
         for r in ai2thor_converted:
-            p = r["epistemic"]["pramana_primary"]
-            if p != Pramana.NON_APPREHENSION.value:
+            ets = r["epistemic"]["evidence_types_all"]
+            if EvidenceType.NON_APPREHENSION.value not in ets:
                 reasoning = r.get("reasoning") or {}
                 assert reasoning.get("structural") is not None, (
                     f"{r['id']}: non-absence record has no reasoning.structural"
