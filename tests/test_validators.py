@@ -15,7 +15,7 @@ from src.adapters.ai2thor.validator import AI2ThorValidator
 from src.adapters.averitec.converter import AveritecConverter
 from src.adapters.averitec.validator import AveritecValidator
 from src.core.claims.claim_validator import AdvancedClaimValidator
-from src.core.claims.labels import EvidenceStance, EvidenceType, Pramana, Verdict
+from src.core.claims.labels import EvidenceStance, EvidenceType, Verdict
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -253,7 +253,7 @@ class TestAveritecValidator:
     def test_non_apprehension_pramana_is_flagged(self):
         val = AveritecValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.NON_APPREHENSION.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
             "verdict": {"label": Verdict.SUPPORTED.value},
             "evidence": [{"stance": EvidenceStance.ABSENT.value, "text": "some text"}],
             "claim_triples": None,
@@ -264,7 +264,7 @@ class TestAveritecValidator:
     def test_unexpected_claim_triples_is_flagged(self):
         val = AveritecValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.TESTIMONY.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.TESTIMONY.value]},
             "verdict": {"label": Verdict.SUPPORTED.value},
             "evidence": [{"stance": EvidenceStance.SUPPORTS.value, "text": "text"}],
             "claim_triples": [["s", "p", "o"]],
@@ -275,7 +275,7 @@ class TestAveritecValidator:
     def test_conflicting_evidence_all_supports_is_flagged(self):
         val = AveritecValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.TESTIMONY.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.TESTIMONY.value]},
             "verdict": {"label": Verdict.CONFLICTING_EVIDENCE.value},
             "evidence": [
                 {"stance": EvidenceStance.SUPPORTS.value, "text": "text"},
@@ -289,7 +289,7 @@ class TestAveritecValidator:
     def test_all_text_null_is_flagged(self):
         val = AveritecValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.TESTIMONY.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.TESTIMONY.value]},
             "verdict": {"label": Verdict.SUPPORTED.value},
             "evidence": [{"stance": EvidenceStance.SUPPORTS.value, "text": None}],
             "claim_triples": None,
@@ -300,7 +300,7 @@ class TestAveritecValidator:
     def test_no_evidence_is_flagged(self):
         val = AveritecValidator()
         bad = {
-            "epistemic": {"pramana_primary": Pramana.TESTIMONY.value},
+            "epistemic": {"evidence_types_all": [EvidenceType.TESTIMONY.value]},
             "verdict": {"label": Verdict.SUPPORTED.value},
             "evidence": [],
             "claim_triples": None,

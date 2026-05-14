@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from src.core.ports.dataset.converter import DatasetConverter
 from src.core.claims.labels import (
-    combine_pramana_weights,
     EvidenceStance,
-    Pramana,
+    EvidenceType,
     Verdict,
+    resolve_source_id,
 )
 from src.utils.time import utc_now_iso
 
@@ -29,49 +30,35 @@ _ANSWER_TYPE_MAP = {
     "unanswerable": "unanswerable",
 }
 
-# ── Heuristic modality buckets ────────────────────────────────────────────────
-# Pratyaksham (Perception, 0.85–0.95): direct sensory evidence — image/video/audio
-# embedded in AVeriTeC answers (rare but possible for media fact-checks).
+# Perceptual modalities → evidence_type = ["perception"]
+# No inference added by default — perceptual evidence is direct observation.
+# Inference is added by the abstractive multi-source post-pass if warranted.
 _PERCEPTUAL = {"image", "video", "audio"}
 
-# Shabda (Testimony, 0.80–0.90): textual sources — web pages, PDFs, tables.
-# This is the dominant evidence type in AVeriTeC.
+# Textual modalities → testimony base (web_table also gets comparison_analogy)
 _TEXTUAL = {"web_text", "pdf", "web_table", "other"}
 
-# ── Heuristic signal: Upamanam (Comparison, 0.70–0.80) ───────────────────────
-# Triggered when the answer text contains numerical/statistical comparison cues
-# (%, rankings, GDP, magnitudes). Kept narrow to avoid false positives.
+# fact_checking_strategies → evidence_type enrichment for all textual items
+_STRATEGY_EVIDENCE_TYPE_MAP: dict[str, str] = {
+    "numerical comparison": EvidenceType.COMPARISON_ANALOGY.value,
+    "consultation": EvidenceType.INFERENCE.value,
+}
+
+# Numeric/statistical comparison cue — triggers comparison_analogy evidence type
 _NUMERIC_CUES = re.compile(
     r"\b(%|percent|percentage|largest|smallest|rank|gdp|million|billion|trillion)\b",
     re.IGNORECASE,
 )
 
-# ── Priority order for pramana_primary selection ──────────────────────────────
-# Sorted by specificity/distinctiveness, NOT by confidence weight.
-# NON_APPREHENSION is always excluded — confirmed absence cannot be established
-# from web text; restricted to AI2THOR closed-world records only.
-# Testimony is listed last despite a higher weight (0.80) than
-# comparison_analogy (0.65) or inference (0.55) — it is the default fallback,
-# and the more specific types are more informative as the primary label.
-_DEFAULT_PRIMARY_ORDER: list[Pramana] = [
-    Pramana.PERCEPTION,
-    Pramana.COMPARISON_ANALOGY,
-    Pramana.INFERENCE,
-    Pramana.TESTIMONY,
-    # POSTULATION_DERIVATION excluded per ADR-011 (no trigger rules; insufficient training samples)
-]
-
-
-def _build_primary_order(custom_order: list[str] | None = None) -> list[Pramana]:
-    """Return the pramana priority list for pramana_primary selection.
-
-    custom_order: list of pramana string values from config, highest priority
-    first. NON_APPREHENSION is always stripped — not valid for web evidence.
-    When custom_order is None the module default is returned.
-    """
-    if custom_order:
-        return [Pramana(p) for p in custom_order if p != Pramana.NON_APPREHENSION.value]
-    return list(_DEFAULT_PRIMARY_ORDER)
+# Inference strength per answer_type (IS rubric from ADR-019)
+# boolean/extractive → direct lookup (0.8), abstractive → synthesised (0.6),
+# unanswerable → no real evidence (0.0)
+_IS_FROM_ANSWER_TYPE: dict[str, float] = {
+    "boolean": 0.8,
+    "extractive": 0.8,
+    "abstractive": 0.6,
+    "unanswerable": 0.0,
+}
 
 
 def _normalize_label(label) -> Verdict:
@@ -89,18 +76,15 @@ def _medium_to_modality(
     answer_type: str = "",
 ) -> str:
     if not source_medium:
-        # Empty medium: unanswerable if the annotator found nothing; else other
         return "unanswerable" if answer_type == "unanswerable" else "other"
 
     sm_raw = str(source_medium).strip()
     sm = sm_raw.lower().replace(" ", "_")
 
     if sm == "metadata":
-        # Annotator's own knowledge or derived calculation — not a web source
         return "annotator_knowledge"
 
     if sm == "other":
-        # AVeriTeC "Other": calculator/search tool with a real URL → web_text
         return "web_text" if source_url else "other"
 
     for key, mod in (
@@ -119,92 +103,7 @@ def _medium_to_modality(
     return "other"
 
 
-def _infer_pramana(
-    modalities: set[str],
-    src_urls: set[str],
-    answer_types: list[str],
-    answers_text: str,
-    weights: dict | None = None,
-    primary_order: list[Pramana] | None = None,
-) -> tuple[str, list[str], float]:
-    """
-    Heuristic Pramana assignment for AVeriTeC records.
-
-    Rules (from research proposal §5, Pramana table):
-
-    PERCEPTION (Pratyaksham, 0.90):
-        Any evidence item uses a perceptual modality (image, video, audio).
-        Rare in AVeriTeC but present in media/image fact-checks.
-
-    TESTIMONY (Shabda, 0.85):
-        Any evidence item uses a textual source (web_text, pdf, web_table).
-        Default for almost all AVeriTeC records — falls back if no other rule fires.
-
-    COMPARISON_ANALOGY (Upamanam, 0.75):
-        Answer text contains numerical/statistical comparison cues (%, GDP, rank…).
-        Captures claims verified by comparing magnitudes against known benchmarks.
-
-    INFERENCE (Anumanam, 0.70):
-        ≥2 abstractive answers AND ≥2 distinct source URLs. Abstractive answers
-        require synthesising information across sources — indicative of multi-hop
-        reasoning rather than direct lookup.
-        Threshold avoids over-assigning inference to simple single-source lookups.
-
-    NON_APPREHENSION (Anupalabdhi): deliberately excluded.
-        Confirmed absence cannot be established from web text alone;
-        this Pramana is restricted to AI2THOR records where the simulator
-        provides a complete, closed-world state.
-
-    POSTULATION_DERIVATION (Arthapatti): no trigger rules yet (status: Limited/Future).
-
-    When multiple types apply, _PRIMARY_ORDER selects the highest-confidence one
-    as pramana_primary; all detected types are recorded in pramana_all.
-    """
-    proof_types: set[Pramana] = set()
-
-    # Rule 1 — Perception: direct sensory/media evidence
-    if modalities & _PERCEPTUAL:
-        proof_types.add(Pramana.PERCEPTION)
-
-    # Rule 2 — Testimony: any textual source (dominant in AVeriTeC)
-    if modalities & _TEXTUAL:
-        proof_types.add(Pramana.TESTIMONY)
-
-    # Rule 3 — Comparison: numerical/statistical cues in answer text
-    if _NUMERIC_CUES.search(answers_text):
-        proof_types.add(Pramana.COMPARISON_ANALOGY)
-
-    # Rule 4 — Inference: multi-source abstractive synthesis
-    # Threshold: >=1 abstractive answer AND >=2 distinct URLs.
-    # The URL guard prevents single-source lookups from being mis-labelled.
-    # Lowered from >=2 abstractive: one synthesised answer across multiple sources
-    # is genuine inference — the strict double requirement excluded too many records.
-    n_abstractive = sum(1 for t in answer_types if t == "abstractive")
-    if n_abstractive >= 1 and len(src_urls) >= 2:
-        proof_types.add(Pramana.INFERENCE)
-
-    # Fallback: pure-textual records with no other signal → Testimony
-    if not proof_types:
-        proof_types.add(Pramana.TESTIMONY)
-
-    _order = primary_order if primary_order is not None else _DEFAULT_PRIMARY_ORDER
-    sorted_types = sorted(
-        proof_types,
-        key=lambda p: _order.index(p) if p in _order else 99,
-    )
-    primary = sorted_types[0]
-    weight = combine_pramana_weights([p.value for p in sorted_types], weights)
-    return primary.value, [p.value for p in sorted_types], weight
-
-
 def _verdict_to_stance(label: Verdict) -> EvidenceStance | None:
-    """
-    Map verdict to per-evidence stance.
-
-    For supported/refuted we know all evidence points one way — AVeriTeC fact-checkers
-    cite only the decisive evidence. For conflicting/not_enough we cannot assign a
-    per-item stance without per-answer annotation, so we leave it null.
-    """
     if label == Verdict.SUPPORTED:
         return EvidenceStance.SUPPORTS
     if label == Verdict.REFUTED:
@@ -212,26 +111,52 @@ def _verdict_to_stance(label: Verdict) -> EvidenceStance | None:
     return None
 
 
-class AveritecConverter(DatasetConverter):
-    """Converts AVeriTeC JSON records to unified v2.0 JSONL."""
+def _infer_evidence_types_basic(modality: str, answer_type: str, answer_text: str) -> list[str]:
+    """Determine base evidence_types for one AVeriTeC evidence item.
 
-    def __init__(self, epistemic_config: dict | None = None):
+    web_table gets comparison_analogy + testimony (tabular data implies numerical
+    comparison); all other textual modalities get testimony as base.
+    Inference from multi-source synthesis and fact_checking_strategies are added
+    as post-processing steps in AveritecConverter._build_evidence.
+    """
+    if modality in _PERCEPTUAL:
+        return [EvidenceType.PERCEPTION.value]
+    if answer_type == "unanswerable":
+        return []
+    if modality == "web_table":
+        # Tabular data inherently supports comparison_analogy in addition to testimony
+        return [EvidenceType.COMPARISON_ANALOGY.value, EvidenceType.TESTIMONY.value]
+    types = [EvidenceType.TESTIMONY.value]
+    if _NUMERIC_CUES.search(answer_text):
+        types.append(EvidenceType.COMPARISON_ANALOGY.value)
+    return types
+
+
+def _resolve_evidence_source(source_url: str, modality: str, registry: dict) -> str:
+    """Parse source_url → domain → registry source_id."""
+    if modality == "annotator_knowledge":
+        return "annotator_knowledge"
+    if not source_url:
+        return "unknown_web"
+    try:
+        parsed = urlparse(source_url)
+        domain = (parsed.netloc or "").lower().removeprefix("www.")
+        if not domain:
+            return "unknown_web"
+        return resolve_source_id(domain, modality, registry)
+    except Exception:
+        return "unknown_web"
+
+
+class AveritecConverter(DatasetConverter):
+    """Converts AVeriTeC JSON records to unified v3.0 JSONL."""
+
+    def __init__(self, registry: dict | None = None):
         """
-        epistemic_config: optional dict loaded from the `epistemic:` YAML section.
-          confidence_weights:    dict[str, float] — override per-pramana weights
-          pramana_priority_order: list[str]       — override primary selection order
-        Omit (or pass None) to use the defaults from labels.py and _DEFAULT_PRIMARY_ORDER.
+        registry: source trust registry dict {source_id: record} for source_id resolution.
+                  If None, resolve_source_id falls back to TLD heuristics and 'unknown_web'.
         """
-        cfg = epistemic_config or {}
-        raw_weights = cfg.get("confidence_weights")
-        self._weights: dict | None = (
-            {Pramana(k): float(v) for k, v in raw_weights.items()}
-            if raw_weights
-            else None
-        )
-        self._primary_order: list[Pramana] = _build_primary_order(
-            cfg.get("pramana_priority_order")
-        )
+        self._registry: dict = registry or {}
 
     @property
     def dataset_name(self) -> str:
@@ -246,25 +171,12 @@ class AveritecConverter(DatasetConverter):
             raise ValueError(f"Expected a JSON list at top-level in {in_path}")
         yield from enumerate(data, start=1)
 
-    def infer_pramana(self, raw_record: dict) -> tuple[str, list[str], float]:
-        evidence_items = self._build_evidence(raw_record, "placeholder")
-        modalities = {e["modality"] for e in evidence_items}
-        src_urls = {e["source_url"] for e in evidence_items if e.get("source_url")}
-        answer_types = [e["_answer_type"] for e in evidence_items]
-        answers_text = " ".join(e["_answer_text"] for e in evidence_items)
-        return _infer_pramana(
-            modalities,
-            src_urls,
-            answer_types,
-            answers_text,
-            weights=self._weights,
-            primary_order=self._primary_order,
-        )
-
     def _build_evidence(self, rec: dict, rec_id: str) -> list[dict]:
-        """Build evidence dicts (with private _answer_* keys for pramana inference)."""
         label = _normalize_label(rec.get("label"))
         stance = _verdict_to_stance(label)
+        strategies = [
+            s.strip().lower() for s in (rec.get("fact_checking_strategies") or [])
+        ]
 
         items = []
         for qi, q in enumerate(rec.get("questions") or [], start=1):
@@ -281,6 +193,10 @@ class AveritecConverter(DatasetConverter):
                 )
                 text = f"{qtext} {ans_text}".strip() if qtext else ans_text
 
+                source_id = _resolve_evidence_source(source_url, modality, self._registry)
+                is_ = _IS_FROM_ANSWER_TYPE.get(ans_type, 0.6)
+                evidence_types = _infer_evidence_types_basic(modality, ans_type, ans_text)
+
                 items.append(
                     {
                         "evidence_id": evidence_id,
@@ -289,12 +205,36 @@ class AveritecConverter(DatasetConverter):
                         "triple_source": None,
                         "modality": modality,
                         "stance": stance.value if stance else None,
+                        "source_id": source_id,
+                        "evidence_types": evidence_types,
+                        "inference_strength": is_,
                         "source_url": a.get("source_url"),
-                        # Private keys stripped before output
+                        # Private key stripped before output
                         "_answer_type": ans_type,
-                        "_answer_text": ans_text,
                     }
                 )
+
+        # Post-pass 1: add inference to abstractive items when claim has multi-source evidence
+        src_urls = {e["source_url"] for e in items if e.get("source_url")}
+        if len(src_urls) >= 2:
+            for item in items:
+                if item["_answer_type"] == "abstractive":
+                    if EvidenceType.INFERENCE.value not in item["evidence_types"]:
+                        item["evidence_types"].append(EvidenceType.INFERENCE.value)
+
+        # Post-pass 2: enrich evidence_types from claim-level fact_checking_strategies.
+        # Only applied to textual (non-perceptual, non-unanswerable) items so that
+        # strategy signals don't override direct sensory evidence type assignments.
+        for strategy in strategies:
+            et_to_add = _STRATEGY_EVIDENCE_TYPE_MAP.get(strategy)
+            if not et_to_add:
+                continue
+            for item in items:
+                modality = item.get("modality", "")
+                if modality not in _PERCEPTUAL and item["evidence_types"]:
+                    if et_to_add not in item["evidence_types"]:
+                        item["evidence_types"].append(et_to_add)
+
         return items
 
     def convert_one(self, raw_record: dict, rec_id: str) -> dict:
@@ -304,22 +244,9 @@ class AveritecConverter(DatasetConverter):
 
         evidence_raw = self._build_evidence(raw_record, oid)
 
-        modalities = {e["modality"] for e in evidence_raw}
-        src_urls = {e["source_url"] for e in evidence_raw if e.get("source_url")}
-        answer_types = [e["_answer_type"] for e in evidence_raw]
-        answers_text = " ".join(e["_answer_text"] for e in evidence_raw)
-
-        pramana_primary, pramana_all, confidence_weight = _infer_pramana(
-            modalities,
-            src_urls,
-            answer_types,
-            answers_text,
-            weights=self._weights,
-            primary_order=self._primary_order,
-        )
-
         evidence_out = [
-            {k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_raw
+            {k: v for k, v in e.items() if not k.startswith("_")}
+            for e in evidence_raw
         ]
 
         if not evidence_out:
@@ -331,22 +258,28 @@ class AveritecConverter(DatasetConverter):
                     "triple_source": None,
                     "modality": "other",
                     "stance": None,
+                    "source_id": "unknown_web",
+                    "evidence_types": [],
+                    "inference_strength": 0.0,
                     "source_url": None,
                 }
             ]
 
+        evidence_types_all = sorted(
+            {t for e in evidence_out for t in e.get("evidence_types", [])}
+        )
+
         return {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "id": oid,
             "claim": claim_text,
             "verdict": {
                 "label": label.value,
                 "justification": raw_record.get("justification"),
+                "derivation_method": "annotated",
             },
             "epistemic": {
-                "pramana_primary": pramana_primary,
-                "pramana_all": pramana_all,
-                "confidence_weight": confidence_weight,
+                "evidence_types_all": evidence_types_all,
                 "assignment_method": "rule_based",
             },
             "claim_triples": None,
@@ -358,7 +291,7 @@ class AveritecConverter(DatasetConverter):
                 "context_id": "schlichtkrull2023averitec",
             },
             "meta": {
-                "schema_version": "2.0",
+                "schema_version": "3.0",
                 "created_utc": utc_now_iso(),
             },
         }

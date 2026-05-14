@@ -87,6 +87,16 @@ _SOCIAL_MEDIA_DOMAINS: frozenset[str] = frozenset(
     }
 )
 
+# Compound TLDs that must be preserved as a unit (e.g. bbc.co.uk → bbc, not bbc_co)
+_COMPOUND_TLDS: frozenset[str] = frozenset({
+    "co.uk", "gov.uk", "ac.uk", "org.uk", "me.uk", "net.uk",
+    "co.in", "gov.in", "ac.in",
+    "co.za", "gov.za", "ac.za",
+    "gov.au", "com.au", "edu.au", "net.au", "org.au",
+    "gov.ng", "gov.gh", "gov.ke",
+    "gouv.fr",
+})
+
 
 # ---------------------------------------------------------------------------
 # EW_i computation
@@ -219,6 +229,16 @@ def load_source_trust_registry(path: str | Path) -> dict[str, dict]:
     return registry
 
 
+def make_source_id(domain: str, modality: str) -> str:
+    """Build the candidate registry key for a domain + modality pair (no registry needed).
+
+    Strips TLD so make_source_id("reuters.com", "web_text") → "reuters_web_text".
+    Use resolve_source_id for full fallback resolution including TLD heuristics.
+    """
+    domain = domain.lower().removeprefix("www.")
+    return f"{_normalise_domain(domain)}_{modality}"
+
+
 def resolve_source_id(domain: str, modality: str, registry: dict[str, dict]) -> str:
     """Resolve a domain + modality pair to a registry source_id.
 
@@ -297,6 +317,22 @@ def _product_complement(complements: list[float]) -> float:
 
 
 def _normalise_domain(domain: str) -> str:
+    """Strip TLD and convert to snake_case for registry key lookup.
+
+    reuters.com → reuters, wikipedia.org → wikipedia,
+    bbc.co.uk → bbc (compound TLD stripped), indiatoday.in → indiatoday.
+    """
+    parts = domain.split(".")
+    if len(parts) >= 3:
+        compound = ".".join(parts[-2:])
+        if compound in _COMPOUND_TLDS:
+            # Strip both TLD components (e.g. ".co.uk") → keep brand only
+            name = ".".join(parts[:-2])
+            return name.replace(".", "_").replace("-", "_")
+    if len(parts) >= 2:
+        # Strip single TLD: reuters.com → reuters
+        name = ".".join(parts[:-1])
+        return name.replace(".", "_").replace("-", "_")
     return domain.replace(".", "_").replace("-", "_")
 
 
@@ -308,20 +344,19 @@ def _strip_subdomain(domain: str) -> str:
 
 
 def _tld_heuristic(domain: str, modality: str) -> str | None:
+    """Return a registry source_id based on domain TLD pattern.
+
+    Maps to the actual registry keys: government_web_text, government_pdf,
+    academic_pdf, general_web_text.  Returns None for .org (too heterogeneous).
+    """
     gov_suffixes = (".gov", ".gov.uk", ".gov.au", ".gov.in", ".gov.za",
                     ".gov.ng", ".gov.gh", ".gov.ke", ".gouv.fr")
     edu_suffixes = (".edu", ".ac.uk", ".ac.in", ".ac.za", ".edu.au")
-    org_suffixes = (".org",)
 
     for s in gov_suffixes:
         if domain.endswith(s):
-            return f"tld_gov_{modality}" if f"tld_gov_{modality}" in (
-                "tld_gov_web_text", "tld_gov_pdf") else "tld_gov_web_text"
+            return "government_pdf" if modality == "pdf" else "government_web_text"
     for s in edu_suffixes:
         if domain.endswith(s):
-            return f"tld_edu_{modality}" if f"tld_edu_{modality}" in (
-                "tld_edu_web_text", "tld_edu_pdf") else "tld_edu_web_text"
-    for s in org_suffixes:
-        if domain.endswith(s):
-            return "tld_org_web_text"
+            return "academic_pdf" if modality == "pdf" else "general_web_text"
     return None

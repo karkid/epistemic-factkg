@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from src.adapters.ai2thor.converter import AI2ThorConverter
-from src.adapters.averitec.converter import AveritecConverter, _infer_pramana
+from src.adapters.averitec.converter import AveritecConverter, _infer_evidence_types_basic
 from src.core.claims.labels import (
     combine_pramana_weights,
     EvidenceStance,
@@ -222,7 +222,7 @@ class TestAveritecConverter:
 
     def test_schema_version(self, averitec_converted):
         for r in averitec_converted:
-            assert r["schema_version"] == "2.0"
+            assert r["schema_version"] == "3.0"
 
     def test_required_top_level_fields(self, averitec_converted):
         required = {
@@ -242,16 +242,23 @@ class TestAveritecConverter:
         for r in averitec_converted:
             assert r["verdict"]["label"] in valid
 
-    def test_pramana_is_enum_value(self, averitec_converted):
-        valid = {p.value for p in Pramana}
+    def test_verdict_has_derivation_method_annotated(self, averitec_converted):
         for r in averitec_converted:
-            assert r["epistemic"]["pramana_primary"] in valid
+            assert r["verdict"]["derivation_method"] == "annotated", (
+                f"{r['id']}: expected derivation_method=annotated"
+            )
 
-    def test_no_non_apprehension_pramana(self, averitec_converted):
+    def test_evidence_types_all_are_valid(self, averitec_converted):
+        valid = {p.value for p in EvidenceType}
         for r in averitec_converted:
-            assert (
-                r["epistemic"]["pramana_primary"] != Pramana.NON_APPREHENSION.value
-            ), f"AVeriTeC should never assign non_apprehension: {r['id']}"
+            for et in r["epistemic"]["evidence_types_all"]:
+                assert et in valid, f"{r['id']}: unexpected evidence_type {et!r}"
+
+    def test_no_non_apprehension_in_evidence_types(self, averitec_converted):
+        for r in averitec_converted:
+            assert EvidenceType.NON_APPREHENSION.value not in r["epistemic"]["evidence_types_all"], (
+                f"AVeriTeC should never have non_apprehension: {r['id']}"
+            )
 
     def test_claim_triples_is_null(self, averitec_converted):
         for r in averitec_converted:
@@ -303,43 +310,155 @@ class TestAveritecConverter:
             assert isinstance(r.get("evidence"), list)
             assert len(r["evidence"]) >= 1, f"{r['id']}: no evidence items"
 
-    def test_pramana_priority_perception_beats_testimony(self):
-        """When both video (perception) and web_text (testimony) are present,
-        pramana_primary must be perception."""
-        primary, all_p, _ = _infer_pramana(
-            {"video", "web_text"}, {"url1", "url2"}, ["extractive"], "text"
-        )
-        assert primary == Pramana.PERCEPTION.value
-        assert Pramana.TESTIMONY.value in all_p
+    def test_evidence_items_have_v3_fields(self, averitec_converted):
+        for r in averitec_converted:
+            for ev in r.get("evidence") or []:
+                assert "evidence_types" in ev, f"{r['id']}: missing evidence_types"
+                assert "source_id" in ev, f"{r['id']}: missing source_id"
+                assert "inference_strength" in ev, f"{r['id']}: missing inference_strength"
 
-    def test_pramana_inference_requires_one_abstractive_two_urls(self):
-        # 1 abstractive + 2 URLs — should be inference (threshold: >=1 abstractive, >=2 urls)
-        p1, _, _ = _infer_pramana(
-            {"web_text"}, {"url1", "url2"}, ["abstractive"], "text"
-        )
-        assert p1 == Pramana.INFERENCE.value
+    def test_evidence_types_basic_perception_from_perceptual_modality(self):
+        """Image/video/audio modalities → evidence_type=perception only (no inference added)."""
+        assert _infer_evidence_types_basic("video", "extractive", "text") == [
+            EvidenceType.PERCEPTION.value
+        ]
+        assert _infer_evidence_types_basic("image", "extractive", "text") == [
+            EvidenceType.PERCEPTION.value
+        ]
 
-        # 2 abstractive + 2 URLs — still inference
-        p2, _, _ = _infer_pramana(
-            {"web_text"}, {"url1", "url2"}, ["abstractive", "abstractive"], "text"
+    def test_evidence_types_basic_testimony_for_web_text(self):
+        assert EvidenceType.TESTIMONY.value in _infer_evidence_types_basic(
+            "web_text", "extractive", "plain text"
         )
-        assert p2 == Pramana.INFERENCE.value
 
-        # 1 abstractive + only 1 URL — NOT inference (URL guard prevents single-source)
-        p3, _, _ = _infer_pramana({"web_text"}, {"url1"}, ["abstractive"], "text")
-        assert p3 != Pramana.INFERENCE.value
+    def test_evidence_types_basic_web_table_gets_comparison_analogy(self):
+        """web_table modality → [comparison_analogy, testimony] per labeling guide."""
+        types = _infer_evidence_types_basic("web_table", "extractive", "some data")
+        assert EvidenceType.COMPARISON_ANALOGY.value in types
+        assert EvidenceType.TESTIMONY.value in types
+        assert EvidenceType.PERCEPTION.value not in types
 
-        # 0 abstractive + 2 URLs — NOT inference
-        p4, _, _ = _infer_pramana(
-            {"web_text"}, {"url1", "url2"}, ["extractive", "extractive"], "text"
+    def test_evidence_types_basic_comparison_analogy_on_numeric_cue(self):
+        types = _infer_evidence_types_basic("web_text", "extractive", "GDP grew by 50%")
+        assert EvidenceType.COMPARISON_ANALOGY.value in types
+        assert EvidenceType.TESTIMONY.value in types
+
+    def test_evidence_types_basic_unanswerable_returns_empty(self):
+        assert _infer_evidence_types_basic("web_text", "unanswerable", "") == []
+
+    def test_numerical_comparison_strategy_adds_comparison_analogy(self):
+        """fact_checking_strategies=['Numerical Comparison'] → comparison_analogy added."""
+        conv = AveritecConverter()
+        raw = {
+            "claim": "Country X has the highest GDP.",
+            "label": "supported",
+            "fact_checking_strategies": ["Numerical Comparison"],
+            "questions": [
+                {
+                    "question": "What is the GDP?",
+                    "answers": [
+                        {
+                            "answer": "GDP is 5 trillion.",
+                            "answer_type": "Extractive",
+                            "source_medium": "Web text",
+                            "source_url": "http://example.com",
+                        }
+                    ],
+                }
+            ],
+        }
+        record = conv.convert_one(raw, "test-strat-001")
+        ets = record["epistemic"]["evidence_types_all"]
+        assert EvidenceType.COMPARISON_ANALOGY.value in ets, f"Expected comparison_analogy: {ets}"
+
+    def test_consultation_strategy_adds_inference(self):
+        """fact_checking_strategies=['Consultation'] → inference added to textual items."""
+        conv = AveritecConverter()
+        raw = {
+            "claim": "The expert confirmed the finding.",
+            "label": "supported",
+            "fact_checking_strategies": ["Consultation"],
+            "questions": [
+                {
+                    "question": "What did the expert say?",
+                    "answers": [
+                        {
+                            "answer": "Expert confirmed this is accurate.",
+                            "answer_type": "Extractive",
+                            "source_medium": "Web text",
+                            "source_url": "http://example.com",
+                        }
+                    ],
+                }
+            ],
+        }
+        record = conv.convert_one(raw, "test-strat-002")
+        ets = record["epistemic"]["evidence_types_all"]
+        assert EvidenceType.INFERENCE.value in ets, f"Expected inference: {ets}"
+
+    def test_strategy_enrichment_does_not_apply_to_perceptual_items(self):
+        """Perceptual evidence (video) keeps only perception even with Numerical Comparison strategy."""
+        conv = AveritecConverter()
+        raw = {
+            "claim": "The video shows the correct number.",
+            "label": "supported",
+            "fact_checking_strategies": ["Numerical Comparison"],
+            "questions": [
+                {
+                    "question": "What does the video show?",
+                    "answers": [
+                        {
+                            "answer": "The number shown is 42.",
+                            "answer_type": "Extractive",
+                            "source_medium": "Video",
+                            "source_url": "http://example.com/video",
+                        }
+                    ],
+                }
+            ],
+        }
+        record = conv.convert_one(raw, "test-strat-003")
+        ev = record["evidence"][0]
+        assert ev["evidence_types"] == [EvidenceType.PERCEPTION.value], (
+            f"Perceptual item should not be enriched: {ev['evidence_types']}"
         )
-        assert p4 != Pramana.INFERENCE.value
 
-    def test_pramana_numeric_cue_triggers_comparison_analogy(self):
-        p, _, _ = _infer_pramana(
-            {"web_text"}, {"url1"}, ["extractive"], "GDP is 50% higher"
+    def test_inference_added_for_abstractive_multi_source(self):
+        """Abstractive items with >=2 distinct source URLs get inference type added."""
+        conv = AveritecConverter()
+        raw = {
+            "claim": "The economy grew significantly.",
+            "label": "supported",
+            "questions": [
+                {
+                    "question": "By how much?",
+                    "answers": [
+                        {
+                            "answer": "GDP rose 5% according to two different agencies.",
+                            "answer_type": "Abstractive",
+                            "source_medium": "Web text",
+                            "source_url": "http://source1.com/report",
+                        }
+                    ],
+                },
+                {
+                    "question": "Is this confirmed?",
+                    "answers": [
+                        {
+                            "answer": "Yes, confirmed by the central bank.",
+                            "answer_type": "Abstractive",
+                            "source_medium": "Web text",
+                            "source_url": "http://source2.org/data",
+                        }
+                    ],
+                },
+            ],
+        }
+        record = conv.convert_one(raw, "test-inf-001")
+        ev_types_all = record["epistemic"]["evidence_types_all"]
+        assert EvidenceType.INFERENCE.value in ev_types_all, (
+            f"Expected inference in evidence_types_all: {ev_types_all}"
         )
-        assert p == Pramana.COMPARISON_ANALOGY.value
 
 
 # ---------------------------------------------------------------------------
@@ -374,61 +493,23 @@ class TestCombinePramanaWeights:
         w = combine_pramana_weights(["perception", "testimony"], custom)
         assert abs(w - 0.75) < 1e-4  # 1 - 0.5*0.5
 
-    def test_averitec_multi_pramana_higher_than_single(self):
-        """Multi-pramana record (video + web_text) gets higher weight than text only."""
-        _, _, w_single = _infer_pramana({"web_text"}, {"u1"}, ["extractive"], "text")
-        _, _, w_multi = _infer_pramana(
-            {"video", "web_text"}, {"u1"}, ["extractive"], "text"
-        )
-        assert w_multi > w_single
-
-    def test_custom_epistemic_config_applied_by_converter(self):
-        """AveritecConverter.__init__ with epistemic_config uses overridden weights."""
-        conv_default = AveritecConverter()
-        conv_custom = AveritecConverter(
-            epistemic_config={"confidence_weights": {"testimony": 0.50}}
-        )
-        rec = {"claim": "test", "label": "supported", "questions": []}
-        _, _, w_default = conv_default.infer_pramana(rec)
-        _, _, w_custom = conv_custom.infer_pramana(rec)
-        # Default testimony weight is 0.80; custom is 0.50 — custom must be lower
-        assert w_custom < w_default
-
-    def test_infer_pramana_perception_plus_testimony_exact_weight(self):
-        """video + web_text → perception + testimony.
-        1 - (1-0.95)*(1-0.80) = 1 - 0.05*0.20 = 0.99
-        """
-        primary, all_p, w = _infer_pramana(
-            {"video", "web_text"}, {"u1"}, ["extractive"], "plain text"
-        )
-        assert primary == Pramana.PERCEPTION.value
-        assert Pramana.TESTIMONY.value in all_p
+    def test_perception_plus_testimony_exact_weight(self):
+        # 1 - (1-0.95)*(1-0.80) = 1 - 0.05*0.20 = 0.99
+        w = combine_pramana_weights(["perception", "testimony"])
         assert abs(w - 0.99) < 1e-4
 
-    def test_infer_pramana_testimony_plus_comparison_exact_weight(self):
-        """web_text + numeric cue → comparison_analogy + testimony.
-        1 - (1-0.65)*(1-0.80) = 1 - 0.35*0.20 = 0.93
-        """
-        primary, all_p, w = _infer_pramana(
-            {"web_text"}, {"u1"}, ["extractive"], "GDP is 50% higher"
-        )
-        assert primary == Pramana.COMPARISON_ANALOGY.value
-        assert Pramana.TESTIMONY.value in all_p
+    def test_comparison_analogy_plus_testimony_exact_weight(self):
+        # 1 - (1-0.65)*(1-0.80) = 1 - 0.35*0.20 = 0.93
+        w = combine_pramana_weights(["comparison_analogy", "testimony"])
         assert abs(w - 0.93) < 1e-4
 
-    def test_infer_pramana_three_types_exact_weight(self):
-        """video + web_text + numeric cue → perception + comparison_analogy + testimony.
-        1 - (1-0.95)*(1-0.65)*(1-0.80) = 1 - 0.05*0.35*0.20 = 1 - 0.0035 = 0.9965
-        """
-        primary, all_p, w = _infer_pramana(
-            {"video", "web_text"}, {"u1"}, ["extractive"], "GDP is 50% higher"
-        )
-        assert primary == Pramana.PERCEPTION.value
-        assert len(all_p) == 3
+    def test_three_types_exact_weight(self):
+        # 1 - (1-0.95)*(1-0.65)*(1-0.80) = 1 - 0.05*0.35*0.20 = 0.9965
+        w = combine_pramana_weights(["perception", "comparison_analogy", "testimony"])
         assert abs(w - 0.9965) < 1e-4
 
-    def test_convert_one_multi_pramana_weight_in_output_record(self):
-        """AveritecConverter.convert_one sets confidence_weight for comparison_analogy + testimony."""
+    def test_convert_one_evidence_types_all_for_numeric_claim(self):
+        """AveritecConverter.convert_one sets evidence_types_all for comparison_analogy + testimony."""
         conv = AveritecConverter()
         raw = {
             "claim": "GDP grew by 50 percent last year.",
@@ -448,9 +529,6 @@ class TestCombinePramanaWeights:
             ],
         }
         record = conv.convert_one(raw, "test-multi-001")
-        w = record["epistemic"]["confidence_weight"]
-        primary = record["epistemic"]["pramana_primary"]
-        all_p = record["epistemic"]["pramana_all"]
-        assert primary == Pramana.COMPARISON_ANALOGY.value
-        assert Pramana.TESTIMONY.value in all_p
-        assert abs(w - 0.93) < 1e-4
+        ets = record["epistemic"]["evidence_types_all"]
+        assert EvidenceType.COMPARISON_ANALOGY.value in ets
+        assert EvidenceType.TESTIMONY.value in ets

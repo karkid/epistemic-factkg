@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from src.core.ports.dataset.validator import DatasetValidator
-from src.core.claims.labels import EvidenceStance, Verdict
+from src.core.claims.labels import EvidenceStance, EvidenceType, Verdict
 
-_VALID_AVERITEC_PRAMANAS = {
-    "perception",
-    "testimony",
-    "comparison_analogy",
-    "inference",
-    "postulation_derivation",
+_VALID_AVERITEC_EVIDENCE_TYPES = {
+    EvidenceType.PERCEPTION.value,
+    EvidenceType.TESTIMONY.value,
+    EvidenceType.COMPARISON_ANALOGY.value,
+    EvidenceType.INFERENCE.value,
+    EvidenceType.POSTULATION_DERIVATION.value,
 }
 
 
 class AveritecValidator(DatasetValidator):
-    """AVeriTeC-specific consistency checks on unified v2.0 records."""
+    """AVeriTeC-specific consistency checks on unified v3.0 records."""
 
     @property
     def dataset_name(self) -> str:
@@ -23,7 +23,7 @@ class AveritecValidator(DatasetValidator):
         msgs = []
         verdict_label = (record.get("verdict") or {}).get("label")
         evidence = record.get("evidence") or []
-        pramana = (record.get("epistemic") or {}).get("pramana_primary")
+        evidence_types_all = (record.get("epistemic") or {}).get("evidence_types_all", [])
 
         if not evidence:
             msgs.append("AVeriTeC record has no evidence items.")
@@ -46,14 +46,11 @@ class AveritecValidator(DatasetValidator):
             )
 
         # non_apprehension is invalid for AVeriTeC — web text cannot confirm absence
-        if pramana == "non_apprehension":
+        if EvidenceType.NON_APPREHENSION.value in evidence_types_all:
             msgs.append(
-                "AVeriTeC record has pramana=non_apprehension, which is invalid "
+                "AVeriTeC record has non_apprehension evidence type, which is invalid "
                 "for web-sourced evidence — confirmed absence requires a closed-world state."
             )
-
-        if pramana and pramana not in _VALID_AVERITEC_PRAMANAS:
-            msgs.append(f"AVeriTeC record has unexpected pramana_primary: {pramana!r}.")
 
         if verdict_label == Verdict.CONFLICTING_EVIDENCE:
             stances = {e.get("stance") for e in evidence if e.get("stance")}
@@ -68,7 +65,6 @@ class AveritecValidator(DatasetValidator):
                     "expected mixed stances."
                 )
 
-        # Evidence text coverage — all-null text means no textual content for GNN
         if evidence and all(e.get("text") is None for e in evidence):
             msgs.append(
                 "AVeriTeC record has no textual evidence content (all evidence.text is null)."
