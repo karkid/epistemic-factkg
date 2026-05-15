@@ -1,4 +1,4 @@
-# ADR-009: Floorplan-Based Train/Dev/Test Split
+# ADR-003: Floorplan-Based Train/Dev/Test Split
 
 ## Status
 

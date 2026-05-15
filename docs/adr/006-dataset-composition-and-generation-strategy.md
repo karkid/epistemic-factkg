@@ -1,8 +1,8 @@
-# ADR-012: Dataset Composition and Generation Strategy
+# ADR-006: Dataset Composition and Generation Strategy
 
 ## Status
 
-Accepted (revised after pipeline calibration; updated in v3.0 to add synthetic third source — see ADR-022, ADR-023)
+Accepted (revised after pipeline calibration; updated in v3.0 to add synthetic third source — see ADR-012, ADR-013)
 
 ## Context
 
@@ -10,7 +10,7 @@ Before Phase 4 (model building), the training dataset composition must be fixed.
 
 - **AI2THOR** — synthetic, generated on demand, perception-grounded, closed-world. Claim count is fully controllable.
 - **AVeriTeC** — real-world, pre-existing, text-based, web evidence. Fixed pool: train=3,068 + dev=500 = **3,568 total** (original ~4,250 estimate was optimistic).
-- **Synthetic (LLM/template-based)** — fictional shortcut-breaking claims generated to break the stance→verdict shortcut. See ADR-022 and ADR-023.
+- **Synthetic (LLM/template-based)** — fictional shortcut-breaking claims generated to break the stance→verdict shortcut. See ADR-012 and ADR-013.
 
 Three decisions needed:
 
@@ -39,7 +39,7 @@ If AI2THOR and AVeriTeC contribute equally (~3,000 each), the model trains on as
 |---|---|---|
 | AI2THOR | ~1,800 | Epistemic anchor: provides high-confidence perception and non_apprehension ground truth; real RDF triples |
 | AVeriTeC | 3,568 | Real-world target domain; full dataset (train=3,068 + dev=500) — ceiling hit |
-| Synthetic | ~1,000 | Shortcut-breaking: same stance → different verdict based on epistemic reliability (ADR-022) |
+| Synthetic | ~1,000 | Shortcut-breaking: same stance → different verdict based on epistemic reliability (ADR-012) |
 
 **AI2THOR generation targets (10 scenes, per-context counts in `config.yaml`):**
 
@@ -62,7 +62,7 @@ If AI2THOR and AVeriTeC contribute equally (~3,000 each), the model trains on as
 | `non_apprehension` | ~750 | — | ~750 | ~14% |
 | `inference` | — | ~550–650** | ~600 | ~11% |
 | `comparison_analogy` | — | ~627 | ~627 | ~12% |
-| `postulation_derivation` | — | — | 0 | excluded (see ADR-011) |
+| `postulation_derivation` | — | — | 0 | excluded (see ADR-005) |
 
 *AI2THOR perception = 600 (200 per type × 3 types, including corruption pairs). AVeriTeC image/video/audio fact-checks contribute ~340 additional perception records — empirically observed, not initially anticipated.
 
@@ -86,4 +86,4 @@ If AI2THOR and AVeriTeC contribute equally (~3,000 each), the model trains on as
 - `comparison_analogy` and `non_apprehension` have no AVeriTeC contribution — they are entirely AI2THOR-sourced, making the model dependent on simulation quality for these classes
 
 **Implementation note:**
-Generation targets are configured in `configs/config.yaml` under `ai2thor.generation` (per-type counts: `n_one_hop`, `n_conjunction`, `n_negation`, `n_absence`). The `just build` command reads these values automatically; CLI overrides are available. `just filter` applies ADR-011 exclusion. `just validate-training` checks the resulting distribution. The corruption doubling effect must be accounted for when setting `n_one_hop`/`n_conjunction`/`n_negation` — effective perception yield = `n × 2 × n_scenes`.
+Generation targets are configured in `configs/config.yaml` under `ai2thor.generation` (per-type counts: `n_one_hop`, `n_conjunction`, `n_negation`, `n_absence`). The `just build` command reads these values automatically; CLI overrides are available. `just filter` applies ADR-005 exclusion. `just validate-training` checks the resulting distribution. The corruption doubling effect must be accounted for when setting `n_one_hop`/`n_conjunction`/`n_negation` — effective perception yield = `n × 2 × n_scenes`.

@@ -1,4 +1,4 @@
-# ADR-003: Ports and Adapters (Hexagonal) Architecture
+# ADR-002: Ports and Adapters (Hexagonal) Architecture
 
 ## Status
 

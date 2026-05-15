@@ -1,4 +1,4 @@
-# ADR-017: Phase 6 Evaluation Protocol
+# ADR-008: Evaluation Protocol
 
 ## Status
 
@@ -24,7 +24,7 @@ Macro F1 is the primary metric, not accuracy.
 that always predicts "refuted" achieves 61% accuracy but macro F1 ≈ 0.25. Macro F1 computes
 F1 for each class independently and averages, weighting each class equally regardless of
 support. This makes the metric sensitive to performance on the rare `not_enough_evidence`
-class, which is central to the `non_apprehension` Pramana research contribution (ADR-005).
+class, which is central to the `non_apprehension` Pramana research contribution (ADR-001).
 
 Accuracy is reported alongside macro F1 for interpretability and comparison with prior work.
 
@@ -103,7 +103,7 @@ providing structural epistemic reasoning. Meaningful variation across Pramana ty
 of Pramana-specific structure contributing to predictions.
 
 **Negative results are still publishable.** If Run B ≈ Run A, this shows that the
-heuristic Pramana labels from ADR-007 do not add signal beyond what the sentence
+heuristic Pramana labels from ADR-001 do not add signal beyond what the sentence
 embeddings already capture — a meaningful finding about the limits of heuristic epistemic
 annotation at this dataset scale.
 

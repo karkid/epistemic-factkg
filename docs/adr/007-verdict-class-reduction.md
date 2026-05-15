@@ -1,4 +1,4 @@
-# ADR-015: Reduce Verdict Classes from 4 to 3 — Drop conflicting_evidence
+# ADR-007: Reduce Verdict Classes from 4 to 3 — Drop conflicting_evidence
 
 ## Status
 
@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-The unified schema defines 4 verdict labels: `supported`, `refuted`, `not_enough_evidence`, `conflicting_evidence`. The Phase 4 training dataset distribution after ADR-011 filtering is:
+The unified schema defines 4 verdict labels: `supported`, `refuted`, `not_enough_evidence`, `conflicting_evidence`. The Phase 4 training dataset distribution after ADR-005 filtering is:
 
 | Verdict | Count | % |
 |---|---|---|
@@ -20,7 +20,7 @@ Options considered for the 4→3 or 4→2 class reduction:
 | Option | Description | Problem |
 |---|---|---|
 | **Keep all 4 classes** | Train on all 4 verdict labels | `conflicting_evidence` at 4.3% (233 records) is insufficient for reliable GNN learning |
-| **Drop to binary** | Keep only supported/refuted | Loses `not_enough_evidence` — this class is the direct output of `non_apprehension` reasoning (ADR-005), central to the research contribution |
+| **Drop to binary** | Keep only supported/refuted | Loses `not_enough_evidence` — this class is the direct output of `non_apprehension` reasoning (ADR-001), central to the research contribution |
 | **Drop conflicting_evidence only** | 3-class: supported, refuted, not_enough_evidence | Removes weakest, least epistemically grounded class; preserves the full epistemic story |
 | **Rebuild with more supported claims** | Regenerate AI2THOR claims to balance classes | `claims_all.jsonl` is frozen (ADR build design); requires running the simulator; disproportionate effort for a distribution problem solvable by loss weighting |
 
@@ -55,7 +55,7 @@ Remaining class imbalance handled with **weighted `CrossEntropyLoss`** — inver
 
 **Why `not_enough_evidence` is kept:**
 - 317 records (5.9%) is small but above the threshold for meaningful class learning with loss weighting
-- This class is the direct verdict output of `non_apprehension` (Anupalabdhi) reasoning — it represents claims where absence of evidence in a closed world is itself a knowledge assertion (ADR-005)
+- This class is the direct verdict output of `non_apprehension` (Anupalabdhi) reasoning — it represents claims where absence of evidence in a closed world is itself a knowledge assertion (ADR-001)
 - Dropping it would eliminate the most epistemically interesting verdict class and undermine the research contribution
 
 **Why no rebuild:**

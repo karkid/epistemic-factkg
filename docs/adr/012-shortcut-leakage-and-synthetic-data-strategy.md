@@ -1,4 +1,4 @@
-# ADR-022: Shortcut Leakage and Synthetic Data Strategy
+# ADR-012: Shortcut Leakage and Synthetic Data Strategy
 
 ## Status
 
@@ -39,7 +39,7 @@ The key insight: epistemic reliability must vary independently of stance for the
 
 **Minimum floor:** ≥ 35% of synthetic records must be shortcut-breaking (stance and verdict point in different directions).
 
-**Implementation:** See ADR-023 for the generation pipeline. See ADR-024 for the grounded generation design.
+**Implementation:** See ADR-013 for the generation pipeline (merged with grounded generation design).
 
 ## Consequences
 

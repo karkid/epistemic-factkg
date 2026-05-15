@@ -1,4 +1,4 @@
-# ADR-011: Exclude postulation_derivation from GNN Training
+# ADR-005: Exclude postulation_derivation from GNN Training
 
 ## Status
 

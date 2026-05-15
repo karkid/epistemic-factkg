@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-12  
 **Status:** Complete — negative result, led to v3.0 dataset redesign  
-**ADRs:** 013, 014, 015, 016, 017
+**ADRs:** superseded/v0 (old GNN architecture + ablation design); see docs/superseded/v0/adr/
 
 ---
 
@@ -88,10 +88,10 @@ Runs A and B are identical: both collapse to predicting `refuted` (majority clas
 The fix requires training examples where **same evidence stance + different epistemic reliability → different verdict**. This forces the GNN to learn the EC formula rather than the stance-lookup rule.
 
 **Changes made:**
-- Added a third data source: **synthetic shortcut-breaking records** (ADR-022, ADR-023, ADR-024)
-- Moved to **per-evidence** epistemic modeling — `evidence_types`, `source_id`, `inference_strength`, `confidence_weight` on each evidence item (ADR-019)
-- Added per-evidence confidence formula: $EC_i = 1 - (1-ST_i)^{EW_i \times IS_i}$ where ST comes from an external source trust registry (ADR-018)
+- Added a third data source: **synthetic shortcut-breaking records** (ADR-012, ADR-013)
+- Moved to **per-evidence** epistemic modeling — `evidence_types`, `source_id`, `inference_strength`, `confidence_weight` on each evidence item (ADR-010)
+- Added per-evidence confidence formula: $EC_i = 1 - (1-ST_i)^{EW_i \times IS_i}$ where ST comes from an external source trust registry (ADR-009)
 - 15 templates generate ~62% shortcut-breaking records (supports→NEE, refutes→NEE, conflicting)
 - Schema bumped to **v3.0** — `pramana_primary` abolished; per-evidence multi-label `evidence_types`
 
-The next experiment will re-run the GNN pipeline on the v3.0 dataset. See `docs/adr/022-*.md` through `024-*.md` for the shortcut-breaking design.
+The next experiment trains the V1 neuro-symbolic GNN on the v3.0 dataset. See `docs/project-plan.md` for the implementation plan.

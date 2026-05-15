@@ -1,4 +1,4 @@
-# ADR-010: RDF/Turtle as Knowledge Graph Intermediate Format
+# ADR-004: RDF/Turtle as Knowledge Graph Intermediate Format
 
 ## Status
 

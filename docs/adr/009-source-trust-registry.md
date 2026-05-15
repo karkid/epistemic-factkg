@@ -1,4 +1,4 @@
-# ADR-018: Source Trust Registry
+# ADR-009: Source Trust Registry
 
 ## Status
 

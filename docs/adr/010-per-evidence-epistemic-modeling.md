@@ -1,4 +1,4 @@
-# ADR-019: Per-Evidence Epistemic Modeling
+# ADR-010: Per-Evidence Epistemic Modeling
 
 ## Status
 
@@ -30,7 +30,7 @@ This ADR records the formula and labeling rules introduced to fix both problems.
 | Field | Type | Description |
 |---|---|---|
 | `evidence_types` | `string[]` | Multi-label EvidenceType classification for this item |
-| `source_id` | `string` | Registry key → $ST_i$ via source trust registry (ADR-018) |
+| `source_id` | `string` | Registry key → $ST_i$ via source trust registry (ADR-009) |
 | `inference_strength` | `float` | $IS_i$ — directness of evidence-to-claim inference (0.0–1.0) |
 
 `evidence_types_all` at the claim level is a summary union (for dataset filtering), not a GNN
@@ -51,7 +51,7 @@ high epistemic type weight alone.
 
 - $ST_i$ — source trustworthiness, resolved from registry via `source_id`
 - $EW_i$ — epistemic-type weight: `combine_pramana_weights(evidence_types)` — diminishing-returns
-  combination over the item's evidence types (ADR-006)
+  combination over the item's evidence types (ADR-001)
 - $IS_i$ — inference strength rubric (see below)
 
 **EC_i floor:** If $EC_i < 0.10$, the evidence contributes negligibly — converters override stance
@@ -117,7 +117,7 @@ All formula functions, constants, and registry utilities live in
 | Symbol | Purpose |
 |---|---|
 | `compute_evidence_confidence(st, ew, is_)` | EC_i formula |
-| `combine_pramana_weights(types)` | EW_i (diminishing returns, ADR-006) |
+| `combine_pramana_weights(types)` | EW_i (diminishing returns, ADR-001) |
 | `aggregate_scores(evidence_items, registry)` | (support_score, refute_score) |
 | `derive_verdict(support_score, refute_score)` | Verdict label |
 | `SUPPORT_THRESHOLD = 0.75` | |
