@@ -6,6 +6,7 @@ from src.core.ports.dataset.converter import DatasetConverter
 from src.core.claims.labels import (
     EvidenceStance,
     EvidenceType,
+    ReasoningStrategy,
     Verdict,
 )
 from src.utils.time import utc_now_iso
@@ -13,6 +14,17 @@ from src.utils.time import utc_now_iso
 
 _SPATIAL_PREDS = {"inside", "ontopof", "near", "in", "on"}
 _AFFORDANCE_PREDS = {"breakable", "pickupable", "openable", "istoggleable"}
+
+_STRATEGY_MAP: dict[str, str] = {
+    "direct_observation": ReasoningStrategy.DIRECT_OBSERVATION,
+    "absence_detection":  ReasoningStrategy.ABSENCE_DETECTION,
+    "spatial_reasoning":  ReasoningStrategy.SPATIAL_COMPARISON,
+    "action_testing":     ReasoningStrategy.MULTI_HOP_INFERENCE,
+}
+
+
+def _to_strategy(raw: str | None) -> str:
+    return _STRATEGY_MAP.get(raw or "", ReasoningStrategy.DIRECT_OBSERVATION)
 
 # Map raw label strings from the AI2THOR claim generator to Verdict enum.
 # The generator emits "support"/"supported" for true claims and
@@ -177,11 +189,12 @@ class AI2ThorConverter(DatasetConverter):
         structural = reasoning.get("structural")
         if structural:
             structural = structural.replace("-", "_")
-        strategy = reasoning.get("strategy") or (
+        raw_strategy = reasoning.get("strategy") or (
             _classify_strategy(predicate, ev_out[0].get("triples", []))
             if ev_out
             else None
         )
+        strategy = _to_strategy(raw_strategy)
 
         verdict = raw.get("verdict") or {}
         justification = verdict.get("justification") or _make_justification(
@@ -208,9 +221,7 @@ class AI2ThorConverter(DatasetConverter):
                 "assignment_method": "rule_based",
             },
             "claim_triples": claim_triples if claim_triples else None,
-            "reasoning": {"structural": structural, "strategy": strategy}
-            if structural
-            else None,
+            "reasoning": {"structural": structural, "strategy": strategy},
             "evidence": ev_out,
             "provenance": {
                 "dataset": provenance.get("dataset", "ai2thor"),
@@ -243,8 +254,9 @@ class AI2ThorConverter(DatasetConverter):
         first = claim_triples[0] if claim_triples else ["", "unknown_relation", ""]
         predicate = first[1] if len(first) == 3 else "unknown_relation"
 
-        strategy = _classify_strategy(predicate, ev_triples)
-        evidence_types = _infer_evidence_types(strategy, bool(ev_triples))
+        raw_strategy = _classify_strategy(predicate, ev_triples)
+        strategy = _to_strategy(raw_strategy)
+        evidence_types = _infer_evidence_types(raw_strategy, bool(ev_triples))
         justification = _make_justification(label, predicate, claim_triples, ev_triples)
 
         structural = reasoning.get("structural")
@@ -272,9 +284,7 @@ class AI2ThorConverter(DatasetConverter):
                 "assignment_method": "rule_based",
             },
             "claim_triples": claim_triples if claim_triples else None,
-            "reasoning": {"structural": structural, "strategy": strategy}
-            if structural
-            else None,
+            "reasoning": {"structural": structural, "strategy": strategy},
             "evidence": [
                 {
                     "evidence_id": f"{oid}-e0",

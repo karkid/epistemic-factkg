@@ -43,6 +43,22 @@ class EvidenceType(StrEnum):
 # until they are updated in Steps 4 and 5.
 Pramana = EvidenceType
 
+
+class ReasoningStrategy(StrEnum):
+    """Unified reasoning strategy taxonomy across all three sources.
+
+    Assigned at the claim level — describes HOW the claim is verified.
+    Used as a 6-d one-hot on claim nodes in the GNN (not on evidence nodes).
+    """
+    DIRECT_OBSERVATION   = "direct_observation"   # AI2THOR: sensor reads property directly
+    ABSENCE_DETECTION    = "absence_detection"    # AI2THOR: sensor confirms object absent
+    SPATIAL_COMPARISON   = "spatial_comparison"   # AI2THOR: spatial relation; AVeriTeC: numeric
+    TESTIMONIAL_LOOKUP   = "testimonial_lookup"   # AVeriTeC/synthetic: written evidence lookup
+    MULTI_HOP_INFERENCE  = "multi_hop_inference"  # AI2THOR action_testing; AVeriTeC consultation
+    CONFLICTING_EVIDENCE = "conflicting_evidence" # Synthetic: opposing evidence templates
+
+
+
 # EW_i weights used in EC_i = 1 - (1 - ST_i)^(EW_i * IS_i).
 # These are the epistemic-type weights for the diminishing-returns formula.
 CONFIDENCE_WEIGHTS: dict[EvidenceType, float] = {

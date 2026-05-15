@@ -45,6 +45,7 @@ from src.adapters.synthetic.client.base import EvidenceSpec, SyntheticTextClient
 from src.core.claims.labels import (
     EvidenceStance,
     EvidenceType,
+    ReasoningStrategy,
     Verdict,
     aggregate_scores,
     combine_evidence_weights,
@@ -56,6 +57,28 @@ from src.core.claims.labels import (
 from src.utils.time import utc_now_iso
 
 MIN_SHORTCUT_FRACTION = 0.35
+
+_STRATEGY_MAP: dict[str, str] = {
+    "high_trust_supported":       ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "low_trust_nee":              ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "high_trust_refuted":         ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "low_trust_refuted_nee":      ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "conflicting":                ReasoningStrategy.CONFLICTING_EVIDENCE,
+    "strong_support_weak_refute": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "weak_support_strong_refute": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "weak_vs_weak_nee":           ReasoningStrategy.CONFLICTING_EVIDENCE,
+    "corroborating_3":            ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "perception_direct":          ReasoningStrategy.DIRECT_OBSERVATION,
+    "inference_nee":              ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "comparison_supported":       ReasoningStrategy.SPATIAL_COMPARISON,
+    "non_apprehension_absent":    ReasoningStrategy.ABSENCE_DETECTION,
+    "non_apprehension_refuted":   ReasoningStrategy.ABSENCE_DETECTION,
+    "non_apprehension_weak_nee":  ReasoningStrategy.ABSENCE_DETECTION,
+}
+
+
+def _to_strategy(template_name: str) -> str:
+    return _STRATEGY_MAP.get(template_name, ReasoningStrategy.TESTIMONIAL_LOOKUP)
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +396,9 @@ def _build_record(
             "assignment_method": "synthetic_template",
         },
         "claim_triples": None,
-        "reasoning": None,
+        "reasoning": {
+            "strategy": _to_strategy(template.name)
+        },
         "evidence": evidence_out,
         "provenance": {
             "dataset": "synthetic",

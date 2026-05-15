@@ -7,10 +7,44 @@ from src.core.ports.dataset.converter import DatasetConverter
 from src.core.claims.labels import (
     EvidenceStance,
     EvidenceType,
+    ReasoningStrategy,
     Verdict,
     resolve_source_id,
 )
 from src.utils.time import utc_now_iso
+
+
+_STRATEGY_MAP: dict[str, str] = {
+    "numerical comparison":          ReasoningStrategy.SPATIAL_COMPARISON,
+    "written evidence":              ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "consultation":                  ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "expert consultation":           ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "fact-checker reference":        ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "satirical source identification": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+}
+
+# Priority order: more informative strategies win when multiple are present.
+_STRATEGY_PRIORITY: list[str] = [
+    ReasoningStrategy.MULTI_HOP_INFERENCE,
+    ReasoningStrategy.SPATIAL_COMPARISON,
+    ReasoningStrategy.TESTIMONIAL_LOOKUP,
+]
+
+
+def _to_strategy(strategies: list[str] | None) -> str:
+    """Map AVeriTeC fact_checking_strategies list to a single canonical value.
+
+    When multiple strategies are present, the most informative one wins
+    according to _STRATEGY_PRIORITY.
+    """
+    if not strategies:
+        return ReasoningStrategy.TESTIMONIAL_LOOKUP
+    mapped = {_STRATEGY_MAP.get(s.strip().lower(), ReasoningStrategy.TESTIMONIAL_LOOKUP)
+              for s in strategies}
+    for candidate in _STRATEGY_PRIORITY:
+        if candidate in mapped:
+            return candidate
+    return ReasoningStrategy.TESTIMONIAL_LOOKUP
 
 
 _LABEL_MAP: dict[str, Verdict] = {
@@ -283,7 +317,11 @@ class AveritecConverter(DatasetConverter):
                 "assignment_method": "rule_based",
             },
             "claim_triples": None,
-            "reasoning": None,
+            "reasoning": {
+                "strategy": _to_strategy(
+                    raw_record.get("fact_checking_strategies") or []
+                )
+            },
             "evidence": evidence_out,
             "provenance": {
                 "dataset": "averitec",

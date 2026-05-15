@@ -1,4 +1,4 @@
-"""Text and modality featurizer for GNN node construction (ADR-014)."""
+"""Text and categorical featurizer for GNN node construction."""
 
 from __future__ import annotations
 
@@ -10,10 +10,14 @@ import torch
 from sentence_transformers import SentenceTransformer
 
 from src.core.gnn.types import (
+    EVIDENCE_TYPE_TO_INT,
     MODALITY_TO_INT,
-    PRAMANA_TO_INT,
+    NUM_EVIDENCE_TYPE,
     NUM_MODALITY,
-    NUM_PRAMANA,
+    NUM_REASONING_STRATEGY,
+    NUM_SOURCE_TYPE,
+    REASONING_STRATEGY_TO_INT,
+    SOURCE_TYPE_TO_INT,
 )
 
 _EMBED_MODEL = "all-MiniLM-L6-v2"
@@ -21,7 +25,7 @@ _EMBED_DIM = 384
 
 
 class Featurizer:
-    """Encodes text to sentence embeddings and categorical fields to one-hot vectors.
+    """Encodes text to sentence embeddings and categorical fields to one-hot/multi-hot vectors.
 
     Loads the sentence-transformer model once and caches embeddings to a .pkl file
     keyed by text hash so re-runs skip re-embedding expensive text.
@@ -70,17 +74,43 @@ class Featurizer:
         return torch.tensor(results, dtype=torch.float32)
 
     def encode_modality(self, modality: str | None) -> torch.Tensor:
-        """One-hot encode evidence modality → float tensor [NUM_MODALITY]."""
+        """One-hot encode evidence modality → float tensor [NUM_MODALITY=5]."""
         vec = torch.zeros(NUM_MODALITY, dtype=torch.float32)
         idx = MODALITY_TO_INT.get(modality or "", -1)
         if idx >= 0:
             vec[idx] = 1.0
         return vec
 
-    def encode_pramana(self, pramana: str | None) -> torch.Tensor:
-        """One-hot encode Pramana type → float tensor [NUM_PRAMANA]."""
-        vec = torch.zeros(NUM_PRAMANA, dtype=torch.float32)
-        idx = PRAMANA_TO_INT.get(pramana or "", -1)
+    def encode_evidence_types(self, evidence_types: list[str]) -> torch.Tensor:
+        """Multi-hot encode evidence types → float tensor [NUM_EVIDENCE_TYPE=5].
+
+        An evidence item can have multiple types (e.g. perception + non_apprehension),
+        so this is multi-hot rather than one-hot. postulation_derivation is not in
+        the index (excluded from training) and is silently ignored.
+        """
+        vec = torch.zeros(NUM_EVIDENCE_TYPE, dtype=torch.float32)
+        for et in evidence_types:
+            idx = EVIDENCE_TYPE_TO_INT.get(et, -1)
+            if idx >= 0:
+                vec[idx] = 1.0
+        return vec
+
+    def encode_reasoning_strategy(self, strategy: str | None) -> torch.Tensor:
+        """One-hot encode reasoning strategy → float tensor [NUM_REASONING_STRATEGY=6]."""
+        vec = torch.zeros(NUM_REASONING_STRATEGY, dtype=torch.float32)
+        idx = REASONING_STRATEGY_TO_INT.get(strategy or "", -1)
+        if idx >= 0:
+            vec[idx] = 1.0
+        return vec
+
+    def encode_source_type(self, category: str | None) -> torch.Tensor:
+        """One-hot encode source category → float tensor [NUM_SOURCE_TYPE=6].
+
+        category is already resolved to one of the 6 categories via
+        get_source_category() in types.py — this method only does the one-hot encoding.
+        """
+        vec = torch.zeros(NUM_SOURCE_TYPE, dtype=torch.float32)
+        idx = SOURCE_TYPE_TO_INT.get(category or "unknown", -1)
         if idx >= 0:
             vec[idx] = 1.0
         return vec
