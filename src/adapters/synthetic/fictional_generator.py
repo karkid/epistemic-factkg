@@ -47,7 +47,7 @@ from src.core.claims.labels import (
     EvidenceType,
     Verdict,
     aggregate_scores,
-    combine_pramana_weights,
+    combine_evidence_weights,
     compute_evidence_confidence,
     derive_verdict,
     get_source_trust,
@@ -336,7 +336,7 @@ def _build_record(
         ev_id = f"{rec_id}-e{i}"
 
         st = get_source_trust(spec.source_id, registry)
-        ew = combine_pramana_weights(spec.evidence_types)
+        ew = combine_evidence_weights(spec.evidence_types)
         ec = compute_evidence_confidence(st, ew, spec.inference_strength)
 
         evidence_items.append({

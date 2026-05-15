@@ -2,8 +2,8 @@
 """Filter unified JSONL to GNN training records.
 
 Excludes:
-- postulation_derivation Pramana (ADR-011)
-- conflicting_evidence verdict (ADR-015)
+- postulation_derivation evidence type (ADR-005)
+- conflicting_evidence verdict (ADR-007)
 """
 
 from __future__ import annotations
@@ -14,14 +14,14 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from src.core.claims.labels import TRAINING_PRAMANA, Verdict, is_training_record
+from src.core.claims.labels import TRAINING_EVIDENCE_TYPES, Verdict, is_training_record
 
 EXCLUDED_VERDICTS: frozenset[str] = frozenset({Verdict.CONFLICTING_EVIDENCE})
 
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Filter unified JSONL to GNN training records (ADR-011).",
+        description="Filter unified JSONL to GNN training records (ADR-005).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument(
@@ -41,7 +41,7 @@ def main():
 
     kept = 0
     excluded = 0
-    excluded_by_pramana: dict[str, int] = defaultdict(int)
+    excluded_by_evidence_type: dict[str, int] = defaultdict(int)
     excluded_by_verdict: dict[str, int] = defaultdict(int)
 
     with (
@@ -67,8 +67,8 @@ def main():
                 fout.write(json.dumps(record, ensure_ascii=False) + "\n")
                 kept += 1
             else:
-                pramana = record.get("epistemic", {}).get("pramana_primary", "unknown")
-                excluded_by_pramana[pramana] += 1
+                for et in record.get("epistemic", {}).get("evidence_types_all", ["unknown"]):
+                    excluded_by_evidence_type[et] += 1
                 excluded += 1
 
     total = kept + excluded
@@ -81,15 +81,15 @@ def main():
     print(f"Excluded       : {excluded:,}  ({excluded / total * 100:.1f}%)")
     if args.verbose:
         if excluded_by_verdict:
-            print("Excluded by verdict (ADR-015):")
+            print("Excluded by verdict (ADR-007):")
             for v, n in sorted(excluded_by_verdict.items()):
                 print(f"  {v}: {n:,}")
-        if excluded_by_pramana:
-            print("Excluded by pramana (ADR-011):")
-            for p, n in sorted(excluded_by_pramana.items()):
-                print(f"  {p}: {n:,}")
-    print(f"Training pramana types : {sorted(TRAINING_PRAMANA)}")
-    print(f"Excluded verdict types : {sorted(EXCLUDED_VERDICTS)}")
+        if excluded_by_evidence_type:
+            print("Excluded by evidence type (ADR-005):")
+            for et, n in sorted(excluded_by_evidence_type.items()):
+                print(f"  {et}: {n:,}")
+    print(f"Training evidence types : {sorted(TRAINING_EVIDENCE_TYPES)}")
+    print(f"Excluded verdict types  : {sorted(EXCLUDED_VERDICTS)}")
     print("=" * 60)
 
 

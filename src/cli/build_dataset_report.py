@@ -72,10 +72,10 @@ def summarize_one(s: Dict[str, Any]) -> str:
     if dists.get("verdict_label"):
         parts.append(md_table("Verdict distribution", dists["verdict_label"], total))
 
-    if dists.get("pramana_primary"):
+    if dists.get("evidence_types_all"):
         parts.append(
             md_table(
-                "Pramana (epistemic) distribution", dists["pramana_primary"], total
+                "Evidence type distribution", dists["evidence_types_all"], total
             )
         )
 
@@ -180,9 +180,9 @@ def summarize_training(
 ) -> str:
     """Generate the training dataset section for the report markdown."""
     total = tv.get("total_records", 0)
-    pramana_dist = tv.get("pramana_distribution", {})
-    pramana_targets = {
-        k: v["target"] for k, v in tv.get("pramana_vs_targets", {}).items()
+    et_dist = tv.get("evidence_type_distribution", {})
+    et_targets = {
+        k: v["target"] for k, v in tv.get("evidence_type_vs_targets", {}).items()
     }
     verdict_dist = tv.get("verdict_distribution", {})
     source_dist = tv.get("source_distribution", {})
@@ -190,16 +190,16 @@ def summarize_training(
     passed = tv.get("pass", False)
     postulation_count = tv.get("postulation_derivation_count", 0)
 
-    # Plot 1: Pramana actual vs target (horizontal bar)
-    if pramana_dist and pramana_targets:
-        p = plots_dir / "training_pramana_distribution.png"
+    # Plot 1: Evidence type actual vs target (horizontal bar)
+    if et_dist and et_targets:
+        p = plots_dir / "training_evidence_type_distribution.png"
         plot_horizontal_bar_with_target(
-            pramana_dist,
-            pramana_targets,
-            "Training — Pramana distribution vs ADR-012 targets",
+            et_dist,
+            et_targets,
+            "Training — Evidence type distribution vs ADR-006 targets",
             p,
         )
-        plot_refs.append(f"- [Training: Pramana vs targets](plots/{p.name})\n")
+        plot_refs.append(f"- [Training: Evidence type vs targets](plots/{p.name})\n")
 
     # Plot 2: Source split pie
     if source_dist:
@@ -213,7 +213,7 @@ def summarize_training(
         plot_bar(verdict_dist, "Training — Verdict distribution", p)
         plot_refs.append(f"- [Training: Verdict distribution](plots/{p.name})\n")
 
-    parts = ["## Training Dataset (ADR-011 / ADR-012)\n\n"]
+    parts = ["## Training Dataset (ADR-005 / ADR-006)\n\n"]
     status = "PASS" if passed else "FAIL"
     parts.append(
         f"**Validation status:** {status}  |  **Total records:** {total:,}  |  `postulation_derivation`: {postulation_count}\n\n"
@@ -226,17 +226,17 @@ def summarize_training(
         parts.append(f"| {src} | {count:,} | {pct} |\n")
     parts.append("\n")
 
-    # Pramana vs targets
-    pv = tv.get("pramana_vs_targets", {})
-    parts.append("### Pramana distribution vs ADR-012 targets\n\n")
+    # Evidence type vs targets
+    pv = tv.get("evidence_type_vs_targets", {})
+    parts.append("### Evidence type distribution vs ADR-006 targets\n\n")
     parts.append(
-        "| Pramana | Actual | Target | Delta | % |\n|---|---:|---:|---:|---:|\n"
+        "| Evidence type | Actual | Target | Delta | % |\n|---|---:|---:|---:|---:|\n"
     )
-    for pramana in sorted(pv.keys()):
-        info = pv[pramana]
+    for et in sorted(pv.keys()):
+        info = pv[et]
         delta_str = f"{info['delta']:+d}"
         parts.append(
-            f"| {pramana} | {info['actual']:,} | {info['target']:,} | {delta_str} | {info['pct']} |\n"
+            f"| {et} | {info['actual']:,} | {info['target']:,} | {delta_str} | {info['pct']} |\n"
         )
     parts.append("\n")
 
@@ -284,7 +284,7 @@ def main():
 
         for dist_key, label in [
             ("verdict_label", "Verdict distribution"),
-            ("pramana_primary", "Pramana distribution"),
+            ("evidence_types_all", "Evidence type distribution"),
             ("evidence_stance", "Evidence stance distribution"),
             ("evidence_modality", "Evidence modality"),
         ]:

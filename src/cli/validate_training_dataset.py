@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate training JSONL against ADR-012 distribution targets."""
+"""Validate training JSONL against ADR-006 distribution targets."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _load_targets(config_path: str) -> dict[str, int]:
     try:
         with open(config_path, "r") as f:
             cfg = yaml.safe_load(f)
-        targets = cfg.get("training", {}).get("pramana_targets", {})
+        targets = cfg.get("training", {}).get("evidence_type_targets", {})
         if targets:
             return {k: int(v) for k, v in targets.items()}
     except Exception:
@@ -43,7 +43,7 @@ def main():
     ap.add_argument(
         "--config",
         default="configs/config.yaml",
-        help="Config file (optional training.pramana_targets override)",
+        help="Config file (optional training.evidence_type_targets override)",
     )
     ap.add_argument(
         "--out", required=True, help="Path to write training_validation.json"
@@ -58,7 +58,7 @@ def main():
 
     targets = _load_targets(args.config)
 
-    pramana_counts: dict[str, int] = defaultdict(int)
+    et_counts: dict[str, int] = defaultdict(int)
     verdict_counts: dict[str, int] = defaultdict(int)
     source_counts: dict[str, int] = defaultdict(int)
     total = 0
@@ -73,22 +73,23 @@ def main():
             except json.JSONDecodeError:
                 continue
             total += 1
-            pramana = record.get("epistemic", {}).get("pramana_primary", "unknown")
+            evidence_types = record.get("epistemic", {}).get("evidence_types_all", [])
+            for et in evidence_types:
+                et_counts[et] += 1
             verdict = record.get("verdict", {}).get("label", "unknown")
             dataset = record.get("provenance", {}).get("dataset", "unknown")
-            pramana_counts[pramana] += 1
             verdict_counts[verdict] += 1
             source_counts[dataset] += 1
 
     # Check for zero postulation_derivation
-    postulation_count = pramana_counts.get("postulation_derivation", 0)
+    postulation_count = et_counts.get("postulation_derivation", 0)
 
     # Comparison vs targets
-    pramana_vs_targets = {}
-    for pramana, target in targets.items():
-        actual = pramana_counts.get(pramana, 0)
+    et_vs_targets = {}
+    for et, target in targets.items():
+        actual = et_counts.get(et, 0)
         pct = actual / total * 100 if total else 0.0
-        pramana_vs_targets[pramana] = {
+        et_vs_targets[et] = {
             "actual": actual,
             "target": target,
             "pct": round(pct, 1),
@@ -105,8 +106,8 @@ def main():
         "input": str(in_path),
         "total_records": total,
         "postulation_derivation_count": postulation_count,
-        "pramana_distribution": dict(pramana_counts),
-        "pramana_vs_targets": pramana_vs_targets,
+        "evidence_type_distribution": dict(et_counts),
+        "evidence_type_vs_targets": et_vs_targets,
         "verdict_distribution": dict(verdict_counts),
         "source_distribution": dict(source_counts),
         "warnings": warnings,
@@ -125,11 +126,11 @@ def main():
     print(f"Total records  : {total:,}")
     print(f"postulation_derivation: {postulation_count}")
     print()
-    print("Pramana distribution vs ADR-012 targets:")
-    for pramana, info in sorted(pramana_vs_targets.items()):
+    print("Evidence type distribution vs ADR-006 targets:")
+    for et, info in sorted(et_vs_targets.items()):
         delta_str = f"{info['delta']:+d}" if info["delta"] else "  0"
         print(
-            f"  {pramana:<22} actual={info['actual']:>5,}  target={info['target']:>5,}  delta={delta_str}"
+            f"  {et:<22} actual={info['actual']:>5,}  target={info['target']:>5,}  delta={delta_str}"
         )
     print()
     print("Source distribution:")

@@ -102,7 +102,7 @@ _COMPOUND_TLDS: frozenset[str] = frozenset({
 # EW_i computation
 # ---------------------------------------------------------------------------
 
-def combine_pramana_weights(pramanas: list[str], weights: dict | None = None) -> float:
+def combine_evidence_weights(evidence_types: list[str], weights: dict | None = None) -> float:
     """Diminishing-returns combination: 1 - Π(1 - wᵢ).
 
     Computes EW_i for an evidence item with multiple epistemic types.
@@ -111,9 +111,13 @@ def combine_pramana_weights(pramanas: list[str], weights: dict | None = None) ->
     """
     w = weights or CONFIDENCE_WEIGHTS
     complement = 1.0
-    for p in pramanas:
-        complement *= 1.0 - w.get(p, 0.0)
+    for et in evidence_types:
+        complement *= 1.0 - w.get(et, 0.0)
     return round(1.0 - complement, 4)
+
+
+# Backward-compatible alias — remove once all adapters use combine_evidence_weights
+combine_pramana_weights = combine_evidence_weights
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +129,7 @@ def compute_evidence_confidence(st: float, ew: float, is_: float) -> float:
 
     Args:
         st:  Source trustworthiness ST_i from registry (0–1).
-        ew:  Epistemic-type weight EW_i = combine_pramana_weights(evidence_types) (0–1).
+        ew:  Epistemic-type weight EW_i = combine_evidence_weights(evidence_types) (0–1).
         is_: Inference strength IS_i from rubric (0–1).
 
     Returns:
@@ -301,7 +305,7 @@ def get_source_trust(source_id: str, registry: dict[str, dict]) -> float:
 def _compute_ec_for_item(ev: dict, registry: dict[str, dict]) -> float:
     source_id = ev.get("source_id", "unknown_web")
     st = get_source_trust(source_id, registry)
-    ew = combine_pramana_weights(ev.get("evidence_types", []))
+    ew = combine_evidence_weights(ev.get("evidence_types", []))
     is_ = ev.get("inference_strength", 0.6)
     ec = compute_evidence_confidence(st, ew, is_)
     return max(ec, 0.0)

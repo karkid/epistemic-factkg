@@ -8,7 +8,7 @@
 #   synthetic:   LLM generator config (model, n_records, distribution)
 
 # ── Shared: epistemic weights ─────────────────────────────────────────────────
-# Used by combine_pramana_weights() to compute EW_i in EC formula (ADR-019).
+# Used by combine_evidence_weights() to compute EW_i in EC formula (ADR-010).
 # These are per-evidence-type weights; assignment is now per-evidence (v3.0).
 epistemic:
   confidence_weights:
