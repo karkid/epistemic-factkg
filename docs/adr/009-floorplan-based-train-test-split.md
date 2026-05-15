@@ -19,14 +19,7 @@ Two split strategies were considered:
 
 Split by **`provenance.context_id` (floorplan)**. All claims from a given floorplan go to exactly one split.
 
-Implementation: `src/cli/split_ai2thor.py` supports three modes:
-- `pct` (default) — assign floorplans by percentage (80/10/10)
-- `counts` — specify exact floorplan counts per split
-- `lists` — specify exact floorplan names per split
-
-A manifest file (`ai2thor_splits_manifest.json`) records which floorplans went to which split and the exact claim counts, enabling reproducibility.
-
-The split uses a configurable seed (default: 13) so the same split is produced deterministically for any given input file.
+Implementation: `src/cli/split_dataset.py` (`just split`). AI2THOR records are grouped by `provenance.context_id` before splitting — all claims from one floorplan go to the same split. AVeriTeC and synthetic records use stratified random sampling by verdict label. Split is deterministic (seed=42). Output: `out/splits/{train,val,test}_indices.json`.
 
 ## Consequences
 

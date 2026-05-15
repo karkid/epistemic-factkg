@@ -182,25 +182,20 @@ Runs three layers of validation:
 
 ---
 
-## Step 5: Split (AI2-THOR only)
+## Step 5: Split
 
-**Command:** `uv run python -m src.cli.split_ai2thor --input <file> --output_dir <dir>`
+**Command:** `just split`
 
-**Input:** AI2-THOR subset of unified JSONL (or the full file)
+**Input:** `out/training/epistemic_factkg_training.jsonl`
 
 **Output:**
-- `<output_dir>/ai2thor_train.jsonl`
-- `<output_dir>/ai2thor_dev.jsonl`
-- `<output_dir>/ai2thor_test.jsonl`
-- `<output_dir>/ai2thor_splits_manifest.json`
+- `out/splits/train_indices.json`
+- `out/splits/val_indices.json`
+- `out/splits/test_indices.json`
 
-Splits by `provenance.context_id` (floorplan), not by claim index. Default: 80/10/10 by floorplan count (`--mode pct`). All claims from a given floorplan go to exactly one split.
+Default: 80/10/10 by record index with stratified verdict labels (seed=42). AI2THOR records are split by `provenance.context_id` (floorplan) to avoid cross-split data leakage from the same scene. AVeriTeC and synthetic records are split by stratified random sampling.
 
-See [ADR-009](adr/009-floorplan-based-train-test-split.md) for why floorplan-based split was chosen over random split.
-
-AVeriTeC already comes pre-split (train/dev/test) from the original dataset — no re-splitting needed.
-
-Synthetic records are randomly split 80/10/10 at record level (no floorplan grouping applies).
+See [ADR-009](adr/009-floorplan-based-train-test-split.md) for the split strategy design.
 
 ---
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from src.core.ports.nlg.template import BaseTemplate
+from src.core.ports.template import BaseTemplate
 
 from src.core.graph.types import Triple
 

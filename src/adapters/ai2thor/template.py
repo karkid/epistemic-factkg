@@ -2,7 +2,7 @@ import inflect
 import re
 
 from src.core.graph.types import Triple
-from src.core.ports.nlg.template import BaseTemplate
+from src.core.ports.template import BaseTemplate
 from src.core.semantics.lexicon.predicates import PredicateForm, PredicateLexicon
 from src.core.nlg.sentence_template import SentenceTemplate
 from typing import Optional

@@ -7,9 +7,7 @@ from rdflib import Graph, URIRef, Literal, RDF
 
 from src.infra.rdf.namespaces import NamespaceManager, NamespaceConfig
 from src.core.graph.types import Graph as SceneGraph, Object, Relationship
-from src.core.ports.graph.graph_data_source import (
-    GraphDataSource,
-)  # your DataSource port
+from src.core.ports.graph import GraphDataSource
 from src.core.ontology import BaseOntology
 from src.utils.exceptions import BuildError, ValidationError, DataSourceError
 from src.infra.rdf.result import GraphBuildResult

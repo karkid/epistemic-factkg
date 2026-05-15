@@ -65,13 +65,13 @@ rebuild max_contexts="10":
         --config {{CONFIG}} \
         --max-contexts {{max_contexts}} \
         --verbose
-    just generate-synthetic
+    just synthetic
     just build
 
 
 # ── Synthetic generation ──────────────────────────────────────────────────────
 [doc("Generate synthetic shortcut-breaking claims (grounded by default; use --client llm for API)")]
-generate-synthetic n_records="1000":
+synthetic n_records="1000":
     mkdir -p {{SYNTHETIC_RAW_DIR}}
     uv run python -m src.cli.generate_synthetic \
         --config {{CONFIG}} \
@@ -107,7 +107,7 @@ filter:
 
 # ── Validate training ────────────────────────────────────────────────────────
 [doc("Validate training JSONL against ADR-012 Pramana distribution targets")]
-validate-training:
+check-train:
     mkdir -p {{REPORT_DIR}}
     uv run python -m src.cli.validate_training_dataset \
         --input {{TRAINING_JSONL}} \
@@ -127,7 +127,7 @@ report:
 
 # ── GNN pipeline ─────────────────────────────────────────────────────────────
 [doc("Build PyG HeteroData graph dataset from filtered training JSONL")]
-build-graph:
+graph:
     mkdir -p out/graphs
     uv run python -m src.cli.build_graph_dataset \
         --input {{TRAINING_JSONL}} \
@@ -161,7 +161,7 @@ train:
         --verbose
 
 
-[doc("Run Phase 5 ablation training — Runs A, B, D (Run C=full already done in Phase 4)")]
+[doc("Ablation training — Runs A, B, D (no-stance variants; Run C=full baseline)")]
 ablation:
     mkdir -p {{CHECKPOINTS_DIR}}
     @echo "=== Run B: no-stance edges, epistemic present (primary test) ==="
@@ -190,8 +190,8 @@ ablation:
         --epochs 50 --verbose
 
 
-[doc("Run Phase 6 evaluation on all 4 ablation runs (test set)")]
-evaluate:
+[doc("Run evaluation on all 4 ablation runs (test set)")]
+eval:
     mkdir -p {{RESULTS_DIR}}
     @echo "=== Evaluating Run C: full graph ==="
     uv run python -m src.cli.evaluate_gnn \
@@ -234,7 +234,7 @@ test:
 
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
-[doc("Full pipeline: build → validate → filter → validate-training → report (logs saved to runs/<RUN_ID>/)")]
+[doc("Full pipeline: build → validate → filter → check-train → report (logs saved to runs/<RUN_ID>/)")]
 run RUN_ID="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -245,7 +245,7 @@ run RUN_ID="":
     just build                       2>&1 | tee "runs/$RUN_ID/logs/build.log"
     just validate                    2>&1 | tee "runs/$RUN_ID/logs/validate.log"
     just filter                      2>&1 | tee "runs/$RUN_ID/logs/filter.log"
-    just validate-training           2>&1 | tee "runs/$RUN_ID/logs/validate-training.log"
+    just check-train                 2>&1 | tee "runs/$RUN_ID/logs/check-train.log"
     just report                      2>&1 | tee "runs/$RUN_ID/logs/report.log"
 
     echo "Done → runs/$RUN_ID/"

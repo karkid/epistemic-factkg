@@ -6,7 +6,7 @@ from ai2thor.controller import Controller
 from src.adapters.ai2thor.result import SceneRandomizerSummary
 from src.adapters.ai2thor.scene_randomizer import SceneRandomizer
 from src.core.graph.types import Graph as SceneGraph, Object, Relationship
-from src.core.ports.graph.graph_data_source import GraphDataSource
+from src.core.ports.graph import GraphDataSource
 from src.utils.exceptions import ConfigurationError, DataSourceError
 
 from src.adapters.ai2thor.config import AI2ThorDataSourceConfig

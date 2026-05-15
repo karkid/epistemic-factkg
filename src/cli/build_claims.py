@@ -20,11 +20,11 @@ from src.adapters.ai2thor.semantics.entity_lexicon import (
     create_ai2thor_object_type_lexicon,
 )
 from src.adapters.ai2thor.semantics.predicate_lexicon import create_predicate_lexicon
-from src.adapters.ai2thor.nlg.template import Ai2ThorTemplate
+from src.adapters.ai2thor.template import Ai2ThorTemplate
 from src.core.nlg.triple_realizer import TripleRealizer
 from src.core.graph.types import TripleList
-from src.infra.rdf.io.ttl import load_triples_from_ttl
-from src.infra.rdf.query.engine import TripleQueryEngine
+from src.infra.rdf.ttl import load_triples_from_ttl
+from src.infra.rdf.engine import TripleQueryEngine
 from src.infra.rdf.formatter import ai2thor_object_type_from_entity_id
 from src.utils.logger import get_logger
 
