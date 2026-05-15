@@ -1,4 +1,4 @@
-"""Pure metric functions for Phase 6 evaluation (ADR-017)."""
+"""Pure metric functions for EpistemicHGNN evaluation (ADR-013)."""
 
 from __future__ import annotations
 
@@ -115,6 +115,26 @@ def compute_ece(
         ece += (count / total) * abs(avg_conf - avg_acc)
 
     return round(ece, 4)
+
+
+def compute_rmse(preds: torch.Tensor, targets: torch.Tensor) -> float:
+    """Root-mean-square error between predicted and ground-truth IS scalars."""
+    return round(torch.sqrt(torch.mean((preds.view(-1) - targets.view(-1)) ** 2)).item(), 4)
+
+
+def compute_pearson_r(preds: torch.Tensor, targets: torch.Tensor) -> float:
+    """Pearson correlation coefficient between predicted and ground-truth IS scalars."""
+    p = preds.view(-1).float()
+    t = targets.view(-1).float()
+    if p.numel() < 2:
+        return 0.0
+    p_c = p - p.mean()
+    t_c = t - t.mean()
+    num = (p_c * t_c).sum()
+    den = torch.sqrt((p_c ** 2).sum() * (t_c ** 2).sum())
+    if den.item() == 0:
+        return 0.0
+    return round((num / den).item(), 4)
 
 
 def compute_per_group_accuracy(

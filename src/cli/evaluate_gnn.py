@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate EpistemicHGNN on the held-out test set (ADR-017)."""
+"""Evaluate EpistemicHGNN V1 — stance, IS regression, and symbolic verdict."""
 
 from __future__ import annotations
 
@@ -8,195 +8,180 @@ import json
 from pathlib import Path
 
 import torch
-from torch_geometric.loader import DataLoader
 
-from src.core.gnn.dataset import EpistemicFactDataset
-from src.core.gnn.featurizer import Featurizer
+from src.core.gnn.graph_builder import ClaimGraphBuilder
 from src.core.gnn.metrics import (
     compute_accuracy,
     compute_confusion_matrix,
     compute_ece,
     compute_macro_f1,
+    compute_pearson_r,
     compute_per_class_metrics,
     compute_per_group_accuracy,
+    compute_rmse,
     compute_weighted_f1,
 )
 from src.core.gnn.model import EpistemicHGNN
-from src.core.gnn.types import NUM_VERDICT, VERDICT_TO_INT
-
+from src.core.gnn.config import GraphConfig
+from src.core.gnn.types import NUM_STANCE, NUM_VERDICT, VERDICT_TO_INT
 
 _INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}
+_INT_TO_STANCE  = {0: "supports", 1: "refutes", 2: "neutral"}
 
 
-def _load_indices(path: Path) -> list[int]:
-    return json.loads(path.read_text())["indices"]
-
-
-def _mask_batch(batch, masked_relations: list[str], device: torch.device):
-    for rel in masked_relations:
-        for et in batch.edge_types:
-            if et[1] == rel:
-                batch[et].edge_index = torch.zeros(
-                    (2, 0), dtype=torch.long, device=device
-                )
-    return batch
+def _load_test_records(jsonl_path: Path, splits_dir: Path) -> list[dict]:
+    records = [
+        json.loads(line)
+        for line in jsonl_path.read_text().splitlines()
+        if line.strip()
+    ]
+    split_file = splits_dir / "test_indices.json"
+    if split_file.exists():
+        indices = json.loads(split_file.read_text())["indices"]
+        return [records[i] for i in indices if i < len(records)]
+    return records
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Evaluate EpistemicHGNN on the test split.",
+        description="Evaluate EpistemicHGNN (V1) on the test split.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    ap.add_argument("--checkpoint", required=True, help="Path to best_model.pt")
-    ap.add_argument("--dataset", required=True, help="Path to graph_dataset.pt")
-    ap.add_argument(
-        "--jsonl", required=True, help="Path to filtered training JSONL (for metadata)"
-    )
-    ap.add_argument("--splits-dir", default="out/splits")
-    ap.add_argument("--output", required=True, help="Directory to write result files")
-    ap.add_argument("--batch-size", type=int, default=32)
-    ap.add_argument("--hidden-dim", type=int, default=256)
-    ap.add_argument("--heads", type=int, default=2)
-    ap.add_argument("--dropout", type=float, default=0.3)
-    ap.add_argument("--device", default="cpu")
-    ap.add_argument(
-        "--no-stance-edges",
-        action="store_true",
-        help="Zero stance back-edges (must match training flags)",
-    )
-    ap.add_argument(
-        "--no-epistemic",
-        action="store_true",
-        help="Zero has_epistemic edge (must match training flags)",
-    )
-    ap.add_argument(
-        "--use-modality-learning",
-        action="store_true",
-        help="Load model with Pathway B head",
-    )
+    ap.add_argument("--checkpoint", required=True)
+    ap.add_argument("--jsonl",       required=True,
+                    help="Filtered training JSONL (test records drawn from this)")
+    ap.add_argument("--registry",    default="data/registry/source_trust_registry.jsonl")
+    ap.add_argument("--embed-cache", default="out/graphs/embed_cache.pkl")
+    ap.add_argument("--splits-dir",  default="out/splits")
+    ap.add_argument("--output",      required=True,
+                    help="Directory to write stance/IS/verdict JSON files")
+    ap.add_argument("--hidden-dim",  type=int,   default=256)
+    ap.add_argument("--heads",       type=int,   default=4)
+    ap.add_argument("--dropout",     type=float, default=0.3)
+    ap.add_argument("--device",      default="cpu")
     args = ap.parse_args()
 
-    device = torch.device(args.device)
+    device     = torch.device(args.device)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── Build masked edge relations list ─────────────────────────────────────
-    masked: list[str] = []
-    if args.no_stance_edges:
-        masked = ["supports", "refutes", "absent", "no_evidence"]
-    if args.no_epistemic:
-        masked.append("has_epistemic")
-
-    # ── Load dataset + test indices ───────────────────────────────────────────
-    dataset = EpistemicFactDataset(
-        jsonl_path=args.jsonl,
-        pt_cache=Path(args.dataset),
-        featurizer=Featurizer(),
-    )
-    test_indices = _load_indices(Path(args.splits_dir) / "test_indices.json")
-    test_data = [dataset[i] for i in test_indices if i < len(dataset)]
-    test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False)
-
-    # ── Load Pramana / source metadata from JSONL ─────────────────────────────
-    records = [
-        json.loads(line)
-        for line in Path(args.jsonl).read_text().splitlines()
-        if line.strip()
-    ]
-    pramana_labels = [
-        records[i]["epistemic"]["pramana_primary"]
-        for i in test_indices
-        if i < len(records)
-    ]
-    source_labels = [
-        records[i]["provenance"]["dataset"]
-        for i in test_indices
-        if i < len(records)
-    ]
-
     # ── Load model ────────────────────────────────────────────────────────────
-    model = EpistemicHGNN(
-        hidden_dim=args.hidden_dim,
-        heads=args.heads,
-        dropout=args.dropout,
-        use_modality_learning=args.use_modality_learning,
-    )
+    model = EpistemicHGNN(GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout)
     model.load_state_dict(
         torch.load(args.checkpoint, map_location=device, weights_only=True)
     )
-    model.to(device)
-    model.eval()
+    model.to(device).eval()
 
-    # ── Run inference ─────────────────────────────────────────────────────────
-    all_preds: list[int] = []
-    all_labels: list[int] = []
-    all_logits: list[torch.Tensor] = []
+    # ── Load test records ─────────────────────────────────────────────────────
+    test_records = _load_test_records(Path(args.jsonl), Path(args.splits_dir))
+    builder = ClaimGraphBuilder.from_paths(args.registry, args.embed_cache)
 
+    # ── Accumulators ─────────────────────────────────────────────────────────
+    stance_preds:   list[torch.Tensor] = []
+    stance_ys:      list[torch.Tensor] = []
+    stance_logits_: list[torch.Tensor] = []
+    is_preds:       list[torch.Tensor] = []
+    is_ys:          list[torch.Tensor] = []
+    verdict_preds:  list[int] = []
+    verdict_trues:  list[int] = []
+    source_labels:  list[str] = []
+
+    skipped = 0
     with torch.no_grad():
-        for batch in test_loader:
-            batch = batch.to(device)
-            batch = _mask_batch(batch, masked, device)
-            out = model(batch)
-            logits = out["verdict"]
-            labels = (batch["claim"].y if hasattr(batch["claim"], "y") else batch.y).view(-1)
-            all_logits.append(logits.cpu())
-            all_preds.extend(logits.argmax(dim=-1).cpu().tolist())
-            all_labels.extend(labels.cpu().tolist())
+        for record in test_records:
+            try:
+                g = builder.build(record)
+            except Exception:
+                skipped += 1
+                continue
 
-    preds_t = torch.tensor(all_preds, dtype=torch.long)
-    labels_t = torch.tensor(all_labels, dtype=torch.long)
-    logits_t = torch.cat(all_logits, dim=0)
+            data = g.data.to(device)
+            out  = model.predict(data)
 
-    # ── Compute metrics ───────────────────────────────────────────────────────
-    accuracy = compute_accuracy(preds_t, labels_t)
-    macro_f1 = compute_macro_f1(preds_t, labels_t, NUM_VERDICT)
-    weighted_f1 = compute_weighted_f1(preds_t, labels_t, NUM_VERDICT)
-    ece = compute_ece(logits_t, labels_t)
-    per_class_raw = compute_per_class_metrics(preds_t, labels_t, NUM_VERDICT)
-    confusion = compute_confusion_matrix(preds_t, labels_t, NUM_VERDICT)
-    per_pramana = compute_per_group_accuracy(preds_t, labels_t, pramana_labels)
-    per_source = compute_per_group_accuracy(preds_t, labels_t, source_labels)
+            stance_preds.append(out["stance_pred"].cpu())
+            stance_ys.append(data["evidence"].stance_y.cpu())
+            stance_logits_.append(out["stance_logits"].cpu())
+            is_preds.append(out["is_pred"].view(-1).cpu())
+            is_ys.append(data["evidence"].is_y.view(-1).cpu())
 
-    # ── Remap per-class keys to verdict names ─────────────────────────────────
-    per_class = {_INT_TO_VERDICT[k]: v for k, v in per_class_raw.items()}
+            v_pred = VERDICT_TO_INT.get(out["verdict"], 2)
+            v_true = g.label
+            verdict_preds.append(v_pred)
+            verdict_trues.append(v_true)
+            source_labels.append(g.dataset)
+
+    if not verdict_preds:
+        print("No test records evaluated — check splits-dir and jsonl path.")
+        return
+
+    # ── Concatenate evidence-level tensors ────────────────────────────────────
+    sp_t  = torch.cat(stance_preds)
+    sy_t  = torch.cat(stance_ys)
+    sl_t  = torch.cat(stance_logits_)
+    ip_t  = torch.cat(is_preds)
+    iy_t  = torch.cat(is_ys)
+    vp_t  = torch.tensor(verdict_preds, dtype=torch.long)
+    vy_t  = torch.tensor(verdict_trues, dtype=torch.long)
+
+    # ── Stance metrics ────────────────────────────────────────────────────────
+    stance_per_class_raw = compute_per_class_metrics(sp_t, sy_t, NUM_STANCE)
+    stance_metrics = {
+        "accuracy":  round(compute_accuracy(sp_t, sy_t), 4),
+        "macro_f1":  round(compute_macro_f1(sp_t, sy_t, NUM_STANCE), 4),
+        "ece":       compute_ece(sl_t, sy_t),
+        "n_evidence": int(sp_t.numel()),
+        "per_class": {_INT_TO_STANCE[k]: v for k, v in stance_per_class_raw.items()},
+    }
+
+    # ── IS metrics ────────────────────────────────────────────────────────────
+    is_metrics = {
+        "rmse":       compute_rmse(ip_t, iy_t),
+        "pearson_r":  compute_pearson_r(ip_t, iy_t),
+        "n_evidence": int(ip_t.numel()),
+        "pred_mean":  round(ip_t.mean().item(), 4),
+        "true_mean":  round(iy_t.mean().item(), 4),
+    }
+
+    # ── Verdict metrics ───────────────────────────────────────────────────────
+    verdict_per_class_raw = compute_per_class_metrics(vp_t, vy_t, NUM_VERDICT)
+    verdict_metrics = {
+        "accuracy":      round(compute_accuracy(vp_t, vy_t), 4),
+        "macro_f1":      round(compute_macro_f1(vp_t, vy_t, NUM_VERDICT), 4),
+        "weighted_f1":   round(compute_weighted_f1(vp_t, vy_t, NUM_VERDICT), 4),
+        "n_claims":      len(verdict_preds),
+        "skipped":       skipped,
+        "per_class":     {_INT_TO_VERDICT[k]: v for k, v in verdict_per_class_raw.items()},
+        "confusion":     compute_confusion_matrix(vp_t, vy_t, NUM_VERDICT),
+        "per_source":    compute_per_group_accuracy(vp_t, vy_t, source_labels),
+    }
 
     # ── Write output files ────────────────────────────────────────────────────
-    metrics = {
-        "accuracy": round(accuracy, 4),
-        "macro_f1": round(macro_f1, 4),
-        "weighted_f1": round(weighted_f1, 4),
-        "ece": ece,
-        "per_class": per_class,
-    }
-    (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-    (output_dir / "confusion_matrix.json").write_text(json.dumps(confusion, indent=2))
-    (output_dir / "per_pramana.json").write_text(json.dumps(per_pramana, indent=2))
-    (output_dir / "per_source.json").write_text(json.dumps(per_source, indent=2))
+    (output_dir / "stance_metrics.json").write_text(json.dumps(stance_metrics, indent=2))
+    (output_dir / "is_metrics.json").write_text(json.dumps(is_metrics, indent=2))
+    (output_dir / "verdict_metrics.json").write_text(json.dumps(verdict_metrics, indent=2))
 
     # ── Print summary ─────────────────────────────────────────────────────────
     print("=" * 60)
-    print(f"Evaluation: {Path(args.checkpoint).parent.name or 'full'}")
-    print(f"Test graphs : {len(all_labels)}")
-    print(f"Accuracy    : {accuracy:.4f}")
-    print(f"Macro F1    : {macro_f1:.4f}")
-    print(f"Weighted F1 : {weighted_f1:.4f}")
-    print(f"ECE         : {ece:.4f}")
+    print(f"EpistemicHGNN V1 — {len(verdict_preds)} claims  ({int(sp_t.numel())} evidence items)")
     print()
-    print("Per-class:")
-    for verdict, m in per_class.items():
-        print(
-            f"  {verdict:<24} P={m['precision']:.3f}  R={m['recall']:.3f}"
-            f"  F1={m['f1']:.3f}  n={m['support']}"
-        )
+    print("H1 Stance")
+    print(f"  accuracy  {stance_metrics['accuracy']:.4f}   macro_f1  {stance_metrics['macro_f1']:.4f}   ECE  {stance_metrics['ece']:.4f}")
+    for stance, m in stance_metrics["per_class"].items():
+        print(f"  {stance:<8}  P={m['precision']:.3f}  R={m['recall']:.3f}  F1={m['f1']:.3f}  n={m['support']}")
     print()
-    print("Per-Pramana accuracy:")
-    for pramana, m in per_pramana.items():
-        print(f"  {pramana:<24} acc={m['accuracy']:.3f}  n={m['support']}")
+    print("H2 Inference Strength")
+    print(f"  RMSE  {is_metrics['rmse']:.4f}   Pearson r  {is_metrics['pearson_r']:.4f}")
+    print(f"  pred_mean={is_metrics['pred_mean']:.3f}  true_mean={is_metrics['true_mean']:.3f}")
     print()
-    print("Per-source accuracy:")
-    for src, m in per_source.items():
-        print(f"  {src:<16} acc={m['accuracy']:.3f}  n={m['support']}")
-    print(f"\nResults written to: {output_dir}/")
+    print("Symbolic Verdict")
+    print(f"  accuracy  {verdict_metrics['accuracy']:.4f}   macro_f1  {verdict_metrics['macro_f1']:.4f}   weighted_f1  {verdict_metrics['weighted_f1']:.4f}")
+    for verdict, m in verdict_metrics["per_class"].items():
+        print(f"  {verdict:<22}  P={m['precision']:.3f}  R={m['recall']:.3f}  F1={m['f1']:.3f}  n={m['support']}")
+    print()
+    print("Per-source verdict accuracy:")
+    for src, m in verdict_metrics["per_source"].items():
+        print(f"  {src:<16}  acc={m['accuracy']:.3f}  n={m['support']}")
+    print(f"\nResults → {output_dir}/")
     print("=" * 60)
 
 

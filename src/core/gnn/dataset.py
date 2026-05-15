@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 from torch_geometric.data import InMemoryDataset
 
+from src.core.claims.labels import load_source_trust_registry
 from src.core.gnn.featurizer import Featurizer
 from src.core.gnn.graph_builder import ClaimGraphBuilder
 from src.core.gnn.types import NUM_VERDICT
@@ -23,11 +24,13 @@ class EpistemicFactDataset(InMemoryDataset):
         self,
         jsonl_path: str | Path,
         pt_cache: str | Path,
+        registry_path: str | Path = "data/registry/source_trust_registry.jsonl",
         featurizer: Featurizer | None = None,
         force_rebuild: bool = False,
     ):
         self._jsonl_path = Path(jsonl_path)
         self._pt_cache = Path(pt_cache)
+        self._registry = load_source_trust_registry(registry_path)
         self._featurizer = featurizer or Featurizer()
         self._force_rebuild = force_rebuild
 
@@ -41,7 +44,7 @@ class EpistemicFactDataset(InMemoryDataset):
         return [self._pt_cache.name]
 
     def process(self) -> None:
-        builder = ClaimGraphBuilder(self._featurizer)
+        builder = ClaimGraphBuilder(self._registry, self._featurizer)
         graphs = []
 
         with open(self._jsonl_path, "r", encoding="utf-8") as f:
@@ -60,7 +63,6 @@ class EpistemicFactDataset(InMemoryDataset):
 
                 # Attach metadata as graph-level tensors
                 cg.data.y = torch.tensor([cg.label], dtype=torch.long)
-                cg.data.pramana = cg.pramana
                 cg.data.dataset_name = cg.dataset
                 graphs.append(cg.data)
 
