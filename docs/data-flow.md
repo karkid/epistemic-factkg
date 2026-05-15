@@ -5,31 +5,64 @@ This document traces how data moves through the pipeline — from raw source inp
 ## Pipeline Overview
 
 ```
-AI2-THOR simulator                   AVeriTeC
-       │                                  │
-    [build]                         (manual download)
-  ① build_rdf                            │
-       │                                  │
- out/knowledge_graph.ttl      data/raw/averitec/{train,dev}.json
-       │
-  ② build_claims
-       │
- data/raw/ai2thor/claims_all.jsonl
-       │                                  │
-       └──────── ③ convert_to_unified ────┘
-                        │
-             out/unified/epistemic_factkg.jsonl
-                        │
-                  [validate]
-                        │
-             out/report/validation.json
-                        │
-                  [report]
-                        │
-               out/report/ (md + charts)
+AI2-THOR simulator          AVeriTeC              Seed pool + AI2THOR claims
+       │                       │                          │
+    [build]              (manual download)        [generate-synthetic]
+  ① build_rdf                  │                          │
+       │                       │                          │
+ out/knowledge_graph.ttl  data/raw/averitec/        data/raw/synthetic/
+       │                 {train,dev}.json          synthetic_current.jsonl
+  ② build_claims                │                          │
+       │                        │                          │
+ data/raw/ai2thor/              │                          │
+ claims_all.jsonl               │                          │
+       │                        │                          │
+       └──────────── ③ convert_to_unified ─────────────────┘
+                              │
+               out/unified/epistemic_factkg.jsonl
+                              │
+                        [validate]
+                              │
+               out/report/validation.json
+                              │
+                         [report]
+                              │
+                    out/report/ (md + charts)
 ```
 
-**Commands:** `just build` runs steps ①②③ in sequence. `just run` runs build → validate → report with timestamped logs.
+**Commands:** `just build` runs ①②③ in sequence (requires `synthetic_current.jsonl` to exist). `just rebuild` calls `just generate-synthetic` first, then `just build`. `just run` runs build → validate → report with timestamped logs.
+
+**Source split (v3.0 target):** ~28% AI2THOR (~1,800) / ~56% AVeriTeC (3,568) / ~16% Synthetic (~1,000). See [ADR-012](adr/012-dataset-composition-and-generation-strategy.md).
+
+---
+
+## Step 0: Generate Synthetic Records (shortcut-breaking)
+
+**Command:** `just generate-synthetic`
+
+**Inputs:**
+- `data/registry/seed_pool.jsonl` — 25 hand-curated (claim, evidence) seed pairs by evidence type
+- `data/raw/ai2thor/claims_all.jsonl` — used as real triplet source for perception/non_apprehension templates
+- `configs/config.yaml` → `synthetic.n_records`, `synthetic.distribution`
+- `ANTHROPIC_API_KEY` (optional) — if set, uses `LLMClient`; else uses `GroundedClient` (seed pool + AI2THOR) or `LocalTextClient`
+
+**Output:** `data/raw/synthetic/synthetic_current.jsonl` (overwrites on each run; version via git)
+
+Generates fictional shortcut-breaking claims using 15 templates. Each template fixes the EC-formula math deterministically — the text client provides only the linguistic layer. ~62% of records break the stance→verdict shortcut (same stance, different verdict depending on source trust and inference strength).
+
+Key templates:
+
+| Category | Templates | Shortcut-breaking? |
+|---|---|---|
+| High-trust clear-verdict | `high_trust_supported`, `high_trust_refuted` | No |
+| Low-trust → NEE | `low_trust_nee`, `low_trust_refuted_nee` | Yes |
+| Asymmetric compound | `strong_support_weak_refute`, `weak_support_strong_refute`, `weak_vs_weak_nee` | Yes |
+| Conflicting | `conflicting` | Yes |
+| Perception (AI2THOR) | `perception_direct` | No |
+| Inference → NEE | `inference_nee` | Yes |
+| Non-apprehension | `non_apprehension_absent`, `non_apprehension_refuted`, `non_apprehension_weak_nee` | Partial |
+
+See [ADR-022](adr/022-shortcut-leakage-and-synthetic-data-strategy.md), [ADR-023](adr/023-synthetic-generation-pipeline.md), [ADR-024](adr/024-grounded-synthetic-generation.md).
 
 ---
 
@@ -59,52 +92,74 @@ Queries the RDF graph to produce supported and refuted claims. Claims are typed 
 
 ---
 
-## Step 3: Convert to Unified Schema v2.0
+## Step 3: Convert to Unified Schema v3.0
 
 **Command:** `just build` (third sub-step — runs `src.cli.convert_to_unified`)
 
-**Input:**
+**Inputs:**
 - `data/raw/ai2thor/claims_all.jsonl`
 - `data/raw/averitec/train.json`
 - `data/raw/averitec/dev.json`
+- `data/raw/synthetic/synthetic_current.jsonl`
+- `data/registry/source_trust_registry.jsonl`
 
 **Output:** `out/unified/epistemic_factkg.jsonl`
 
-Each source adapter (`AI2ThorConverter`, `AveritecConverter`) applies `infer_pramana()` to assign Pramana labels and confidence weights, then calls `convert_one()` to produce a unified v2.0 record. The final JSONL concatenates all sources.
+Each source adapter applies per-evidence epistemic labeling — setting `evidence_types`, `source_id`, `inference_strength`, and computing `confidence_weight` via the EC formula — then calls `convert_one()` to produce a unified v3.0 record. `pramana_primary` no longer exists; evidence types are per-evidence and multi-label.
 
-Key conversions:
-- AI2-THOR: `claim_triples`, `reasoning`, `evidence[].triple_source = "ground_truth"` are populated; `pramana_primary` is `perception` or `non_apprehension`
-- AVeriTeC: `claim_triples = null`, `reasoning = null`, QA pairs flattened into `evidence[].text`; `pramana_primary` is `testimony` or `inference`
+Key per-adapter behavior:
+- **AI2THOR**: `evidence[].evidence_types` = `["perception"]` or `["non_apprehension"]` based on claim type; `source_id = "ai2thor_simulation"`; `inference_strength = 1.0`; `claim_triples` and `evidence[].triples` populated from RDF
+- **AVeriTeC**: `evidence_types` from modality + answer-type heuristics; `source_id` resolved from `source_url` domain; `inference_strength` from answer type (extractive=0.8, abstractive=0.6); `claim_triples = null`
+- **Synthetic**: evidence fields already set by template; `triple_source = "ai2thor_simulation"` for perception/non_apprehension records with real triples; `provenance.dataset = "synthetic"`
 
-See [ADR-002](adr/002-unified-schema-v2-null-tolerant.md) for schema design and [ADR-007](adr/007-heuristic-epistemic-labeling.md) for labeling strategy.
+The **EC formula** is applied in all converters:
 
-### Unified Record Schema (key fields)
+$$EC_i = 1 - (1 - ST_i)^{EW_i \times IS_i}$$
+
+where $ST_i$ is looked up from `source_trust_registry.jsonl`, $EW_i = \text{combine\_pramana\_weights(evidence\_types)}$, and $IS_i$ is `inference_strength`.
+
+Verdict aggregation uses product-of-complements over supporting and refuting evidence items:
+
+$$\text{SupportScore} = 1 - \prod_{i \in \text{Supports}}(1 - EC_i)$$
+$$\text{RefuteScore} = 1 - \prod_{i \in \text{Refutes}}(1 - EC_i)$$
+
+For synthetic records, the verdict is set by template construction (not re-derived); `derivation_method = "aggregated_from_evidence"`. For AI2THOR and AVeriTeC, the original annotated verdict is kept; `derivation_method = "annotated"`.
+
+See [ADR-019](adr/019-per-evidence-epistemic-modeling.md) for per-evidence epistemic modeling and [ADR-015](adr/015-source-trust-registry.md) for the source trust registry design.
+
+### Unified Record Schema (key fields, v3.0)
 
 ```json
 {
-  "schema_version": "2.0",
+  "schema_version": "3.0",
   "id": "...",
   "claim": "...",
-  "verdict": { "label": "supported|refuted|not_enough_evidence|conflicting_evidence", "justification": "..." },
+  "verdict": {
+    "label": "supported|refuted|not_enough_evidence|conflicting_evidence",
+    "justification": null,
+    "derivation_method": "aggregated_from_evidence|annotated"
+  },
   "epistemic": {
-    "pramana_primary": "perception|testimony|inference|...",
-    "pramana_all": ["..."],
-    "confidence_weight": 0.95,
+    "evidence_types_all": ["testimony", "inference"],
     "assignment_method": "rule_based"
   },
-  "claim_triples": [["subject", "predicate", "object"]] ,
+  "claim_triples": [["subject", "predicate", "object"]],
   "reasoning": { "structural": "one_hop|conjunction|...", "strategy": "..." },
   "evidence": [{
     "evidence_id": "...",
     "text": "...",
     "triples": null,
-    "triple_source": "ground_truth|extracted|null",
+    "triple_source": "ground_truth|ai2thor_simulation|extracted|null",
     "modality": "simulation_state|web_text|pdf|...",
-    "stance": "supports|refutes|absent",
-    "source_url": null
+    "stance": "supports|refutes|absent|not_enough_evidence|conflicting_evidence",
+    "source_url": null,
+    "evidence_types": ["testimony"],
+    "source_id": "bbc_web_text",
+    "inference_strength": 0.8,
+    "confidence_weight": 0.72
   }],
-  "provenance": { "dataset": "ai2thor|averitec", "split": null, "context_id": "..." },
-  "meta": { "schema_version": "2.0", "created_utc": "..." }
+  "provenance": { "dataset": "ai2thor|averitec|synthetic", "split": null, "context_id": "..." },
+  "meta": { "schema_version": "3.0", "created_utc": "..." }
 }
 ```
 
@@ -122,8 +177,8 @@ Full schema definition: `data/schema/unified_schema.json`
 
 Runs three layers of validation:
 1. **Schema validation** — JSON Schema Draft-07 against `data/schema/unified_schema.json`
-2. **Dataset-level semantic checks** — adapter-specific validators (`AI2ThorValidator`, `AveritecValidator`) check field consistency (e.g., AI2-THOR claims must have non-null triples)
-3. **Pramana checks** — confidence weights must match known Pramana values; `pramana_primary` must be in `pramana_all`
+2. **Dataset-level semantic checks** — adapter-specific validators check field consistency (e.g., AI2-THOR claims must have non-null triples; all evidence items must have `evidence_types`, `source_id`, `inference_strength`, `confidence_weight`)
+3. **Epistemic checks** — shortcut fraction ≥ 35% in synthetic records; `confidence_weight` values are in `[0, 1]`; `evidence_types_all` matches union of per-evidence types
 
 ---
 
@@ -145,6 +200,8 @@ See [ADR-009](adr/009-floorplan-based-train-test-split.md) for why floorplan-bas
 
 AVeriTeC already comes pre-split (train/dev/test) from the original dataset — no re-splitting needed.
 
+Synthetic records are randomly split 80/10/10 at record level (no floorplan grouping applies).
+
 ---
 
 ## Step 6: Dataset Report
@@ -155,4 +212,15 @@ AVeriTeC already comes pre-split (train/dev/test) from the original dataset — 
 
 **Output:** `out/report/` (markdown report + charts)
 
-Generates a summary report with per-dataset statistics, Pramana distribution, verdict distribution, and validation error breakdown.
+Generates a summary report with per-dataset statistics, evidence type distribution, verdict distribution (per source), shortcut fraction audit, and validation error breakdown.
+
+---
+
+## Reference Data
+
+Two curated reference files live in `data/registry/` — they are inputs to the pipeline, not pipeline outputs:
+
+| File | Purpose |
+|---|---|
+| `data/registry/source_trust_registry.jsonl` | Maps `source_id` → `source_trust` (ST) for the EC formula; ~90 entries covering AI2THOR, common AVeriTeC domains, and synthetic source types |
+| `data/registry/seed_pool.jsonl` | 25 hand-authored (claim, evidence) pairs used by `GroundedClient` to produce semantically coherent synthetic text |

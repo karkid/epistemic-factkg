@@ -8,10 +8,14 @@ default:
 
 # ── Variables ────────────────────────────────────────────────────────────────
 CONFIG              := "configs/config.yaml"
+REGISTRY            := "data/registry/source_trust_registry.jsonl"
 AI2THOR_RAW_DIR     := "data/raw/ai2thor"
 AI2THOR_CLAIMS      := AI2THOR_RAW_DIR + "/claims_all.jsonl"
 RAW_AVERITEC_TRAIN  := "data/raw/averitec/train.json"
 RAW_AVERITEC_DEV    := "data/raw/averitec/dev.json"
+SYNTHETIC_RAW_DIR   := "data/raw/synthetic"
+SYNTHETIC_JSONL     := SYNTHETIC_RAW_DIR + "/synthetic_current.jsonl"
+SEED_POOL           := "data/registry/seed_pool.jsonl"
 KG_TTL              := "out/knowledge_graph.ttl"
 UNIFIED_JSONL       := "out/unified/epistemic_factkg.jsonl"
 VALIDATION_JSON     := "out/report/validation.json"
@@ -31,7 +35,7 @@ init:
 
 
 # ── Build ────────────────────────────────────────────────────────────────────
-[doc("Convert frozen AI2THOR claims + AVeriTeC to unified JSONL (no simulator needed)")]
+[doc("Convert frozen AI2THOR claims + AVeriTeC + any synthetic batches to unified v3.0 JSONL")]
 build:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -39,15 +43,20 @@ build:
         echo "Error: {{AI2THOR_CLAIMS}} not found. Run 'just rebuild' to generate it." >&2
         exit 1
     fi
+    SYNTHETIC_ARG=""
+    if [ -f "{{SYNTHETIC_JSONL}}" ]; then
+        SYNTHETIC_ARG="--synthetic {{SYNTHETIC_JSONL}}"
+    fi
     uv run python -m src.cli.convert_to_unified \
-        --config {{CONFIG}} \
+        --registry {{REGISTRY}} \
         --averitec {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
         --ai2thor {{AI2THOR_CLAIMS}} \
+        $SYNTHETIC_ARG \
         --output {{UNIFIED_JSONL}} \
         --intermediate_dir out/intermediate
 
 
-[doc("Re-generate AI2THOR claims from scratch via simulator, then convert all datasets to unified JSONL")]
+[doc("Re-generate AI2THOR claims from scratch via simulator, then generate synthetic batch, then convert all datasets to unified v3.0 JSONL")]
 rebuild max_contexts="10":
     uv run python -m src.cli.build_rdf \
         --config {{CONFIG}} --out {{KG_TTL}} --verbose
@@ -56,12 +65,25 @@ rebuild max_contexts="10":
         --config {{CONFIG}} \
         --max-contexts {{max_contexts}} \
         --verbose
-    uv run python -m src.cli.convert_to_unified \
+    just generate-synthetic
+    just build
+
+
+# ── Synthetic generation ──────────────────────────────────────────────────────
+[doc("Generate synthetic shortcut-breaking claims (grounded by default; use --client llm for API)")]
+generate-synthetic n_records="1000":
+    mkdir -p {{SYNTHETIC_RAW_DIR}}
+    uv run python -m src.cli.generate_synthetic \
         --config {{CONFIG}} \
-        --averitec {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
-        --ai2thor {{AI2THOR_CLAIMS}} \
-        --output {{UNIFIED_JSONL}} \
-        --intermediate_dir out/intermediate
+        --registry {{REGISTRY}} \
+        --seed-pool {{SEED_POOL}} \
+        --ai2thor-claims {{AI2THOR_CLAIMS}} \
+        --n-records {{n_records}} \
+        --output {{SYNTHETIC_JSONL}}
+    echo "Generated: {{SYNTHETIC_JSONL}}"
+    uv run python -m src.cli.validate_synthetic \
+        --input {{SYNTHETIC_JSONL}} \
+        --registry {{REGISTRY}}
 
 
 # ── Validate ─────────────────────────────────────────────────────────────────

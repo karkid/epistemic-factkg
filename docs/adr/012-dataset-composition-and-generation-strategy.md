@@ -2,14 +2,15 @@
 
 ## Status
 
-Accepted (revised after pipeline calibration)
+Accepted (revised after pipeline calibration; updated in v3.0 to add synthetic third source — see ADR-022, ADR-023)
 
 ## Context
 
-Before Phase 4 (model building), the training dataset composition must be fixed. Two sources are available:
+Before Phase 4 (model building), the training dataset composition must be fixed. Three sources are available:
 
 - **AI2THOR** — synthetic, generated on demand, perception-grounded, closed-world. Claim count is fully controllable.
 - **AVeriTeC** — real-world, pre-existing, text-based, web evidence. Fixed pool: train=3,068 + dev=500 = **3,568 total** (original ~4,250 estimate was optimistic).
+- **Synthetic (LLM/template-based)** — fictional shortcut-breaking claims generated to break the stance→verdict shortcut. See ADR-022 and ADR-023.
 
 Three decisions needed:
 
@@ -30,14 +31,15 @@ If AI2THOR and AVeriTeC contribute equally (~3,000 each), the model trains on as
 
 ## Decision
 
-**Total size:** ~5,400 claims — sufficient for GNN training with 5 Pramana types and 4 verdict classes, while keeping graph construction tractable.
+**Total size:** ~6,400 claims — sufficient for GNN training with 5 evidence types and 4 verdict classes, while keeping graph construction tractable.
 
-**Source split: ~34% AI2THOR / ~66% AVeriTeC**
+**Source split: ~28% AI2THOR / ~56% AVeriTeC / ~16% synthetic**
 
 | Source | Count | Rationale |
 |---|---|---|
-| AI2THOR | ~1,800 | Epistemic anchor: provides high-confidence perception and non_apprehension ground truth; controllable distribution |
+| AI2THOR | ~1,800 | Epistemic anchor: provides high-confidence perception and non_apprehension ground truth; real RDF triples |
 | AVeriTeC | 3,568 | Real-world target domain; full dataset (train=3,068 + dev=500) — ceiling hit |
+| Synthetic | ~1,000 | Shortcut-breaking: same stance → different verdict based on epistemic reliability (ADR-022) |
 
 **AI2THOR generation targets (10 scenes, per-context counts in `config.yaml`):**
 

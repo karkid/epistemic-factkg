@@ -1,10 +1,11 @@
-"""Convert all registered datasets to a single merged unified v2.0 JSONL.
+"""Convert all registered datasets to a single merged unified v3.0 JSONL.
 
 Usage
 -----
 python -m src.cli.convert_to_unified \\
     --averitec data/raw/averitec/train.json data/raw/averitec/dev.json \\
     --ai2thor  data/raw/ai2thor/claims_all.jsonl \\
+    --synthetic data/raw/synthetic/batch_001.jsonl \\
     --output   out/unified/epistemic_factkg.jsonl
 
 To add a new dataset, implement DatasetConverter in src/adapters/<name>/converter.py
@@ -17,17 +18,21 @@ import argparse
 from pathlib import Path
 
 from src.adapters.ai2thor.converter import AI2ThorConverter
-from src.utils.config_loader import load_epistemic_config
 from src.adapters.averitec.converter import AveritecConverter
+from src.core.claims.labels import load_source_trust_registry
 
 _DEFAULT_CONFIG = "configs/config.yaml"
+_DEFAULT_REGISTRY = "data/registry/source_trust_registry.jsonl"
 
 
-def _make_converters(config_path: str | None = None) -> dict:
-    epistemic = load_epistemic_config(config_path or _DEFAULT_CONFIG)
+def _make_converters(registry_path: str | None = None) -> dict:
+    registry: dict = {}
+    rp = Path(registry_path or _DEFAULT_REGISTRY)
+    if rp.exists():
+        registry = load_source_trust_registry(rp)
     return {
         "ai2thor": AI2ThorConverter(),
-        "averitec": AveritecConverter(epistemic_config=epistemic),
+        "averitec": AveritecConverter(registry=registry),
     }
 
 
@@ -38,12 +43,30 @@ def convert_to_unified(
     split: str | None = None,
     converters: dict | None = None,
 ) -> int:
-    """Convert a source file to unified v2.0 JSONL. Returns record count."""
-    registry = converters or _make_converters()
-    converter = registry.get(dataset)
+    """Convert a source file to unified v3.0 JSONL. Returns record count.
+
+    For 'synthetic' dataset, the input is already v3.0 JSONL — pass-through only.
+    """
+    if dataset == "synthetic":
+        return _passthrough_jsonl(in_path, out_path)
+    reg = converters or _make_converters()
+    converter = reg.get(dataset)
     if converter is None:
-        raise ValueError(f"Unknown dataset {dataset!r}. Available: {sorted(registry)}")
+        raise ValueError(f"Unknown dataset {dataset!r}. Available: {sorted(reg)}")
     return converter.convert_file(in_path, out_path, split)
+
+
+def _passthrough_jsonl(in_path: str, out_path: str) -> int:
+    """Copy synthetic JSONL records verbatim — already in v3.0 format."""
+    import json
+    count = 0
+    with open(in_path, encoding="utf-8") as fin, open(out_path, "w", encoding="utf-8") as fout:
+        for line in fin:
+            line = line.strip()
+            if line:
+                fout.write(line + "\n")
+                count += 1
+    return count
 
 
 def _infer_split(path: Path) -> str | None:
@@ -59,13 +82,12 @@ def _infer_split(path: Path) -> str | None:
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Convert all datasets to a single merged unified v2.0 JSONL."
+        description="Convert all datasets to a single merged unified v3.0 JSONL."
     )
     ap.add_argument(
-        "--config",
-        default=_DEFAULT_CONFIG,
-        help=f"Pipeline config YAML (default: {_DEFAULT_CONFIG}). "
-        "Reads the epistemic: section for confidence weights and priority order.",
+        "--registry",
+        default=_DEFAULT_REGISTRY,
+        help=f"Source trust registry JSONL (default: {_DEFAULT_REGISTRY}).",
     )
     ap.add_argument(
         "--output",
@@ -87,13 +109,20 @@ def main():
         help="AI2THOR JSONL files.",
     )
     ap.add_argument(
+        "--synthetic",
+        nargs="*",
+        default=[],
+        metavar="FILE",
+        help="Synthetic JSONL files (already in v3.0 format — pass-through).",
+    )
+    ap.add_argument(
         "--intermediate_dir",
         default=None,
         help="Optional: write per-dataset JSONL files here for debugging.",
     )
     args = ap.parse_args()
 
-    converters = _make_converters(args.config)
+    converters = _make_converters(args.registry)
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,9 +131,11 @@ def main():
     if intermediate_dir:
         intermediate_dir.mkdir(parents=True, exist_ok=True)
 
-    inputs = [("averitec", p) for p in args.averitec] + [
-        ("ai2thor", p) for p in args.ai2thor
-    ]
+    inputs = (
+        [("averitec", p) for p in args.averitec]
+        + [("ai2thor", p) for p in args.ai2thor]
+        + [("synthetic", p) for p in args.synthetic]
+    )
 
     if not inputs:
         print("No inputs provided. Use --averitec / --ai2thor.")
