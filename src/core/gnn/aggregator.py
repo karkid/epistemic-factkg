@@ -19,6 +19,32 @@ _REFUTE_STANCE  = 1
 class SymbolicAggregator:
     """Stateless: no __init__ parameters, no nn.Module inheritance."""
 
+    def compute_soft_scores(
+        self,
+        stance_probs: torch.Tensor,  # [N_ev, 3] — softmax from H1 (differentiable)
+        is_pred:      torch.Tensor,  # [N_ev] or [N_ev,1]
+        ew:           torch.Tensor,  # [N_ev]
+        st:           torch.Tensor,  # [N_ev]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Differentiable soft symbolic scores for end-to-end training.
+
+        Uses softmax stance probabilities instead of argmax so gradients
+        flow back through H1 and H2 into the encoder.
+
+        soft_support = 1 - ∏(1 - EC_i * p_support_i)
+        soft_refute  = 1 - ∏(1 - EC_i * p_refute_i)
+        """
+        is_flat = is_pred.view(-1).float()
+        ec = 1.0 - (1.0 - st.float()) ** (ew.float() * is_flat)
+
+        p_support = stance_probs[:, 0]
+        p_refute  = stance_probs[:, 1]
+
+        support_score = 1.0 - torch.prod(1.0 - ec * p_support)
+        refute_score  = 1.0 - torch.prod(1.0 - ec * p_refute)
+
+        return support_score.unsqueeze(0), refute_score.unsqueeze(0)  # [1], [1]
+
     def compute_scores(
         self,
         stance_pred: torch.Tensor,   # [N_ev] int — argmax of H1 logits

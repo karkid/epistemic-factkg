@@ -38,8 +38,10 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--hidden-dim",     type=int,   default=256)
     ap.add_argument("--heads",          type=int,   default=4)
     ap.add_argument("--dropout",        type=float, default=0.3)
-    ap.add_argument("--is-loss-weight", type=float, default=0.5,
-                    help="λ for IS regression: total = stance_loss + λ * is_loss")
+    ap.add_argument("--is-loss-weight",      type=float, default=0.5,
+                    help="λ₁ for IS regression loss")
+    ap.add_argument("--verdict-loss-weight", type=float, default=1.0,
+                    help="λ₂ for claim-level verdict loss (VerdictHead calibration)")
     ap.add_argument("--no-class-weights", action="store_true",
                     help="Disable inverse-frequency stance class weights")
     ap.add_argument("--device",         default="cpu")
@@ -125,6 +127,7 @@ def main() -> None:
         hidden_dim=args.hidden_dim,
         heads=args.heads,
         is_loss_weight=args.is_loss_weight,
+        verdict_loss_weight=args.verdict_loss_weight,
         device=args.device,
         checkpoint_dir=args.checkpoint_dir,
     )

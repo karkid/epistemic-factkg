@@ -15,24 +15,27 @@ from src.core.gnn.types import NodeType
 
 @dataclass
 class TrainConfig:
-    epochs:         int   = 50
-    lr:             float = 1e-3
-    batch_size:     int   = 32
-    dropout:        float = 0.3
-    hidden_dim:     int   = 256
-    heads:          int   = 4
-    is_loss_weight: float = 0.5   # λ: total = stance_loss + λ * is_loss
-    device:         str   = "cpu"
-    checkpoint_dir: str   = "out/checkpoints"
-    patience:       int   = 10
+    epochs:              int   = 50
+    lr:                  float = 1e-3
+    batch_size:          int   = 32
+    dropout:             float = 0.3
+    hidden_dim:          int   = 256
+    heads:               int   = 4
+    is_loss_weight:      float = 0.5   # λ₁: stance + λ₁*is + λ₂*verdict
+    verdict_loss_weight: float = 1.0   # λ₂
+    device:              str   = "cpu"
+    checkpoint_dir:      str   = "out/checkpoints"
+    patience:            int   = 10
 
 
 @dataclass
 class EpochResult:
-    loss:        float
-    stance_loss: float
-    is_loss:     float
-    stance_acc:  float   # fraction of evidence items with correct stance
+    loss:         float
+    stance_loss:  float
+    is_loss:      float
+    verdict_loss: float
+    stance_acc:   float   # fraction of evidence items with correct stance
+    verdict_acc:  float   # fraction of claims with correct verdict
 
 
 class Trainer:
@@ -52,10 +55,11 @@ class Trainer:
         self.device = torch.device(config.device)
         self.model.to(self.device)
 
-        self.stance_criterion = nn.CrossEntropyLoss(
+        self.stance_criterion  = nn.CrossEntropyLoss(
             weight=stance_class_weights.to(self.device) if stance_class_weights is not None else None
         )
-        self.is_criterion = nn.MSELoss()
+        self.is_criterion      = nn.MSELoss()
+        self.verdict_criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode="min", patience=5, factor=0.5
@@ -69,39 +73,50 @@ class Trainer:
 
     def _run_epoch(self, loader: DataLoader, train: bool) -> EpochResult:
         self.model.train(train)
-        total_loss = total_stance = total_is = correct_stance = n_items = 0
+        total_loss = total_stance = total_is = total_verdict = 0
+        correct_stance = correct_verdict = n_ev = n_claims = 0
 
         with torch.set_grad_enabled(train):
             for batch in loader:
                 batch = batch.to(self.device)
                 out   = self.model(batch)
 
-                stance_y = batch[NodeType.EVIDENCE].stance_y.view(-1)   # [N_ev]
-                is_y     = batch[NodeType.EVIDENCE].is_y.view(-1, 1)     # [N_ev, 1]
+                stance_y  = batch[NodeType.EVIDENCE].stance_y.view(-1)  # [N_ev]
+                is_y      = batch[NodeType.EVIDENCE].is_y.view(-1, 1)   # [N_ev, 1]
+                verdict_y = batch[NodeType.CLAIM].y.view(-1)            # [N_claims]
 
                 s_loss = self.stance_criterion(out["stance_logits"], stance_y)
                 i_loss = self.is_criterion(out["is_pred"], is_y)
-                loss   = s_loss + self.config.is_loss_weight * i_loss
+                v_loss = self.verdict_criterion(out["verdict_logits"], verdict_y)
+                loss   = (s_loss
+                          + self.config.is_loss_weight      * i_loss
+                          + self.config.verdict_loss_weight * v_loss)
 
                 if train:
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
 
-                n = stance_y.size(0)
-                total_loss   += loss.item()    * n
-                total_stance += s_loss.item()  * n
-                total_is     += i_loss.item()  * n
-                preds = out["stance_logits"].argmax(dim=-1)
-                correct_stance += (preds == stance_y).sum().item()
-                n_items += n
+                nev = stance_y.size(0)
+                nc  = verdict_y.size(0)
+                total_loss    += loss.item()    * nev
+                total_stance  += s_loss.item()  * nev
+                total_is      += i_loss.item()  * nev
+                total_verdict += v_loss.item()  * nc
+                correct_stance  += (out["stance_logits"].argmax(-1) == stance_y).sum().item()
+                correct_verdict += (out["verdict_logits"].argmax(-1) == verdict_y).sum().item()
+                n_ev     += nev
+                n_claims += nc
 
-        d = max(n_items, 1)
+        dev = max(n_ev, 1)
+        dc  = max(n_claims, 1)
         return EpochResult(
-            loss=total_loss / d,
-            stance_loss=total_stance / d,
-            is_loss=total_is / d,
-            stance_acc=correct_stance / d,
+            loss=total_loss / dev,
+            stance_loss=total_stance / dev,
+            is_loss=total_is / dev,
+            verdict_loss=total_verdict / dc,
+            stance_acc=correct_stance / dev,
+            verdict_acc=correct_verdict / dc,
         )
 
     def fit(
@@ -117,23 +132,28 @@ class Trainer:
             self.scheduler.step(val.loss)
 
             history.append({
-                "epoch":       epoch,
-                "train_loss":  round(tr.loss,  4),
-                "train_s":     round(tr.stance_loss, 4),
-                "train_is":    round(tr.is_loss, 4),
-                "train_acc":   round(tr.stance_acc, 4),
-                "val_loss":    round(val.loss,  4),
-                "val_s":       round(val.stance_loss, 4),
-                "val_is":      round(val.is_loss, 4),
-                "val_acc":     round(val.stance_acc, 4),
+                "epoch":         epoch,
+                "train_loss":    round(tr.loss,         4),
+                "train_s":       round(tr.stance_loss,  4),
+                "train_is":      round(tr.is_loss,      4),
+                "train_v":       round(tr.verdict_loss, 4),
+                "train_s_acc":   round(tr.stance_acc,   4),
+                "train_v_acc":   round(tr.verdict_acc,  4),
+                "val_loss":      round(val.loss,        4),
+                "val_s":         round(val.stance_loss, 4),
+                "val_is":        round(val.is_loss,     4),
+                "val_v":         round(val.verdict_loss,4),
+                "val_s_acc":     round(val.stance_acc,  4),
+                "val_v_acc":     round(val.verdict_acc, 4),
             })
 
             if verbose:
                 print(
                     f"Epoch {epoch:3d} | "
-                    f"loss {tr.loss:.4f} (s={tr.stance_loss:.4f} is={tr.is_loss:.4f}) "
-                    f"s_acc {tr.stance_acc:.3f} | "
-                    f"val loss {val.loss:.4f} s_acc {val.stance_acc:.3f}"
+                    f"loss {tr.loss:.4f} "
+                    f"(s={tr.stance_loss:.3f} is={tr.is_loss:.3f} v={tr.verdict_loss:.3f}) "
+                    f"s_acc {tr.stance_acc:.3f} v_acc {tr.verdict_acc:.3f} | "
+                    f"val loss {val.loss:.4f} s_acc {val.stance_acc:.3f} v_acc {val.verdict_acc:.3f}"
                 )
 
             if val.loss < self._best_val_loss:

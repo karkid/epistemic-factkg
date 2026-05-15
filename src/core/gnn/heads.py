@@ -32,6 +32,24 @@ class StanceHead(nn.Module):
         return self.mlp(ev_emb)
 
 
+class VerdictHead(nn.Module):
+    """Learned verdict calibration: maps (support_score, refute_score) → 3-class logits.
+
+    Replaces hard-coded thresholds (0.75 / 0.40) with a learned Linear(2→3).
+    Trained with claim-level CrossEntropyLoss against annotated verdicts.
+    The EC formula (symbolic aggregation) is unchanged — this head only
+    learns where the decision boundaries sit for each dataset's annotation style.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = nn.Linear(2, 3)
+
+    def forward(self, scores: torch.Tensor) -> torch.Tensor:
+        """scores: [N_claims, 2] — (support_score, refute_score) per claim."""
+        return self.linear(scores)
+
+
 class ISHead(nn.Module):
     """H2 — per-evidence inference-strength regression.
 

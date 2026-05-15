@@ -131,6 +131,7 @@ class ClaimGraphBuilder:
         label = VERDICT_TO_INT.get(
             record.get("verdict", {}).get("label", "not_enough_evidence"), 2
         )
+        data[NodeType.CLAIM].y = torch.tensor([label], dtype=torch.long)
         dataset = record.get("provenance", {}).get("dataset", "unknown")
         return ClaimGraph(data=data, label=label, dataset=dataset)
 
