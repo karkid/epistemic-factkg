@@ -166,7 +166,6 @@ eval:
     mkdir -p {{RESULTS_DIR}}
     uv run python -m src.cli.evaluate_gnn \
         --checkpoint {{CHECKPOINTS_DIR}}/best_model.pt \
-        --dataset {{GRAPH_DATASET}} \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
         --output {{RESULTS_DIR}}
