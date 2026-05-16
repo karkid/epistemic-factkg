@@ -1,18 +1,17 @@
-"""EpistemicHGNN — neuro-symbolic fact-verification model (ADR-013, ADR-014).
+"""HybridHGNN — neuro-symbolic model with fused EC + claim-embedding verdict (v2-hgnn).
 
-Architecture:
-  EpistemicEncoder  (shared HeteroConv, config-driven)
-      ↓ evidence embeddings [N_ev, hidden_dim]
-  StanceHead   H1  → stance logits  [N_ev, 3]
-  ISHead       H2  → IS scalars     [N_ev, 1]
-      ↓ differentiable soft EC aggregation (per claim)
-  VerdictHead      → verdict logits [N_claims, 3]
+Architecture is identical to EpistemicHGNN (v1-hgnn) except for the verdict pathway:
 
-Training loss:
-  stance_CE + λ₁ * IS_MSE + λ₂ * verdict_CE
-  Gradients flow through H1 (soft stance probs) and H2 (IS) into the encoder.
+  v1-hgnn:  EC scores [2d]              → VerdictHead        → verdict
+  v2-hgnn:  EC scores [2d] + claim_emb  → HybridVerdictHead  → verdict
 
-At inference: hard argmax stance → symbolic EC scores → VerdictHead → verdict string.
+Everything upstream is shared: same encoder, same StanceHead (H1), same ISHead (H2),
+same EC formula, same IS detach so IS regression is clean.
+
+Ablation story (for paper):
+  baseline   — claim_emb only          — no epistemic formalism
+  v1-hgnn    — EC scores only          — pure symbolic, information bottleneck
+  v2-hgnn    — EC scores + claim_emb  — hybrid; isolates EC contribution
 """
 
 from __future__ import annotations
@@ -22,15 +21,15 @@ import torch.nn as nn
 from torch_geometric.data import HeteroData
 
 from src.model.architecture.aggregator import SymbolicAggregator
-from src.model.config import GraphConfig
 from src.model.architecture.encoder import EpistemicEncoder
-from src.model.architecture.heads import ISHead, StanceHead, VerdictHead
+from src.model.architecture.heads import HybridVerdictHead, ISHead, StanceHead
+from src.model.config import GraphConfig
 from src.model.data.types import VERDICT_TO_INT, NodeType
 
 _INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}
 
 
-class EpistemicHGNN(nn.Module):
+class HybridHGNN(nn.Module):
     """
     Args:
         graph_config:  Node dims + edge types (use GraphConfig.v1()).
@@ -51,7 +50,7 @@ class EpistemicHGNN(nn.Module):
         self.encoder = EpistemicEncoder(cfg, hidden_dim, heads, dropout)
         self.stance_head = StanceHead(hidden_dim)
         self.is_head = ISHead(hidden_dim)
-        self.verdict_head = VerdictHead()
+        self.verdict_head = HybridVerdictHead(hidden_dim)
         self.aggregator = SymbolicAggregator()
 
     def forward(self, data: HeteroData) -> dict[str, torch.Tensor]:
@@ -60,16 +59,18 @@ class EpistemicHGNN(nn.Module):
         Returns:
             stance_logits  : [N_ev, 3]
             is_pred        : [N_ev, 1]
-            verdict_logits : [N_claims, 3]  — from soft symbolic scores
+            verdict_logits : [N_claims, 3]  — from EC scores fused with claim embedding
         """
         x_dict = self.encoder(data)
         ev_emb = x_dict[NodeType.EVIDENCE]
+        claim_emb = x_dict[NodeType.CLAIM]
 
-        stance_logits = self.stance_head(ev_emb)  # [N_ev, 3]
-        is_pred = self.is_head(ev_emb)  # [N_ev, 1]
+        stance_logits = self.stance_head(ev_emb)
+        is_pred = self.is_head(ev_emb)
 
-        # Soft symbolic scores — differentiable (uses softmax probs, not argmax)
-        verdict_logits = self._soft_verdict_logits(data, stance_logits, is_pred.detach())
+        verdict_logits = self._soft_verdict_logits(
+            data, stance_logits, is_pred.detach(), claim_emb
+        )
 
         return {
             "stance_logits": stance_logits,
@@ -79,11 +80,7 @@ class EpistemicHGNN(nn.Module):
 
     @torch.no_grad()
     def predict(self, data: HeteroData) -> dict:
-        """Full neuro-symbolic inference for a single graph.
-
-        Returns stance/IS/symbolic scores for interpretability,
-        plus the learned VerdictHead verdict string.
-        """
+        """Full neuro-symbolic inference for a single graph."""
         out = self.forward(data)
         stance_pred = out["stance_logits"].argmax(dim=-1)
 
@@ -110,13 +107,9 @@ class EpistemicHGNN(nn.Module):
         data: HeteroData,
         stance_logits: torch.Tensor,
         is_pred: torch.Tensor,
+        claim_emb: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute per-claim soft symbolic scores and map through VerdictHead.
-
-        Uses the batch pointer (data["evidence"].batch) to group evidence
-        items by claim. Falls back to a single claim when batch pointer is
-        absent (single-graph inference).
-        """
+        """Compute soft EC scores and fuse with claim embedding → VerdictHead."""
         ev = data[NodeType.EVIDENCE]
         batch_ptr = getattr(ev, "batch", None)
         n_claims = data[NodeType.CLAIM].x.shape[0]
@@ -140,4 +133,4 @@ class EpistemicHGNN(nn.Module):
             scores[c, 0] = sup
             scores[c, 1] = ref
 
-        return self.verdict_head(scores)  # [n_claims, 3]
+        return self.verdict_head(scores, claim_emb)  # [n_claims, 3]

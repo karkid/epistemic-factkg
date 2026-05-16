@@ -38,6 +38,7 @@ non_apprehension_absent     1 ai2thor non_app IS=0.8   supported       no
 
 from __future__ import annotations
 
+import random
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -383,9 +384,15 @@ def _build_record(
         triples = ev_triples[i] if i < len(ev_triples) else []
         ev_id = f"{rec_id}-e{i}"
 
+        # Small Gaussian jitter on IS so synthetic values don't cluster on
+        # fixed template constants (e.g. always exactly 0.8).  σ=0.05 keeps
+        # verdict boundaries stable while adding realistic variation.
+        is_val = float(
+            max(0.1, min(1.0, spec.inference_strength + random.gauss(0.0, 0.05)))
+        )
         st = get_source_trust(spec.source_id, registry)
         ew = combine_evidence_weights(spec.evidence_types)
-        ec = compute_evidence_confidence(st, ew, spec.inference_strength)
+        ec = compute_evidence_confidence(st, ew, is_val)
 
         evidence_items.append(
             {
@@ -397,7 +404,7 @@ def _build_record(
                 "stance": spec.stance,
                 "evidence_types": list(spec.evidence_types),
                 "source_id": spec.source_id,
-                "inference_strength": spec.inference_strength,
+                "inference_strength": is_val,
                 "source_url": None,
                 "_ec": ec,
             }

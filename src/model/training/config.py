@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 @dataclass
 class TrainConfig:
-    epochs: int = 50
-    lr: float = 1e-3
+    epochs: int = 100
+    lr: float = 3e-4
     batch_size: int = 32
     dropout: float = 0.3
     hidden_dim: int = 256
@@ -18,4 +18,4 @@ class TrainConfig:
     device: str = "cpu"
     checkpoint_dir: str = "out/model/checkpoints"
     report_dir: str = "out/reports/model"
-    patience: int = 10
+    patience: int = 20

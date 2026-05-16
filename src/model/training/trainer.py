@@ -31,6 +31,7 @@ class Trainer:
         model: nn.Module,
         config: TrainConfig,
         stance_class_weights: torch.Tensor | None = None,
+        verdict_class_weights: torch.Tensor | None = None,
     ):
         self.model = model
         self.config = config
@@ -43,10 +44,14 @@ class Trainer:
             else None
         )
         self.is_criterion = nn.MSELoss()
-        self.verdict_criterion = nn.CrossEntropyLoss()
+        self.verdict_criterion = nn.CrossEntropyLoss(
+            weight=verdict_class_weights.to(self.device)
+            if verdict_class_weights is not None
+            else None
+        )
         self.optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", patience=5, factor=0.5
+            self.optimizer, mode="min", patience=8, factor=0.5
         )
 
         self._best_val_loss = float("inf")

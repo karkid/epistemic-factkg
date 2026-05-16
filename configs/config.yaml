@@ -25,31 +25,41 @@ synthetic:
   model: "claude-haiku-4-5-20251001"
 
   # Total records to generate per run.
-  n_records: 1000
+  n_records: 2500
 
   # Minimum fraction of records that must be shortcut-breaking (ADR-013).
   min_shortcut_fraction: 0.35
 
   # Distribution across template types (must sum to 1.0).
-  # Shortcut-breaking (SB) types: low_trust_nee, low_trust_refuted_nee, conflicting,
+  # Shortcut-breaking (SB) types: low_trust_nee, low_trust_refuted_nee,
   #   strong_support_weak_refute, weak_support_strong_refute, weak_vs_weak_nee, inference_nee
-  # Total SB fraction: ~61% — well above the 35% minimum (ADR-013).
+  # Total SB fraction: ~59% — well above the 35% minimum (ADR-013).
+  #
+  # NEI-heavy distribution: ~55% NEI / ~28% supported / ~17% refuted.
+  # Rationale: AVeriTeC skews 57% refuted and AI2THOR has zero NEI (closed-world),
+  # so synthetic is the only lever to push NEI toward ~24% of the combined dataset.
+  # conflicting_evidence is excluded from GNN training (ADR-007) so its template is
+  # omitted here to avoid generating records that will be filtered out.
   distribution:
-    high_trust_supported:          0.06
-    low_trust_nee:                 0.07   # SB: supports→NEE
+    # NEI templates — 0.55 total
+    low_trust_nee:                 0.11   # SB: supports→NEE (low ST)
+    low_trust_refuted_nee:         0.11   # SB: refutes→NEE (low ST)
+    weak_vs_weak_nee:              0.12   # SB: both stances present, verdict=NEE
+    inference_nee:                 0.11   # SB: supports→NEE via inference IS penalty
+    non_apprehension_weak_nee:     0.10   # SB: absent→NEE via low-trust source
+
+    # Supported templates — 0.28 total
+    high_trust_supported:          0.05
+    strong_support_weak_refute:    0.07   # SB: has refute stance but verdict=supported
+    corroborating_3:               0.05
+    perception_direct:             0.05
+    comparison_supported:          0.04
+    non_apprehension_absent:       0.02   # absent→supported (normal)
+
+    # Refuted templates — 0.17 total
     high_trust_refuted:            0.06
-    low_trust_refuted_nee:         0.07   # SB: refutes→NEE
-    conflicting:                   0.07   # SB: both stances, conflicting
-    strong_support_weak_refute:    0.09   # SB: has refute stance but verdict=supported
-    weak_support_strong_refute:    0.09   # SB: has support stance but verdict=refuted
-    weak_vs_weak_nee:              0.09   # SB: both stances present, verdict=NEE
-    corroborating_3:               0.06
-    perception_direct:             0.07
-    inference_nee:                 0.07   # SB: supports→NEE via inference IS penalty
-    comparison_supported:          0.06
-    non_apprehension_absent:       0.03   # absent→supported (normal)
+    weak_support_strong_refute:    0.07   # SB: has support stance but verdict=refuted
     non_apprehension_refuted:      0.04   # absence refutes positive claim
-    non_apprehension_weak_nee:     0.07   # SB: absent→NEE via low-trust source
 
   # Output directory for generated JSONL files.
   output_dir: "data/raw/synthetic"

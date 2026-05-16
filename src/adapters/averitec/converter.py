@@ -10,7 +10,7 @@ from src.epistemic.enums import (
     ReasoningStrategy,
     Verdict,
 )
-from src.epistemic.registry import resolve_source_id
+from src.epistemic.registry import get_source_trust, resolve_source_id
 from src.utils.time import utc_now_iso
 
 
@@ -85,6 +85,9 @@ _NUMERIC_CUES = re.compile(
     r"\b(%|percent|percentage|largest|smallest|rank|gdp|million|billion|trillion)\b",
     re.IGNORECASE,
 )
+
+# Wayback Machine URL: extract the embedded original URL after the timestamp
+_ARCHIVE_RE = re.compile(r"web\.archive\.org/web/\d+[^/]*/(.+)")
 
 # Inference strength per answer_type (IS rubric from ADR-019)
 # boolean/extractive → direct lookup (0.8), abstractive → synthesised (0.6),
@@ -171,12 +174,25 @@ def _infer_evidence_types_basic(
 
 
 def _resolve_evidence_source(source_url: str, modality: str, registry: dict) -> str:
-    """Parse source_url → domain → registry source_id."""
+    """Parse source_url → domain → registry source_id.
+
+    Wayback Machine URLs embed the original URL in the path; we extract that
+    original domain so archived Reuters/BBC/gov pages get their real trust score
+    instead of the generic webarchive fallback (ST=0.40).
+    """
     if modality == "annotator_knowledge":
         return "annotator_knowledge"
     if not source_url:
         return "unknown_web"
     try:
+        # Unwrap Wayback Machine archives before domain resolution
+        m = _ARCHIVE_RE.search(source_url)
+        if m:
+            embedded = m.group(1)
+            if not embedded.startswith(("http://", "https://")):
+                embedded = "https://" + embedded
+            source_url = embedded
+
         parsed = urlparse(source_url)
         domain = (parsed.netloc or "").lower().removeprefix("www.")
         if not domain:
@@ -234,7 +250,11 @@ class AveritecConverter(DatasetConverter):
                 source_id = _resolve_evidence_source(
                     source_url, modality, self._registry
                 )
-                is_ = _IS_FROM_ANSWER_TYPE.get(ans_type, 0.6)
+                is_raw = _IS_FROM_ANSWER_TYPE.get(ans_type, 0.6)
+                # IS cannot exceed source trust: a Facebook post cannot provide
+                # IS=0.8 inference regardless of how direct the answer is.
+                st = get_source_trust(source_id, self._registry)
+                is_ = is_raw if st >= 0.45 else max(0.10, min(is_raw, st))
                 evidence_types = _infer_evidence_types_basic(
                     modality, ans_type, ans_text
                 )

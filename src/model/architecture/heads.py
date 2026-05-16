@@ -50,6 +50,30 @@ class VerdictHead(nn.Module):
         return self.linear(scores)
 
 
+class HybridVerdictHead(nn.Module):
+    """Verdict head that fuses symbolic EC scores with the claim node embedding.
+
+    Input : EC scores [N_claims, 2] + claim embedding [N_claims, hidden_dim]
+    Output: logits [N_claims, 3]
+
+    The fusion lets the head use both the interpretable epistemic signal
+    (support_score / refute_score from the EC formula) and the full semantic
+    context from the encoder, so neither source of information is discarded.
+    """
+
+    def __init__(self, hidden_dim: int = 256) -> None:
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(hidden_dim + 2, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, 3),
+        )
+
+    def forward(self, scores: torch.Tensor, claim_emb: torch.Tensor) -> torch.Tensor:
+        """scores: [N_claims, 2], claim_emb: [N_claims, hidden_dim]."""
+        return self.mlp(torch.cat([scores, claim_emb], dim=1))
+
+
 class ISHead(nn.Module):
     """H2 — per-evidence inference-strength regression.
 

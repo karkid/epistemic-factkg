@@ -18,7 +18,7 @@ from src.model.data.builder import ClaimGraphBuilder
 from src.model.models import MODELS
 from src.model.training.config import TrainConfig
 from src.model.training.trainer import Trainer
-from src.model.data.types import NUM_STANCE
+from src.model.data.types import NUM_STANCE, NUM_VERDICT
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -57,7 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--no-class-weights",
         action="store_true",
-        help="Disable inverse-frequency stance class weights",
+        help="Disable inverse-frequency class weights for both stance and verdict",
     )
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--verbose", "-v", action="store_true")
@@ -127,17 +127,29 @@ def main() -> None:
     train_loader = DataLoader(train_graphs, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_graphs, batch_size=args.batch_size, shuffle=False)
 
-    # ── Stance class weights ──────────────────────────────────────────────────
+    # ── Class weights (inverse-frequency) ────────────────────────────────────
     stance_weights = None
+    verdict_weights = None
     if not args.no_class_weights:
         all_stance_y = torch.cat([g["evidence"].stance_y for g in train_graphs])
-        counts = (
+        s_counts = (
             torch.bincount(all_stance_y, minlength=NUM_STANCE).float().clamp(min=1.0)
         )
-        stance_weights = counts.sum() / (NUM_STANCE * counts)
+        stance_weights = s_counts.sum() / (NUM_STANCE * s_counts)
+
+        all_verdict_y = torch.cat([g["claim"].y for g in train_graphs])
+        v_counts = (
+            torch.bincount(all_verdict_y, minlength=NUM_VERDICT).float().clamp(min=1.0)
+        )
+        verdict_weights = v_counts.sum() / (NUM_VERDICT * v_counts)
+
         if args.verbose:
             print(
-                f"Stance class weights: {[round(w, 3) for w in stance_weights.tolist()]}"
+                f"Stance  class weights: {[round(w, 3) for w in stance_weights.tolist()]}"
+            )
+            print(
+                f"Verdict class weights: {[round(w, 3) for w in verdict_weights.tolist()]}"
+                f"  (supported / refuted / NEI)"
             )
 
     # ── Model + trainer ───────────────────────────────────────────────────────
@@ -161,7 +173,12 @@ def main() -> None:
         device=args.device,
         checkpoint_dir=args.checkpoint_dir,
     )
-    trainer = Trainer(model, config, stance_class_weights=stance_weights)
+    trainer = Trainer(
+        model,
+        config,
+        stance_class_weights=stance_weights,
+        verdict_class_weights=verdict_weights,
+    )
 
     print(
         f"Training {args.model_name}  |  "

@@ -46,11 +46,9 @@ def _write_eval_plots(
     plots_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Confusion matrix heatmap ──────────────────────────────────────────────
-    confusion = verdict_metrics["confusion"]
-    labels = list(confusion.keys())
-    matrix = np.array(
-        [[confusion[t].get(p, 0) for p in labels] for t in labels], dtype=float
-    )
+    confusion = verdict_metrics["confusion"]  # list[list[int]]
+    labels = [_INT_TO_VERDICT[i] for i in range(len(confusion))]
+    matrix = np.array(confusion, dtype=float)
     fig, ax = plt.subplots(figsize=(6, 5))
     im = ax.imshow(matrix, cmap="Blues")
     ax.set_xticks(range(len(labels)))
@@ -189,7 +187,7 @@ def main() -> None:
         GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout
     )
     model.load_state_dict(
-        torch.load(args.checkpoint, map_location=device, weights_only=True)
+        torch.load(args.checkpoint, map_location=device, weights_only=False)
     )
     model.to(device).eval()
 
@@ -294,15 +292,15 @@ def main() -> None:
             for cls, m in per_class.items()
         )
 
-    def _confusion_table(confusion: dict) -> str:
-        labels = list(confusion.keys())
+    def _confusion_table(confusion: list) -> str:
+        labels = [_INT_TO_VERDICT[i] for i in range(len(confusion))]
         header = "| True \\ Pred | " + " | ".join(labels) + " |"
         sep = "|" + "---|" * (len(labels) + 1)
         rows = [
-            f"| {true} | "
-            + " | ".join(str(confusion[true].get(p, 0)) for p in labels)
+            f"| {labels[i]} | "
+            + " | ".join(str(confusion[i][j]) for j in range(len(labels)))
             + " |"
-            for true in labels
+            for i in range(len(labels))
         ]
         return "\n".join([header, sep] + rows)
 

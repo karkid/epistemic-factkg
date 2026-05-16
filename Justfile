@@ -141,7 +141,6 @@ build rebuild="false":
             --registry {{REGISTRY}} \
             --seed-pool {{SEED_POOL}} \
             --ai2thor-claims {{AI2THOR_CLAIMS}} \
-            --n-records 1000 \
             --output {{SYNTHETIC_JSONL}}
     fi
     mkdir -p out/data/unified out/data/training out/data/intermediate
@@ -212,8 +211,8 @@ train model=MODEL_NAME:
         --splits-dir {{SPLITS_DIR}} \
         --checkpoint-dir out/model/{{model}}/checkpoints \
         --report-dir out/reports/model/{{model}} \
-        --epochs 50 \
-        --lr 1e-3 \
+        --epochs 100 \
+        --lr 3e-4 \
         --batch-size 32 \
         --device cpu \
         --verbose

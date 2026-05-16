@@ -8,9 +8,12 @@ To add a new model:
   2. Import it here and add to MODELS.
 """
 
+from src.model.models.baseline import BaselineHGNN
 from src.model.models.epistemichgnn import EpistemicHGNN
+from src.model.models.hybridhgnn import HybridHGNN
 
 MODELS: dict[str, type] = {
     "v1-hgnn": EpistemicHGNN,
-    # "baseline": BaselineGNN,  ← register new models here
+    "v2-hgnn": HybridHGNN,
+    "baseline": BaselineHGNN,
 }

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.adapters.synthetic.client.base import EvidenceSpec, SyntheticTextClient
-from adapters.synthetic.llm.prompt_builder import (
+from src.adapters.synthetic.llm.prompt_builder import (
     build_prompt,
     parse_llm_response,
     _SYSTEM_PROMPT,
