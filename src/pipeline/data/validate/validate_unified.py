@@ -427,7 +427,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Validate unified v3.0 JSONL files.")
     ap.add_argument("--files", nargs="+", required=True)
     ap.add_argument("--schema", default=None)
-    ap.add_argument("--out", default="out/report/validation.json")
+    ap.add_argument("--out", default="out/reports/data/validation.json")
     ap.add_argument("--max_examples", type=int, default=3)
     args = ap.parse_args()
 

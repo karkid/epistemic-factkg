@@ -16,5 +16,6 @@ class TrainConfig:
     is_loss_weight: float = 0.5  # λ₁: stance + λ₁*is + λ₂*verdict
     verdict_loss_weight: float = 1.0  # λ₂
     device: str = "cpu"
-    checkpoint_dir: str = "out/checkpoints"
+    checkpoint_dir: str = "out/model/checkpoints"
+    report_dir: str = "out/reports/model"
     patience: int = 10

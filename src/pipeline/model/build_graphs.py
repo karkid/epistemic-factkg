@@ -20,7 +20,7 @@ def main() -> None:
     ap.add_argument("--output", required=True, help="Path to write graph_dataset.pt")
     ap.add_argument(
         "--embed-cache",
-        default="out/graphs/embed_cache.pkl",
+        default="out/model/graphs/embed_cache.pkl",
         help="Path to sentence-embedding cache .pkl",
     )
     ap.add_argument(

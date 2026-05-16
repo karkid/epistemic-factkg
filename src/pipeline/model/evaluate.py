@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -52,8 +53,8 @@ def main() -> None:
         help="Filtered training JSONL (test records drawn from this)",
     )
     ap.add_argument("--registry", default="data/registry/source_trust_registry.jsonl")
-    ap.add_argument("--embed-cache", default="out/graphs/embed_cache.pkl")
-    ap.add_argument("--splits-dir", default="out/splits")
+    ap.add_argument("--embed-cache", default="out/model/graphs/embed_cache.pkl")
+    ap.add_argument("--splits-dir", default="out/data/splits")
     ap.add_argument(
         "--output",
         required=True,
@@ -167,6 +168,33 @@ def main() -> None:
     (output_dir / "verdict_metrics.json").write_text(
         json.dumps(verdict_metrics, indent=2)
     )
+
+    # ── Write eval_summary.md ─────────────────────────────────────────────────
+    _now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    eval_md = (
+        f"# Evaluation Summary\n\n"
+        f"Generated: {_now}\n\n"
+        f"## Stance Classification\n\n"
+        f"| Metric | Value |\n|--------|-------|\n"
+        f"| Accuracy | {stance_metrics['accuracy']:.4f} |\n"
+        f"| Macro F1 | {stance_metrics['macro_f1']:.4f} |\n"
+        f"| ECE | {stance_metrics['ece']:.4f} |\n"
+        f"| N Evidence | {stance_metrics['n_evidence']} |\n\n"
+        f"## Information Score (IS)\n\n"
+        f"| Metric | Value |\n|--------|-------|\n"
+        f"| RMSE | {is_metrics['rmse']:.4f} |\n"
+        f"| Pearson r | {is_metrics['pearson_r']:.4f} |\n"
+        f"| Pred Mean | {is_metrics['pred_mean']:.4f} |\n"
+        f"| True Mean | {is_metrics['true_mean']:.4f} |\n\n"
+        f"## Verdict\n\n"
+        f"| Metric | Value |\n|--------|-------|\n"
+        f"| Accuracy | {verdict_metrics['accuracy']:.4f} |\n"
+        f"| Macro F1 | {verdict_metrics['macro_f1']:.4f} |\n"
+        f"| Weighted F1 | {verdict_metrics['weighted_f1']:.4f} |\n"
+        f"| N Claims | {verdict_metrics['n_claims']} |\n"
+        f"| Skipped | {verdict_metrics['skipped']} |\n"
+    )
+    (output_dir.parent / "eval_summary.md").write_text(eval_md)
 
     # ── Print summary ─────────────────────────────────────────────────────────
     print("=" * 60)

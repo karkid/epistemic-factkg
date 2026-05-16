@@ -16,16 +16,17 @@ RAW_AVERITEC_DEV    := "data/raw/averitec/dev.json"
 SYNTHETIC_RAW_DIR   := "data/raw/synthetic"
 SYNTHETIC_JSONL     := SYNTHETIC_RAW_DIR + "/synthetic_current.jsonl"
 SEED_POOL           := "data/registry/seed_pool.jsonl"
-KG_TTL              := "out/knowledge_graph.ttl"
-UNIFIED_JSONL       := "out/unified/epistemic_factkg.jsonl"
-VALIDATION_JSON     := "out/report/validation.json"
-REPORT_DIR          := "out/report"
-TRAINING_JSONL      := "out/training/epistemic_factkg_training.jsonl"
-TRAINING_VALIDATION := "out/report/training_validation.json"
-GRAPH_DATASET       := "out/graphs/graph_dataset.pt"
-SPLITS_DIR          := "out/splits"
-CHECKPOINTS_DIR     := "out/checkpoints"
-RESULTS_DIR         := "out/results"
+KG_TTL              := "out/model/knowledge_graph.ttl"
+UNIFIED_JSONL       := "out/data/unified/epistemic_factkg.jsonl"
+VALIDATION_JSON     := "out/reports/data/validation.json"
+REPORT_DIR          := "out/reports/data"
+MODEL_REPORT_DIR    := "out/reports/model"
+TRAINING_JSONL      := "out/data/training/epistemic_factkg_training.jsonl"
+TRAINING_VALIDATION := "out/reports/data/training_validation.json"
+GRAPH_DATASET       := "out/model/graphs/graph_dataset.pt"
+SPLITS_DIR          := "out/data/splits"
+CHECKPOINTS_DIR     := "out/model/checkpoints"
+RESULTS_DIR         := "out/reports/model/eval"
 
 
 # ╔═════════════════════════════════════════════════════════════════════════════╗
@@ -57,9 +58,9 @@ test:
 
 
 [group("Dev")]
-[doc("Delete all generated outputs: out/, data/processed/, data/summary/, runs/")]
+[doc("Delete all generated outputs: out/ (includes runs/), data/processed/, data/summary/")]
 clean:
-    rm -rf out/ data/processed/ data/summary/ runs/
+    rm -rf out/ data/processed/ data/summary/
     @echo "Cleaned generated outputs."
 
 
@@ -127,7 +128,7 @@ build rebuild="false":
             --n-records 1000 \
             --output {{SYNTHETIC_JSONL}}
     fi
-    mkdir -p out/unified out/training out/intermediate
+    mkdir -p out/data/unified out/data/training out/data/intermediate
     uv run python -m src.pipeline.data.build \
         $REBUILD_FLAG \
         --registry {{REGISTRY}} \
@@ -136,7 +137,7 @@ build rebuild="false":
         --synthetic {{SYNTHETIC_JSONL}} \
         --unified-out {{UNIFIED_JSONL}} \
         --training-out {{TRAINING_JSONL}} \
-        --intermediate-dir out/intermediate
+        --intermediate-dir out/data/intermediate
     mkdir -p {{SPLITS_DIR}}
     uv run python -m src.pipeline.data.split_dataset \
         --input {{TRAINING_JSONL}} \
@@ -176,23 +177,24 @@ report:
 [group("Model Pipeline")]
 [doc("Build PyG HeteroData graph dataset from filtered training JSONL")]
 graph:
-    mkdir -p out/graphs
+    mkdir -p out/model/graphs
     uv run python -m src.pipeline.model.build_graphs \
         --input {{TRAINING_JSONL}} \
         --output {{GRAPH_DATASET}} \
-        --embed-cache out/graphs/embed_cache.pkl \
+        --embed-cache out/model/graphs/embed_cache.pkl \
         --verbose
 
 
 [group("Model Pipeline")]
 [doc("Train EpistemicHGNN (multi-head neuro-symbolic — stance + IS multi-task loss)")]
 train:
-    mkdir -p {{CHECKPOINTS_DIR}}
+    mkdir -p {{CHECKPOINTS_DIR}} {{MODEL_REPORT_DIR}}
     uv run python -m src.pipeline.model.train \
         --dataset {{GRAPH_DATASET}} \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
         --checkpoint-dir {{CHECKPOINTS_DIR}} \
+        --report-dir {{MODEL_REPORT_DIR}} \
         --epochs 50 \
         --lr 1e-3 \
         --batch-size 32 \

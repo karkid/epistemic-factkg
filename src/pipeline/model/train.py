@@ -27,10 +27,11 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--jsonl", required=True, help="Filtered training JSONL")
-    ap.add_argument("--splits-dir", default="out/splits")
-    ap.add_argument("--checkpoint-dir", default="out/checkpoints")
+    ap.add_argument("--splits-dir", default="out/data/splits")
+    ap.add_argument("--checkpoint-dir", default="out/model/checkpoints")
+    ap.add_argument("--report-dir", default="out/reports/model")
     ap.add_argument("--registry", default="data/registry/source_trust_registry.jsonl")
-    ap.add_argument("--embed-cache", default="out/graphs/embed_cache.pkl")
+    ap.add_argument("--embed-cache", default="out/model/graphs/embed_cache.pkl")
     ap.add_argument(
         "--dataset", default=None, help="Unused — kept for Justfile compatibility"
     )
@@ -160,7 +161,9 @@ def main() -> None:
 
     # ── Save history ──────────────────────────────────────────────────────────
     ckpt_dir = Path(args.checkpoint_dir)
-    (ckpt_dir / "training_history.json").write_text(json.dumps(history, indent=2))
+    report_dir = Path(args.report_dir)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "training_history.json").write_text(json.dumps(history, indent=2))
     print(f"Best model → {ckpt_dir}/best_model.pt")
 
 

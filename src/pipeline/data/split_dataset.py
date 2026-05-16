@@ -94,7 +94,7 @@ def main() -> None:
     )
     ap.add_argument("--input", required=True, help="Path to filtered training JSONL")
     ap.add_argument(
-        "--output-dir", default="out/splits", help="Directory for index JSON files"
+        "--output-dir", default="out/data/splits", help="Directory for index JSON files"
     )
     ap.add_argument("--train-frac", type=float, default=0.8)
     ap.add_argument("--val-frac", type=float, default=0.1)
