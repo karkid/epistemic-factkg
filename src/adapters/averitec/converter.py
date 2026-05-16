@@ -3,23 +3,23 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
-from src.core.ports.dataset.converter import DatasetConverter
-from src.core.claims.labels import (
+from src.ports.converter import DatasetConverter
+from src.epistemic.enums import (
     EvidenceStance,
     EvidenceType,
     ReasoningStrategy,
     Verdict,
-    resolve_source_id,
 )
+from src.epistemic.registry import resolve_source_id
 from src.utils.time import utc_now_iso
 
 
 _STRATEGY_MAP: dict[str, str] = {
-    "numerical comparison":          ReasoningStrategy.SPATIAL_COMPARISON,
-    "written evidence":              ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "consultation":                  ReasoningStrategy.MULTI_HOP_INFERENCE,
-    "expert consultation":           ReasoningStrategy.MULTI_HOP_INFERENCE,
-    "fact-checker reference":        ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "numerical comparison": ReasoningStrategy.SPATIAL_COMPARISON,
+    "written evidence": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "consultation": ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "expert consultation": ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "fact-checker reference": ReasoningStrategy.MULTI_HOP_INFERENCE,
     "satirical source identification": ReasoningStrategy.TESTIMONIAL_LOOKUP,
 }
 
@@ -39,8 +39,10 @@ def _to_strategy(strategies: list[str] | None) -> str:
     """
     if not strategies:
         return ReasoningStrategy.TESTIMONIAL_LOOKUP
-    mapped = {_STRATEGY_MAP.get(s.strip().lower(), ReasoningStrategy.TESTIMONIAL_LOOKUP)
-              for s in strategies}
+    mapped = {
+        _STRATEGY_MAP.get(s.strip().lower(), ReasoningStrategy.TESTIMONIAL_LOOKUP)
+        for s in strategies
+    }
     for candidate in _STRATEGY_PRIORITY:
         if candidate in mapped:
             return candidate
@@ -145,7 +147,9 @@ def _verdict_to_stance(label: Verdict) -> EvidenceStance | None:
     return None
 
 
-def _infer_evidence_types_basic(modality: str, answer_type: str, answer_text: str) -> list[str]:
+def _infer_evidence_types_basic(
+    modality: str, answer_type: str, answer_text: str
+) -> list[str]:
     """Determine base evidence_types for one AVeriTeC evidence item.
 
     web_table gets comparison_analogy + testimony (tabular data implies numerical
@@ -227,9 +231,13 @@ class AveritecConverter(DatasetConverter):
                 )
                 text = f"{qtext} {ans_text}".strip() if qtext else ans_text
 
-                source_id = _resolve_evidence_source(source_url, modality, self._registry)
+                source_id = _resolve_evidence_source(
+                    source_url, modality, self._registry
+                )
                 is_ = _IS_FROM_ANSWER_TYPE.get(ans_type, 0.6)
-                evidence_types = _infer_evidence_types_basic(modality, ans_type, ans_text)
+                evidence_types = _infer_evidence_types_basic(
+                    modality, ans_type, ans_text
+                )
 
                 items.append(
                     {
@@ -279,8 +287,7 @@ class AveritecConverter(DatasetConverter):
         evidence_raw = self._build_evidence(raw_record, oid)
 
         evidence_out = [
-            {k: v for k, v in e.items() if not k.startswith("_")}
-            for e in evidence_raw
+            {k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_raw
         ]
 
         if not evidence_out:

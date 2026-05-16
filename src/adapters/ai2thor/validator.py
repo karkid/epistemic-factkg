@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.core.ports.dataset.validator import DatasetValidator
-from src.core.claims.labels import EvidenceStance, EvidenceType
+from src.ports.validator import DatasetValidator
+from src.epistemic.enums import EvidenceStance, EvidenceType
 
 
 _VALID_AI2THOR_EVIDENCE_TYPES = {
@@ -60,8 +60,6 @@ class AI2ThorValidator(DatasetValidator):
         # Only perception / non_apprehension are valid for simulator-sourced records
         for et in evidence_types_all:
             if et not in _VALID_AI2THOR_EVIDENCE_TYPES:
-                msgs.append(
-                    f"AI2THOR record has unexpected evidence_type: {et!r}."
-                )
+                msgs.append(f"AI2THOR record has unexpected evidence_type: {et!r}.")
 
         return msgs

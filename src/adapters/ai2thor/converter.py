@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from urllib.parse import unquote
 
-from src.core.ports.dataset.converter import DatasetConverter
-from src.core.claims.labels import (
+from src.ports.converter import DatasetConverter
+from src.epistemic.enums import (
     EvidenceStance,
     EvidenceType,
     ReasoningStrategy,
@@ -17,14 +17,15 @@ _AFFORDANCE_PREDS = {"breakable", "pickupable", "openable", "istoggleable"}
 
 _STRATEGY_MAP: dict[str, str] = {
     "direct_observation": ReasoningStrategy.DIRECT_OBSERVATION,
-    "absence_detection":  ReasoningStrategy.ABSENCE_DETECTION,
-    "spatial_reasoning":  ReasoningStrategy.SPATIAL_COMPARISON,
-    "action_testing":     ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "absence_detection": ReasoningStrategy.ABSENCE_DETECTION,
+    "spatial_reasoning": ReasoningStrategy.SPATIAL_COMPARISON,
+    "action_testing": ReasoningStrategy.MULTI_HOP_INFERENCE,
 }
 
 
 def _to_strategy(raw: str | None) -> str:
     return _STRATEGY_MAP.get(raw or "", ReasoningStrategy.DIRECT_OBSERVATION)
+
 
 # Map raw label strings from the AI2THOR claim generator to Verdict enum.
 # The generator emits "support"/"supported" for true claims and
@@ -106,8 +107,14 @@ def _label_to_stance(label: Verdict | None) -> str | None:
 
 _STRATEGY_EVIDENCE_TYPES: dict[str, list[str]] = {
     "direct_observation": [EvidenceType.PERCEPTION.value],
-    "absence_detection": [EvidenceType.PERCEPTION.value, EvidenceType.NON_APPREHENSION.value],
-    "spatial_reasoning": [EvidenceType.PERCEPTION.value, EvidenceType.COMPARISON_ANALOGY.value],
+    "absence_detection": [
+        EvidenceType.PERCEPTION.value,
+        EvidenceType.NON_APPREHENSION.value,
+    ],
+    "spatial_reasoning": [
+        EvidenceType.PERCEPTION.value,
+        EvidenceType.COMPARISON_ANALOGY.value,
+    ],
     "action_testing": [EvidenceType.PERCEPTION.value, EvidenceType.INFERENCE.value],
 }
 
@@ -125,7 +132,11 @@ def _infer_evidence_types(strategy: str | None, has_ev_triples: bool) -> list[st
     """
     if strategy in _STRATEGY_EVIDENCE_TYPES:
         return _STRATEGY_EVIDENCE_TYPES[strategy]
-    return [EvidenceType.PERCEPTION.value] if has_ev_triples else [EvidenceType.NON_APPREHENSION.value]
+    return (
+        [EvidenceType.PERCEPTION.value]
+        if has_ev_triples
+        else [EvidenceType.NON_APPREHENSION.value]
+    )
 
 
 class AI2ThorConverter(DatasetConverter):
@@ -160,7 +171,9 @@ class AI2ThorConverter(DatasetConverter):
         ev_out = []
         for ev in evidence:
             decoded_triples = _convert_triples(ev.get("triples") or [])
-            ev_strategy = ev.get("strategy") or _classify_strategy(predicate, decoded_triples)
+            ev_strategy = ev.get("strategy") or _classify_strategy(
+                predicate, decoded_triples
+            )
             evidence_types = _infer_evidence_types(ev_strategy, bool(decoded_triples))
             raw_stance = ev.get("stance")
             stance = (

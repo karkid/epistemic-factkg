@@ -4,9 +4,9 @@ Generates varied fictional text using vocabulary pools and random entity
 substitution.  Epistemic parameters are assigned by the caller; this only
 provides the linguistic layer (claim + evidence sentences).
 """
+
 from __future__ import annotations
 
-import json
 import random
 from typing import Any
 
@@ -16,24 +16,77 @@ from .base import EvidenceSpec, SyntheticTextClient
 # Entity pools — all fictional
 # ---------------------------------------------------------------------------
 
-_BRANDS     = ["Stellark", "Nexovac", "Trimora", "Crestlyn", "Dalvian",
-               "Vorvex", "Lumiven", "Harqual", "Fenwick", "Ostara"]
-_CITIES     = ["Northaven", "Crestford", "Marshton", "Quivell", "Valderon",
-               "Ostwick", "Fenbury", "Talmoore", "Rivance", "Kelspath"]
-_INSTS      = ["Institute of Applied Sciences", "Bureau of Standards",
-               "Research Council", "Health Authority", "Consumer Safety Board",
-               "Standards Office", "Analytics Division", "Testing Consortium"]
-_PRODUCTS   = ["appliance", "beverage", "supplement", "compound",
-               "treatment", "device", "formula", "coating", "filter", "unit"]
-_ACTIONS    = ["contains", "releases", "reduces", "increases",
-               "produces", "stores", "emits", "processes"]
-_SUBSTANCES = ["trace chromium", "residual additives", "microplastics",
-               "polyphenols", "preservative compounds", "binding agents",
-               "antioxidants", "mineral deposits", "volatile compounds"]
-_METRICS    = ["42", "31", "18", "27", "55", "12", "8", "64"]
-_UNITS      = ["percent", "units per litre", "parts per million", "milligrams per kilogram"]
+_BRANDS = [
+    "Stellark",
+    "Nexovac",
+    "Trimora",
+    "Crestlyn",
+    "Dalvian",
+    "Vorvex",
+    "Lumiven",
+    "Harqual",
+    "Fenwick",
+    "Ostara",
+]
+_CITIES = [
+    "Northaven",
+    "Crestford",
+    "Marshton",
+    "Quivell",
+    "Valderon",
+    "Ostwick",
+    "Fenbury",
+    "Talmoore",
+    "Rivance",
+    "Kelspath",
+]
+_INSTS = [
+    "Institute of Applied Sciences",
+    "Bureau of Standards",
+    "Research Council",
+    "Health Authority",
+    "Consumer Safety Board",
+    "Standards Office",
+    "Analytics Division",
+    "Testing Consortium",
+]
+_PRODUCTS = [
+    "appliance",
+    "beverage",
+    "supplement",
+    "compound",
+    "treatment",
+    "device",
+    "formula",
+    "coating",
+    "filter",
+    "unit",
+]
+_ACTIONS = [
+    "contains",
+    "releases",
+    "reduces",
+    "increases",
+    "produces",
+    "stores",
+    "emits",
+    "processes",
+]
+_SUBSTANCES = [
+    "trace chromium",
+    "residual additives",
+    "microplastics",
+    "polyphenols",
+    "preservative compounds",
+    "binding agents",
+    "antioxidants",
+    "mineral deposits",
+    "volatile compounds",
+]
+_METRICS = ["42", "31", "18", "27", "55", "12", "8", "64"]
+_UNITS = ["percent", "units per litre", "parts per million", "milligrams per kilogram"]
 
-_WEAK_PREFIXES  = [
+_WEAK_PREFIXES = [
     "Reportedly, ",
     "According to an unverified source, ",
     "Sources allegedly suggest that ",
@@ -162,14 +215,14 @@ _TEXT_POOLS: dict[str, dict[str, list[str]]] = {
 
 def _ctx() -> dict:
     return {
-        "brand":   random.choice(_BRANDS),
-        "city":    random.choice(_CITIES),
-        "inst":    random.choice(_INSTS),
+        "brand": random.choice(_BRANDS),
+        "city": random.choice(_CITIES),
+        "inst": random.choice(_INSTS),
         "product": random.choice(_PRODUCTS),
-        "action":  random.choice(_ACTIONS),
-        "subst":   random.choice(_SUBSTANCES),
-        "metric":  random.choice(_METRICS),
-        "unit":    random.choice(_UNITS),
+        "action": random.choice(_ACTIONS),
+        "subst": random.choice(_SUBSTANCES),
+        "metric": random.choice(_METRICS),
+        "unit": random.choice(_UNITS),
     }
 
 
@@ -179,13 +232,21 @@ def _render(tmpl: str, c: dict) -> str:
 
 def _pick_pool(evidence_type: str, reliability: str) -> list[str]:
     type_pools = _TEXT_POOLS.get(evidence_type) or _TEXT_POOLS["testimony"]
-    return type_pools.get(reliability) or type_pools.get("strong") or list(type_pools.values())[0]
+    return (
+        type_pools.get(reliability)
+        or type_pools.get("strong")
+        or list(type_pools.values())[0]
+    )
 
 
 def _make_evidence_text(spec: EvidenceSpec, c: dict) -> str:
-    pool = _pick_pool(spec.evidence_types[0] if spec.evidence_types else "testimony", spec.reliability)
+    pool = _pick_pool(
+        spec.evidence_types[0] if spec.evidence_types else "testimony", spec.reliability
+    )
     base = _render(random.choice(pool), c)
-    if spec.reliability == "weak" and not base.startswith(tuple(p.strip() for p in _WEAK_PREFIXES)):
+    if spec.reliability == "weak" and not base.startswith(
+        tuple(p.strip() for p in _WEAK_PREFIXES)
+    ):
         base = random.choice(_WEAK_PREFIXES) + base[0].lower() + base[1:]
     return base
 
@@ -212,7 +273,11 @@ class LocalTextClient(SyntheticTextClient):
         specs: list[EvidenceSpec],
         template_name: str,
     ) -> dict[str, Any] | None:
-        primary_type = specs[0].evidence_types[0] if specs and specs[0].evidence_types else "testimony"
+        primary_type = (
+            specs[0].evidence_types[0]
+            if specs and specs[0].evidence_types
+            else "testimony"
+        )
         c = _ctx()
         claim = _make_claim(primary_type, c)
         evidence_texts = [_make_evidence_text(spec, _ctx()) for spec in specs]

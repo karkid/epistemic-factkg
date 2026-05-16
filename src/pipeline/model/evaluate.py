@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Evaluate EpistemicHGNN V1 — stance, IS regression, and symbolic verdict."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import torch
+
+from src.model.data.builder import ClaimGraphBuilder
+from src.model.evaluation.metrics import (
+    compute_accuracy,
+    compute_confusion_matrix,
+    compute_ece,
+    compute_macro_f1,
+    compute_pearson_r,
+    compute_per_class_metrics,
+    compute_per_group_accuracy,
+    compute_rmse,
+    compute_weighted_f1,
+)
+from src.model.epistemichgnn import EpistemicHGNN
+from src.model.config import GraphConfig
+from src.model.data.types import NUM_STANCE, NUM_VERDICT, VERDICT_TO_INT
+
+_INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}
+_INT_TO_STANCE = {0: "supports", 1: "refutes", 2: "neutral"}
+
+
+def _load_test_records(jsonl_path: Path, splits_dir: Path) -> list[dict]:
+    records = [
+        json.loads(line) for line in jsonl_path.read_text().splitlines() if line.strip()
+    ]
+    split_file = splits_dir / "test_indices.json"
+    if split_file.exists():
+        indices = json.loads(split_file.read_text())["indices"]
+        return [records[i] for i in indices if i < len(records)]
+    return records
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description="Evaluate EpistemicHGNN (V1) on the test split.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    ap.add_argument("--checkpoint", required=True)
+    ap.add_argument(
+        "--jsonl",
+        required=True,
+        help="Filtered training JSONL (test records drawn from this)",
+    )
+    ap.add_argument("--registry", default="data/registry/source_trust_registry.jsonl")
+    ap.add_argument("--embed-cache", default="out/graphs/embed_cache.pkl")
+    ap.add_argument("--splits-dir", default="out/splits")
+    ap.add_argument(
+        "--output",
+        required=True,
+        help="Directory to write stance/IS/verdict JSON files",
+    )
+    ap.add_argument("--hidden-dim", type=int, default=256)
+    ap.add_argument("--heads", type=int, default=4)
+    ap.add_argument("--dropout", type=float, default=0.3)
+    ap.add_argument("--device", default="cpu")
+    args = ap.parse_args()
+
+    device = torch.device(args.device)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Load model ────────────────────────────────────────────────────────────
+    model = EpistemicHGNN(GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout)
+    model.load_state_dict(
+        torch.load(args.checkpoint, map_location=device, weights_only=True)
+    )
+    model.to(device).eval()
+
+    # ── Load test records ─────────────────────────────────────────────────────
+    test_records = _load_test_records(Path(args.jsonl), Path(args.splits_dir))
+    builder = ClaimGraphBuilder.from_paths(args.registry, args.embed_cache)
+
+    # ── Accumulators ─────────────────────────────────────────────────────────
+    stance_preds: list[torch.Tensor] = []
+    stance_ys: list[torch.Tensor] = []
+    stance_logits_: list[torch.Tensor] = []
+    is_preds: list[torch.Tensor] = []
+    is_ys: list[torch.Tensor] = []
+    verdict_preds: list[int] = []
+    verdict_trues: list[int] = []
+    source_labels: list[str] = []
+
+    skipped = 0
+    with torch.no_grad():
+        for record in test_records:
+            try:
+                g = builder.build(record)
+            except Exception:
+                skipped += 1
+                continue
+
+            data = g.data.to(device)
+            out = model.predict(data)
+
+            stance_preds.append(out["stance_pred"].cpu())
+            stance_ys.append(data["evidence"].stance_y.cpu())
+            stance_logits_.append(out["stance_logits"].cpu())
+            is_preds.append(out["is_pred"].view(-1).cpu())
+            is_ys.append(data["evidence"].is_y.view(-1).cpu())
+
+            v_pred = VERDICT_TO_INT.get(out["verdict"], 2)
+            v_true = g.label
+            verdict_preds.append(v_pred)
+            verdict_trues.append(v_true)
+            source_labels.append(g.dataset)
+
+    if not verdict_preds:
+        print("No test records evaluated — check splits-dir and jsonl path.")
+        return
+
+    # ── Concatenate evidence-level tensors ────────────────────────────────────
+    sp_t = torch.cat(stance_preds)
+    sy_t = torch.cat(stance_ys)
+    sl_t = torch.cat(stance_logits_)
+    ip_t = torch.cat(is_preds)
+    iy_t = torch.cat(is_ys)
+    vp_t = torch.tensor(verdict_preds, dtype=torch.long)
+    vy_t = torch.tensor(verdict_trues, dtype=torch.long)
+
+    # ── Stance metrics ────────────────────────────────────────────────────────
+    stance_per_class_raw = compute_per_class_metrics(sp_t, sy_t, NUM_STANCE)
+    stance_metrics = {
+        "accuracy": round(compute_accuracy(sp_t, sy_t), 4),
+        "macro_f1": round(compute_macro_f1(sp_t, sy_t, NUM_STANCE), 4),
+        "ece": compute_ece(sl_t, sy_t),
+        "n_evidence": int(sp_t.numel()),
+        "per_class": {_INT_TO_STANCE[k]: v for k, v in stance_per_class_raw.items()},
+    }
+
+    # ── IS metrics ────────────────────────────────────────────────────────────
+    is_metrics = {
+        "rmse": compute_rmse(ip_t, iy_t),
+        "pearson_r": compute_pearson_r(ip_t, iy_t),
+        "n_evidence": int(ip_t.numel()),
+        "pred_mean": round(ip_t.mean().item(), 4),
+        "true_mean": round(iy_t.mean().item(), 4),
+    }
+
+    # ── Verdict metrics ───────────────────────────────────────────────────────
+    verdict_per_class_raw = compute_per_class_metrics(vp_t, vy_t, NUM_VERDICT)
+    verdict_metrics = {
+        "accuracy": round(compute_accuracy(vp_t, vy_t), 4),
+        "macro_f1": round(compute_macro_f1(vp_t, vy_t, NUM_VERDICT), 4),
+        "weighted_f1": round(compute_weighted_f1(vp_t, vy_t, NUM_VERDICT), 4),
+        "n_claims": len(verdict_preds),
+        "skipped": skipped,
+        "per_class": {_INT_TO_VERDICT[k]: v for k, v in verdict_per_class_raw.items()},
+        "confusion": compute_confusion_matrix(vp_t, vy_t, NUM_VERDICT),
+        "per_source": compute_per_group_accuracy(vp_t, vy_t, source_labels),
+    }
+
+    # ── Write output files ────────────────────────────────────────────────────
+    (output_dir / "stance_metrics.json").write_text(
+        json.dumps(stance_metrics, indent=2)
+    )
+    (output_dir / "is_metrics.json").write_text(json.dumps(is_metrics, indent=2))
+    (output_dir / "verdict_metrics.json").write_text(
+        json.dumps(verdict_metrics, indent=2)
+    )
+
+    # ── Print summary ─────────────────────────────────────────────────────────
+    print("=" * 60)
+    print(
+        f"EpistemicHGNN V1 — {len(verdict_preds)} claims  ({int(sp_t.numel())} evidence items)"
+    )
+    print()
+    print("H1 Stance")
+    print(
+        f"  accuracy  {stance_metrics['accuracy']:.4f}   macro_f1  {stance_metrics['macro_f1']:.4f}   ECE  {stance_metrics['ece']:.4f}"
+    )
+    for stance, m in stance_metrics["per_class"].items():
+        print(
+            f"  {stance:<8}  P={m['precision']:.3f}  R={m['recall']:.3f}  F1={m['f1']:.3f}  n={m['support']}"
+        )
+    print()
+    print("H2 Inference Strength")
+    print(
+        f"  RMSE  {is_metrics['rmse']:.4f}   Pearson r  {is_metrics['pearson_r']:.4f}"
+    )
+    print(
+        f"  pred_mean={is_metrics['pred_mean']:.3f}  true_mean={is_metrics['true_mean']:.3f}"
+    )
+    print()
+    print("Symbolic Verdict")
+    print(
+        f"  accuracy  {verdict_metrics['accuracy']:.4f}   macro_f1  {verdict_metrics['macro_f1']:.4f}   weighted_f1  {verdict_metrics['weighted_f1']:.4f}"
+    )
+    for verdict, m in verdict_metrics["per_class"].items():
+        print(
+            f"  {verdict:<22}  P={m['precision']:.3f}  R={m['recall']:.3f}  F1={m['f1']:.3f}  n={m['support']}"
+        )
+    print()
+    print("Per-source verdict accuracy:")
+    for src, m in verdict_metrics["per_source"].items():
+        print(f"  {src:<16}  acc={m['accuracy']:.3f}  n={m['support']}")
+    print(f"\nResults → {output_dir}/")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()

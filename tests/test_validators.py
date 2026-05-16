@@ -2,7 +2,7 @@
 Validator tests using permanent fixtures.
 
 Tests the AI2ThorValidator, AveritecValidator, AdvancedClaimValidator, and
-validate_unified_dataset summarize_file() function against the committed fixture files.
+src.pipeline.data.validate_unified summarize_file() function against the committed fixture files.
 """
 
 import json
@@ -14,8 +14,8 @@ from src.adapters.ai2thor.converter import AI2ThorConverter
 from src.adapters.ai2thor.validator import AI2ThorValidator
 from src.adapters.averitec.converter import AveritecConverter
 from src.adapters.averitec.validator import AveritecValidator
-from src.core.claims.claim_validator import AdvancedClaimValidator
-from src.core.claims.labels import EvidenceStance, EvidenceType, Verdict
+from src.epistemic.validator import AdvancedClaimValidator
+from src.epistemic.enums import EvidenceStance, EvidenceType, Verdict
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -341,9 +341,9 @@ class TestSummarizeFile:
 
     def test_ai2thor_zero_schema_errors(self, ai2thor_jsonl):
         from jsonschema import Draft7Validator
-        from src.core.claims.claim_schema import CLAIM_SCHEMA
-        from src.core.claims.claim_validator import AdvancedClaimValidator
-        from src.cli.validate_unified_dataset import summarize_file
+        from src.epistemic.schema import CLAIM_SCHEMA
+        from src.epistemic.validator import AdvancedClaimValidator
+        from src.pipeline.data.validate.validate_unified import summarize_file
 
         s = summarize_file(
             str(ai2thor_jsonl),
@@ -361,9 +361,9 @@ class TestSummarizeFile:
 
     def test_averitec_zero_schema_errors(self, averitec_jsonl):
         from jsonschema import Draft7Validator
-        from src.core.claims.claim_schema import CLAIM_SCHEMA
-        from src.core.claims.claim_validator import AdvancedClaimValidator
-        from src.cli.validate_unified_dataset import summarize_file
+        from src.epistemic.schema import CLAIM_SCHEMA
+        from src.epistemic.validator import AdvancedClaimValidator
+        from src.pipeline.data.validate.validate_unified import summarize_file
 
         s = summarize_file(
             str(averitec_jsonl),
@@ -377,9 +377,9 @@ class TestSummarizeFile:
 
     def test_ai2thor_absence_claims_counted_correctly(self, ai2thor_jsonl):
         from jsonschema import Draft7Validator
-        from src.core.claims.claim_schema import CLAIM_SCHEMA
-        from src.core.claims.claim_validator import AdvancedClaimValidator
-        from src.cli.validate_unified_dataset import summarize_file
+        from src.epistemic.schema import CLAIM_SCHEMA
+        from src.epistemic.validator import AdvancedClaimValidator
+        from src.pipeline.data.validate.validate_unified import summarize_file
 
         s = summarize_file(
             str(ai2thor_jsonl),
@@ -392,9 +392,9 @@ class TestSummarizeFile:
 
     def test_coverage_metrics_populated(self, ai2thor_jsonl):
         from jsonschema import Draft7Validator
-        from src.core.claims.claim_schema import CLAIM_SCHEMA
-        from src.core.claims.claim_validator import AdvancedClaimValidator
-        from src.cli.validate_unified_dataset import summarize_file
+        from src.epistemic.schema import CLAIM_SCHEMA
+        from src.epistemic.validator import AdvancedClaimValidator
+        from src.pipeline.data.validate.validate_unified import summarize_file
 
         s = summarize_file(
             str(ai2thor_jsonl),
@@ -407,9 +407,9 @@ class TestSummarizeFile:
 
     def test_markdown_report_is_written(self, ai2thor_jsonl, tmp_path):
         from jsonschema import Draft7Validator
-        from src.core.claims.claim_schema import CLAIM_SCHEMA
-        from src.core.claims.claim_validator import AdvancedClaimValidator
-        from src.cli.validate_unified_dataset import (
+        from src.epistemic.schema import CLAIM_SCHEMA
+        from src.epistemic.validator import AdvancedClaimValidator
+        from src.pipeline.data.validate.validate_unified import (
             summarize_file,
             write_validation_report_md,
         )

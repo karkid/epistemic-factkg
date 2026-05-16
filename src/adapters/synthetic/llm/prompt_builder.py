@@ -7,6 +7,7 @@ Design goals
 * Evidence-type guidance per item — LLM knows HOW to write each text.
 * JSON-only output — no markdown, no prose outside the JSON block.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,18 +17,18 @@ from typing import Any
 from src.adapters.synthetic.client.base import EvidenceSpec
 
 _RELIABILITY_GUIDE: dict[str, str] = {
-    "strong":  "direct, specific, verifiable — no hedging language",
-    "weak":    "vague, uncertain — use 'reportedly', 'allegedly', 'sources suggest', 'possibly'",
-    "hedged":  "exists but is ambiguous — partial coverage or internally uncertain",
-    "absent":  "confirmed absence — 'no X was found', 'absence confirmed', 'none detected'",
+    "strong": "direct, specific, verifiable — no hedging language",
+    "weak": "vague, uncertain — use 'reportedly', 'allegedly', 'sources suggest', 'possibly'",
+    "hedged": "exists but is ambiguous — partial coverage or internally uncertain",
+    "absent": "confirmed absence — 'no X was found', 'absence confirmed', 'none detected'",
 }
 
 _EVIDENCE_TYPE_GUIDE: dict[str, str] = {
-    "testimony":          "reported by a source (news article, document, spokesperson, official record)",
-    "perception":         "direct observation or physical measurement",
-    "inference":          "multi-step reasoning drawn from other observed facts",
+    "testimony": "reported by a source (news article, document, spokesperson, official record)",
+    "perception": "direct observation or physical measurement",
+    "inference": "multi-step reasoning drawn from other observed facts",
     "comparison_analogy": "numerical or statistical comparison against a baseline or reference group",
-    "non_apprehension":   "confirmed absence of something expected",
+    "non_apprehension": "confirmed absence of something expected",
     "postulation_derivation": "hypothetical or speculative reasoning",
 }
 

@@ -1,10 +1,15 @@
 """Anthropic API client wrapper for LLM-based synthetic generation."""
+
 from __future__ import annotations
 
 from typing import Any
 
 from src.adapters.synthetic.client.base import EvidenceSpec, SyntheticTextClient
-from .prompt_builder import build_prompt, parse_llm_response
+from adapters.synthetic.llm.prompt_builder import (
+    build_prompt,
+    parse_llm_response,
+    _SYSTEM_PROMPT,
+)
 
 
 class LLMClient(SyntheticTextClient):
@@ -28,6 +33,7 @@ class LLMClient(SyntheticTextClient):
             self._api = _client
         else:
             import anthropic
+
             self._api = anthropic.Anthropic(api_key=api_key)
         self._model = model
         self._max_tokens = max_tokens
@@ -37,7 +43,6 @@ class LLMClient(SyntheticTextClient):
         specs: list[EvidenceSpec],
         template_name: str,
     ) -> dict[str, Any] | None:
-        from src.adapters.synthetic.llm.prompt_builder import _SYSTEM_PROMPT
         prompt = build_prompt(specs, template_name)
         try:
             response = self._api.messages.create(

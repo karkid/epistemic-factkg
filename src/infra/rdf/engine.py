@@ -13,7 +13,7 @@ import re
 from typing import DefaultDict, Dict, Iterable, List, Optional, Set, Union
 from urllib.parse import unquote
 
-from src.core.graph.types import Triple, TripleList, TripleSet
+from src.infra.graph.types import Triple, TripleList, TripleSet
 
 from typing import Pattern as RePattern
 

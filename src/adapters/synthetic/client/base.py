@@ -1,19 +1,21 @@
 """Base interface for synthetic text generation clients."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
 @dataclass
 class EvidenceSpec:
     """Epistemic + generation parameters for one evidence item."""
-    stance: str            # EvidenceStance value
-    source_id: str         # registry key → source trust
+
+    stance: str  # EvidenceStance value
+    source_id: str  # registry key → source trust
     evidence_types: list[str]
     inference_strength: float
-    reliability: str       # "strong" | "weak" | "hedged" | "absent"
+    reliability: str  # "strong" | "weak" | "hedged" | "absent"
 
 
 class SyntheticTextClient(ABC):

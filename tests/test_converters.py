@@ -12,14 +12,12 @@ from pathlib import Path
 import pytest
 
 from src.adapters.ai2thor.converter import AI2ThorConverter
-from src.adapters.averitec.converter import AveritecConverter, _infer_evidence_types_basic
-from src.core.claims.labels import (
-    combine_pramana_weights,
-    EvidenceStance,
-    EvidenceType,
-    Pramana,
-    Verdict,
+from src.adapters.averitec.converter import (
+    AveritecConverter,
+    _infer_evidence_types_basic,
 )
+from src.epistemic.enums import EvidenceStance, EvidenceType, Verdict
+from src.epistemic.formula import combine_evidence_weights as combine_pramana_weights
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -92,9 +90,7 @@ class TestAI2ThorConverter:
         valid = {p.value for p in EvidenceType}
         for r in ai2thor_converted:
             for et in r["epistemic"]["evidence_types_all"]:
-                assert et in valid, (
-                    f"{r['id']}: unexpected evidence_type {et!r}"
-                )
+                assert et in valid, f"{r['id']}: unexpected evidence_type {et!r}"
 
     def test_ai2thor_evidence_types_limited_to_perception_and_non_apprehension(
         self, ai2thor_converted
@@ -102,9 +98,7 @@ class TestAI2ThorConverter:
         allowed = {EvidenceType.PERCEPTION.value, EvidenceType.NON_APPREHENSION.value}
         for r in ai2thor_converted:
             for et in r["epistemic"]["evidence_types_all"]:
-                assert et in allowed, (
-                    f"{r['id']}: unexpected evidence_type {et!r}"
-                )
+                assert et in allowed, f"{r['id']}: unexpected evidence_type {et!r}"
 
     def test_dataset_provenance(self, ai2thor_converted):
         for r in ai2thor_converted:
@@ -123,7 +117,9 @@ class TestAI2ThorConverter:
             for ev in r.get("evidence") or []:
                 assert "evidence_types" in ev, f"{r['id']}: missing evidence_types"
                 assert "source_id" in ev, f"{r['id']}: missing source_id"
-                assert "inference_strength" in ev, f"{r['id']}: missing inference_strength"
+                assert "inference_strength" in ev, (
+                    f"{r['id']}: missing inference_strength"
+                )
 
     def test_evidence_source_id_is_ai2thor_simulation(self, ai2thor_converted):
         for r in ai2thor_converted:
@@ -166,7 +162,8 @@ class TestAI2ThorConverter:
         absence = [
             r
             for r in ai2thor_converted
-            if EvidenceType.NON_APPREHENSION.value in r["epistemic"]["evidence_types_all"]
+            if EvidenceType.NON_APPREHENSION.value
+            in r["epistemic"]["evidence_types_all"]
         ]
         assert len(absence) >= 1, "No absence claims in fixture"
         for r in absence:
@@ -256,9 +253,10 @@ class TestAveritecConverter:
 
     def test_no_non_apprehension_in_evidence_types(self, averitec_converted):
         for r in averitec_converted:
-            assert EvidenceType.NON_APPREHENSION.value not in r["epistemic"]["evidence_types_all"], (
-                f"AVeriTeC should never have non_apprehension: {r['id']}"
-            )
+            assert (
+                EvidenceType.NON_APPREHENSION.value
+                not in r["epistemic"]["evidence_types_all"]
+            ), f"AVeriTeC should never have non_apprehension: {r['id']}"
 
     def test_claim_triples_is_null(self, averitec_converted):
         for r in averitec_converted:
@@ -315,7 +313,9 @@ class TestAveritecConverter:
             for ev in r.get("evidence") or []:
                 assert "evidence_types" in ev, f"{r['id']}: missing evidence_types"
                 assert "source_id" in ev, f"{r['id']}: missing source_id"
-                assert "inference_strength" in ev, f"{r['id']}: missing inference_strength"
+                assert "inference_strength" in ev, (
+                    f"{r['id']}: missing inference_strength"
+                )
 
     def test_evidence_types_basic_perception_from_perceptual_modality(self):
         """Image/video/audio modalities → evidence_type=perception only (no inference added)."""
@@ -369,7 +369,9 @@ class TestAveritecConverter:
         }
         record = conv.convert_one(raw, "test-strat-001")
         ets = record["epistemic"]["evidence_types_all"]
-        assert EvidenceType.COMPARISON_ANALOGY.value in ets, f"Expected comparison_analogy: {ets}"
+        assert EvidenceType.COMPARISON_ANALOGY.value in ets, (
+            f"Expected comparison_analogy: {ets}"
+        )
 
     def test_consultation_strategy_adds_inference(self):
         """fact_checking_strategies=['Consultation'] → inference added to textual items."""

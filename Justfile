@@ -28,128 +28,167 @@ CHECKPOINTS_DIR     := "out/checkpoints"
 RESULTS_DIR         := "out/results"
 
 
-# ── Setup ────────────────────────────────────────────────────────────────────
+# ╔═════════════════════════════════════════════════════════════════════════════╗
+# ║  DEV                                                                       ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+
+[group("Dev")]
 [doc("Install dependencies and set up the environment")]
 init:
     uv venv && uv sync && uv pip install -e ".[dev,notebook]"
 
 
-# ── Build ────────────────────────────────────────────────────────────────────
-[doc("Convert frozen AI2THOR claims + AVeriTeC + any synthetic batches to unified v3.0 JSONL")]
-build:
+[group("Dev")]
+[doc("Lint and format check (ruff)")]
+lint:
+    uv run ruff format --check . && uv run ruff check .
+
+
+[group("Dev")]
+[doc("Auto-fix lint and format issues (ruff)")]
+fix:
+    uv run ruff format . && uv run ruff check --fix .
+
+
+[group("Dev")]
+[doc("Run test suite (pytest)")]
+test:
+    uv run pytest tests/ -v --tb=short
+
+
+[group("Dev")]
+[doc("Delete all generated outputs: out/, data/processed/, data/summary/, runs/")]
+clean:
+    rm -rf out/ data/processed/ data/summary/ runs/
+    @echo "Cleaned generated outputs."
+
+
+[group("Dev")]
+[doc("Run a pipeline or one step: just run <data|model> [STEP]")]
+run PIPELINE="" STEP="":
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ ! -f "{{AI2THOR_CLAIMS}}" ]; then
-        echo "Error: {{AI2THOR_CLAIMS}} not found. Run 'just rebuild' to generate it." >&2
+    PIPELINE="{{PIPELINE}}"
+    STEP="{{STEP}}"
+    case "${PIPELINE}" in
+      data)
+        case "${STEP}" in
+          "")        just build && just validate && just report ;;
+          rebuild)   just build rebuild=true && just validate && just report ;;
+          build)     just build ;;
+          validate)  just validate ;;
+          report)    just report ;;
+          *) echo "Unknown data step '${STEP}'. Available: rebuild  build  validate  report"; exit 1 ;;
+        esac
+        ;;
+      model)
+        case "${STEP}" in
+          "")      just graph && just train && just eval ;;
+          build)   just graph ;;
+          train)   just train ;;
+          eval)    just eval ;;
+          *) echo "Unknown model step '${STEP}'. Available: build  train  eval"; exit 1 ;;
+        esac
+        ;;
+      *)
+        echo "Usage: just run <data|model> [STEP]"
+        echo "  data  steps: rebuild  build  validate  report"
+        echo "  model steps: build  train  eval"
+        exit 1
+        ;;
+    esac
+
+
+# ╔═════════════════════════════════════════════════════════════════════════════╗
+# ║  DATA PIPELINE                                                             ║
+# ║  Order: build → validate → report  (pass rebuild=true to re-simulate AI2THOR first)
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+
+[group("Data Pipeline")]
+[doc("Build training data: generate synthetic, merge sources, filter, split (rebuild=true re-simulates AI2THOR first)")]
+build rebuild="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REBUILD_FLAG=""
+    if [ "{{rebuild}}" = "true" ]; then
+        REBUILD_FLAG="--rebuild --config {{CONFIG}} --out-rdf {{KG_TTL}} --ai2thor-dir {{AI2THOR_RAW_DIR}}"
+    elif [ ! -f "{{AI2THOR_CLAIMS}}" ]; then
+        echo "Error: {{AI2THOR_CLAIMS}} not found. Run 'just build rebuild=true' to generate it." >&2
         exit 1
     fi
-    SYNTHETIC_ARG=""
-    if [ -f "{{SYNTHETIC_JSONL}}" ]; then
-        SYNTHETIC_ARG="--synthetic {{SYNTHETIC_JSONL}}"
+    if [ ! -f "{{SYNTHETIC_JSONL}}" ]; then
+        echo "--- generating synthetic claims ---"
+        mkdir -p {{SYNTHETIC_RAW_DIR}}
+        uv run python -m src.pipeline.data.generate synthetic \
+            --config {{CONFIG}} \
+            --registry {{REGISTRY}} \
+            --seed-pool {{SEED_POOL}} \
+            --ai2thor-claims {{AI2THOR_CLAIMS}} \
+            --n-records 1000 \
+            --output {{SYNTHETIC_JSONL}}
     fi
-    uv run python -m src.cli.convert_to_unified \
+    mkdir -p out/unified out/training out/intermediate
+    uv run python -m src.pipeline.data.build \
+        $REBUILD_FLAG \
         --registry {{REGISTRY}} \
         --averitec {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
         --ai2thor {{AI2THOR_CLAIMS}} \
-        $SYNTHETIC_ARG \
-        --output {{UNIFIED_JSONL}} \
-        --intermediate_dir out/intermediate
-
-
-[doc("Re-generate AI2THOR claims from scratch via simulator, then generate synthetic batch, then convert all datasets to unified v3.0 JSONL")]
-rebuild max_contexts="10":
-    uv run python -m src.cli.build_rdf \
-        --config {{CONFIG}} --out {{KG_TTL}} --verbose
-    uv run python -m src.cli.build_claims {{KG_TTL}} \
-        --output-dir {{AI2THOR_RAW_DIR}} \
-        --config {{CONFIG}} \
-        --max-contexts {{max_contexts}} \
-        --verbose
-    just synthetic
-    just build
-
-
-# ── Synthetic generation ──────────────────────────────────────────────────────
-[doc("Generate synthetic shortcut-breaking claims (grounded by default; use --client llm for API)")]
-synthetic n_records="1000":
-    mkdir -p {{SYNTHETIC_RAW_DIR}}
-    uv run python -m src.cli.generate_synthetic \
-        --config {{CONFIG}} \
-        --registry {{REGISTRY}} \
-        --seed-pool {{SEED_POOL}} \
-        --ai2thor-claims {{AI2THOR_CLAIMS}} \
-        --n-records {{n_records}} \
-        --output {{SYNTHETIC_JSONL}}
-    echo "Generated: {{SYNTHETIC_JSONL}}"
-    uv run python -m src.cli.validate_synthetic \
-        --input {{SYNTHETIC_JSONL}} \
-        --registry {{REGISTRY}}
-
-
-# ── Validate ─────────────────────────────────────────────────────────────────
-[doc("Validate the unified JSONL (schema + semantic + pramana checks for all datasets)")]
-validate:
-    mkdir -p {{REPORT_DIR}}
-    uv run python -m src.cli.validate_unified_dataset \
-        --files {{UNIFIED_JSONL}} \
-        --out {{VALIDATION_JSON}}
-
-
-# ── Filter ───────────────────────────────────────────────────────────────────
-[doc("Filter unified JSONL to GNN training records — excludes postulation_derivation (ADR-011)")]
-filter:
-    mkdir -p out/training
-    uv run python -m src.cli.filter_for_training \
-        --input {{UNIFIED_JSONL}} \
-        --output {{TRAINING_JSONL}} \
-        --verbose
-
-
-# ── Validate training ────────────────────────────────────────────────────────
-[doc("Validate training JSONL against ADR-012 Pramana distribution targets")]
-check-train:
-    mkdir -p {{REPORT_DIR}}
-    uv run python -m src.cli.validate_training_dataset \
-        --input {{TRAINING_JSONL}} \
-        --config {{CONFIG}} \
-        --out {{TRAINING_VALIDATION}}
-
-
-# ── Report ───────────────────────────────────────────────────────────────────
-[doc("Generate dataset report (markdown + charts) from validation output")]
-report:
-    uv run python -m src.cli.build_dataset_report \
-        --summary {{VALIDATION_JSON}} \
-        --out_dir {{REPORT_DIR}} \
-        --training-summary {{TRAINING_VALIDATION}} \
-        --title "Epistemic FactKG Dataset Report"
-
-
-# ── GNN pipeline ─────────────────────────────────────────────────────────────
-[doc("Build PyG HeteroData graph dataset from filtered training JSONL")]
-graph:
-    mkdir -p out/graphs
-    uv run python -m src.cli.build_graph_dataset \
-        --input {{TRAINING_JSONL}} \
-        --output {{GRAPH_DATASET}} \
-        --embed-cache out/graphs/embed_cache.pkl \
-        --verbose
-
-
-[doc("Generate deterministic train/val/test split index files (ADR-009)")]
-split:
+        --synthetic {{SYNTHETIC_JSONL}} \
+        --unified-out {{UNIFIED_JSONL}} \
+        --training-out {{TRAINING_JSONL}} \
+        --intermediate-dir out/intermediate
     mkdir -p {{SPLITS_DIR}}
-    uv run python -m src.cli.split_dataset \
+    uv run python -m src.pipeline.data.split_dataset \
         --input {{TRAINING_JSONL}} \
         --output-dir {{SPLITS_DIR}} \
         --seed 42 \
         --verbose
 
 
+[group("Data Pipeline")]
+[doc("Validate unified JSONL schema + training Pramana distribution (ADR-012)")]
+validate:
+    mkdir -p {{REPORT_DIR}}
+    uv run python -m src.pipeline.data.validate unified \
+        --files {{UNIFIED_JSONL}} \
+        --out {{VALIDATION_JSON}}
+    uv run python -m src.pipeline.data.validate training \
+        --input {{TRAINING_JSONL}} \
+        --config {{CONFIG}} \
+        --out {{TRAINING_VALIDATION}}
+
+
+[group("Data Pipeline")]
+[doc("Generate dataset quality report (markdown + charts) from validation output")]
+report:
+    uv run python -m src.pipeline.model.report \
+        --summary {{VALIDATION_JSON}} \
+        --out_dir {{REPORT_DIR}} \
+        --training-summary {{TRAINING_VALIDATION}} \
+        --title "Epistemic FactKG Dataset Report"
+
+
+# ╔═════════════════════════════════════════════════════════════════════════════╗
+# ║  MODEL PIPELINE                                                            ║
+# ║  Order: graph → train → eval                                               ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+
+[group("Model Pipeline")]
+[doc("Build PyG HeteroData graph dataset from filtered training JSONL")]
+graph:
+    mkdir -p out/graphs
+    uv run python -m src.pipeline.model.build_graphs \
+        --input {{TRAINING_JSONL}} \
+        --output {{GRAPH_DATASET}} \
+        --embed-cache out/graphs/embed_cache.pkl \
+        --verbose
+
+
+[group("Model Pipeline")]
 [doc("Train EpistemicHGNN (multi-head neuro-symbolic — stance + IS multi-task loss)")]
 train:
     mkdir -p {{CHECKPOINTS_DIR}}
-    uv run python -m src.cli.train_gnn \
+    uv run python -m src.pipeline.model.train \
         --dataset {{GRAPH_DATASET}} \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
@@ -161,43 +200,12 @@ train:
         --verbose
 
 
+[group("Model Pipeline")]
 [doc("Evaluate EpistemicHGNN on test set — outputs stance, IS, and verdict metrics")]
 eval:
     mkdir -p {{RESULTS_DIR}}
-    uv run python -m src.cli.evaluate_gnn \
+    uv run python -m src.pipeline.model.evaluate \
         --checkpoint {{CHECKPOINTS_DIR}}/best_model.pt \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
         --output {{RESULTS_DIR}}
-
-
-# ── Test ─────────────────────────────────────────────────────────────────────
-[doc("Lint (ruff) and run test suite")]
-test:
-    uv run ruff format . && uv run ruff check .
-    uv run pytest tests/ -v --tb=short
-
-
-# ── Full pipeline ─────────────────────────────────────────────────────────────
-[doc("Full pipeline: build → validate → filter → check-train → report (logs saved to runs/<RUN_ID>/)")]
-run RUN_ID="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    RUN_ID="${RUN_ID:-$(date -u +"%Y-%m-%d_%H-%M-%S")}"
-    echo "RUN_ID=$RUN_ID"
-    mkdir -p "runs/$RUN_ID/logs"
-
-    just build                       2>&1 | tee "runs/$RUN_ID/logs/build.log"
-    just validate                    2>&1 | tee "runs/$RUN_ID/logs/validate.log"
-    just filter                      2>&1 | tee "runs/$RUN_ID/logs/filter.log"
-    just check-train                 2>&1 | tee "runs/$RUN_ID/logs/check-train.log"
-    just report                      2>&1 | tee "runs/$RUN_ID/logs/report.log"
-
-    echo "Done → runs/$RUN_ID/"
-
-
-# ── Clean ────────────────────────────────────────────────────────────────────
-[doc("Delete all generated outputs: out/, data/processed/, data/summary/, runs/")]
-clean:
-    rm -rf out/ data/processed/ data/summary/ runs/
-    @echo "Cleaned generated outputs."

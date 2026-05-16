@@ -3,9 +3,9 @@
 All tests are offline — no real API calls.
 LLMClient tests mock the Anthropic client via dependency injection.
 """
+
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -21,9 +21,12 @@ from src.adapters.synthetic.fictional_generator import (
     FictionalClaimGenerator,
 )
 from src.adapters.synthetic.validator import SyntheticDataValidator
-from src.core.claims.labels import EvidenceType, Verdict, load_source_trust_registry
+from src.epistemic.enums import EvidenceType, Verdict
+from src.epistemic.registry import load_source_trust_registry
 
-REGISTRY_PATH = Path(__file__).parent.parent / "data/registry/source_trust_registry.jsonl"
+REGISTRY_PATH = (
+    Path(__file__).parent.parent / "data/registry/source_trust_registry.jsonl"
+)
 SEED_POOL_PATH = Path(__file__).parent.parent / "data/registry/seed_pool.jsonl"
 
 
@@ -36,6 +39,7 @@ def registry() -> dict:
 # _make_plan
 # ---------------------------------------------------------------------------
 
+
 class TestMakePlan:
     def test_total_equals_n_records(self):
         plan = _make_plan(100, {"a": 0.5, "b": 0.3, "c": 0.2})
@@ -47,6 +51,7 @@ class TestMakePlan:
 
     def test_all_template_keys_present(self):
         from src.adapters.synthetic.fictional_generator import _DEFAULT_DISTRIBUTION
+
         plan = _make_plan(100, _DEFAULT_DISTRIBUTION)
         assert set(plan.keys()) == set(_DEFAULT_DISTRIBUTION.keys())
 
@@ -55,20 +60,23 @@ class TestMakePlan:
 # prompt_builder
 # ---------------------------------------------------------------------------
 
+
 class TestPromptBuilder:
     def test_build_prompt_contains_specs(self):
         specs = [
             EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
-            EvidenceSpec("refutes",  "apnews_web_text",  ["testimony"], 0.8, "strong"),
+            EvidenceSpec("refutes", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ]
         prompt = build_prompt(specs, "conflicting")
         assert "testimony" in prompt
         assert "supports" in prompt
-        assert "refutes"  in prompt
-        assert "strong"   in prompt
+        assert "refutes" in prompt
+        assert "strong" in prompt
 
     def test_build_prompt_n_items(self):
-        specs = [EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")]
+        specs = [
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")
+        ]
         prompt = build_prompt(specs, "single")
         assert "1 evidence item" in prompt
 
@@ -96,29 +104,45 @@ class TestPromptBuilder:
 # _build_record — verdict math verified by construction
 # ---------------------------------------------------------------------------
 
+
 class TestBuildRecord:
     def test_high_trust_supported_verdict(self, registry):
-        parsed = {"claim": "The fictional device works.", "evidence_texts": ["A confirms.", "B confirms."]}
+        parsed = {
+            "claim": "The fictional device works.",
+            "evidence_texts": ["A confirms.", "B confirms."],
+        }
         rec = _build_record(parsed, _TEMPLATES["high_trust_supported"], registry)
         assert rec["verdict"]["label"] == Verdict.SUPPORTED.value
 
     def test_low_trust_nee_verdict(self, registry):
-        parsed = {"claim": "The gadget runs forever.", "evidence_texts": ["Reportedly it does."]}
+        parsed = {
+            "claim": "The gadget runs forever.",
+            "evidence_texts": ["Reportedly it does."],
+        }
         rec = _build_record(parsed, _TEMPLATES["low_trust_nee"], registry)
         assert rec["verdict"]["label"] == Verdict.NOT_ENOUGH_EVIDENCE.value
 
     def test_high_trust_refuted_verdict(self, registry):
-        parsed = {"claim": "The building is red.", "evidence_texts": ["It's blue, A says.", "It's blue, B says."]}
+        parsed = {
+            "claim": "The building is red.",
+            "evidence_texts": ["It's blue, A says.", "It's blue, B says."],
+        }
         rec = _build_record(parsed, _TEMPLATES["high_trust_refuted"], registry)
         assert rec["verdict"]["label"] == Verdict.REFUTED.value
 
     def test_low_trust_refuted_nee_verdict(self, registry):
-        parsed = {"claim": "The device uses 5W.", "evidence_texts": ["Anonymous site says maybe not."]}
+        parsed = {
+            "claim": "The device uses 5W.",
+            "evidence_texts": ["Anonymous site says maybe not."],
+        }
         rec = _build_record(parsed, _TEMPLATES["low_trust_refuted_nee"], registry)
         assert rec["verdict"]["label"] == Verdict.NOT_ENOUGH_EVIDENCE.value
 
     def test_conflicting_verdict(self, registry):
-        parsed = {"claim": "The product is effective.", "evidence_texts": ["A says yes.", "B says no."]}
+        parsed = {
+            "claim": "The product is effective.",
+            "evidence_texts": ["A says yes.", "B says no."],
+        }
         rec = _build_record(parsed, _TEMPLATES["conflicting"], registry)
         assert rec["verdict"]["label"] == Verdict.CONFLICTING_EVIDENCE.value
 
@@ -136,7 +160,10 @@ class TestBuildRecord:
 
     def test_weak_vs_weak_nee(self, registry):
         """Both weak stances → not_enough_evidence."""
-        parsed = {"claim": "Claim.", "evidence_texts": ["Weak support.", "Weak refute."]}
+        parsed = {
+            "claim": "Claim.",
+            "evidence_texts": ["Weak support.", "Weak refute."],
+        }
         rec = _build_record(parsed, _TEMPLATES["weak_vs_weak_nee"], registry)
         assert rec["verdict"]["label"] == Verdict.NOT_ENOUGH_EVIDENCE.value
 
@@ -147,12 +174,18 @@ class TestBuildRecord:
         assert rec["verdict"]["label"] == Verdict.NOT_ENOUGH_EVIDENCE.value
 
     def test_perception_direct_supported(self, registry):
-        parsed = {"claim": "The cup is on the table.", "evidence_texts": ["Direct observation confirms."]}
+        parsed = {
+            "claim": "The cup is on the table.",
+            "evidence_texts": ["Direct observation confirms."],
+        }
         rec = _build_record(parsed, _TEMPLATES["perception_direct"], registry)
         assert rec["verdict"]["label"] == Verdict.SUPPORTED.value
 
     def test_comparison_supported(self, registry):
-        parsed = {"claim": "Model A uses 40% less power.", "evidence_texts": ["Stats A.", "Stats B."]}
+        parsed = {
+            "claim": "Model A uses 40% less power.",
+            "evidence_texts": ["Stats A.", "Stats B."],
+        }
         rec = _build_record(parsed, _TEMPLATES["comparison_supported"], registry)
         assert rec["verdict"]["label"] == Verdict.SUPPORTED.value
 
@@ -161,7 +194,7 @@ class TestBuildRecord:
         parsed = {"claim": "Test.", "evidence_texts": ["Ev."]}
         rec = _build_record(parsed, _TEMPLATES["high_trust_supported"], registry)
         assert "support_score" not in rec["verdict"]
-        assert "refute_score"  not in rec["verdict"]
+        assert "refute_score" not in rec["verdict"]
 
     def test_record_has_required_v3_fields(self, registry):
         parsed = {"claim": "Test.", "evidence_texts": ["Evidence."]}
@@ -178,7 +211,9 @@ class TestBuildRecord:
         parsed = {"claim": "Test.", "evidence_texts": ["Ev.", "Ev2."]}
         for name, tmpl in _TEMPLATES.items():
             rec = _build_record(parsed, tmpl, registry)
-            assert rec["meta"]["is_shortcut_breaking"] == tmpl.is_shortcut_breaking, name
+            assert rec["meta"]["is_shortcut_breaking"] == tmpl.is_shortcut_breaking, (
+                name
+            )
 
     def test_provenance_dataset_is_synthetic(self, registry):
         parsed = {"claim": "Test.", "evidence_texts": ["Ev."]}
@@ -190,10 +225,13 @@ class TestBuildRecord:
 # LocalTextClient
 # ---------------------------------------------------------------------------
 
+
 class TestLocalTextClient:
     def test_returns_claim_and_evidence(self, registry):
         client = LocalTextClient()
-        specs = [EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")]
+        specs = [
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")
+        ]
         result = client.generate(specs, "test")
         assert isinstance(result, dict)
         assert "claim" in result and "evidence_texts" in result
@@ -203,20 +241,28 @@ class TestLocalTextClient:
         client = LocalTextClient()
         specs = [
             EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
-            EvidenceSpec("refutes",  "apnews_web_text",  ["testimony"], 0.8, "strong"),
+            EvidenceSpec("refutes", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ]
         result = client.generate(specs, "conflicting")
         assert len(result["evidence_texts"]) == 2
 
     def test_perception_type_handled(self):
         client = LocalTextClient()
-        specs = [EvidenceSpec("supports", "ai2thor_simulation", ["perception"], 1.0, "strong")]
+        specs = [
+            EvidenceSpec(
+                "supports", "ai2thor_simulation", ["perception"], 1.0, "strong"
+            )
+        ]
         result = client.generate(specs, "perception_direct")
         assert result is not None
 
     def test_non_apprehension_absent(self):
         client = LocalTextClient()
-        specs = [EvidenceSpec("absent", "ai2thor_simulation", ["non_apprehension"], 0.8, "absent")]
+        specs = [
+            EvidenceSpec(
+                "absent", "ai2thor_simulation", ["non_apprehension"], 0.8, "absent"
+            )
+        ]
         result = client.generate(specs, "non_apprehension_absent")
         assert result is not None
 
@@ -234,6 +280,7 @@ class TestLocalTextClient:
 # GroundedClient
 # ---------------------------------------------------------------------------
 
+
 class TestGroundedClient:
     def test_loads_seed_pool(self):
         client = GroundedClient(seed_pool_path=SEED_POOL_PATH)
@@ -241,58 +288,93 @@ class TestGroundedClient:
 
     def test_returns_grounded_claim(self):
         client = GroundedClient(seed_pool_path=SEED_POOL_PATH)
-        specs = [EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")]
+        specs = [
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")
+        ]
         result = client.generate(specs, "high_trust_supported")
         assert isinstance(result["claim"], str) and len(result["claim"]) > 5
 
     def test_weak_prefix_applied(self):
         client = GroundedClient(seed_pool_path=SEED_POOL_PATH)
-        specs = [EvidenceSpec("supports", "social_media_web_text", ["testimony"], 0.6, "weak")]
+        specs = [
+            EvidenceSpec(
+                "supports", "social_media_web_text", ["testimony"], 0.6, "weak"
+            )
+        ]
         result = client.generate(specs, "low_trust_nee")
         text = result["evidence_texts"][0].lower()
-        hedging_words = ["reportedly", "allegedly", "unverified", "anonymous", "unconfirmed"]
+        hedging_words = [
+            "reportedly",
+            "allegedly",
+            "unverified",
+            "anonymous",
+            "unconfirmed",
+        ]
         assert any(w in text for w in hedging_words), f"Expected hedging in: {text}"
 
     def test_falls_back_for_unknown_type(self):
         client = GroundedClient(seed_pool_path=SEED_POOL_PATH)
-        specs = [EvidenceSpec("supports", "ai2thor_simulation", ["perception"], 1.0, "strong")]
+        specs = [
+            EvidenceSpec(
+                "supports", "ai2thor_simulation", ["perception"], 1.0, "strong"
+            )
+        ]
         result = client.generate(specs, "perception_direct")
         assert result is not None
 
     def test_ai2thor_triplets_in_perception_records(self):
-        AI2THOR_PATH = Path(__file__).parent.parent / "data/raw/ai2thor/claims_all.jsonl"
+        AI2THOR_PATH = (
+            Path(__file__).parent.parent / "data/raw/ai2thor/claims_all.jsonl"
+        )
         if not AI2THOR_PATH.exists():
             pytest.skip("AI2THOR claims not available")
-        client = GroundedClient(seed_pool_path=SEED_POOL_PATH, ai2thor_path=AI2THOR_PATH)
-        specs = [EvidenceSpec("supports", "ai2thor_simulation", ["perception"], 1.0, "strong")]
+        client = GroundedClient(
+            seed_pool_path=SEED_POOL_PATH, ai2thor_path=AI2THOR_PATH
+        )
+        specs = [
+            EvidenceSpec(
+                "supports", "ai2thor_simulation", ["perception"], 1.0, "strong"
+            )
+        ]
         result = client.generate(specs, "perception_direct")
         assert result is not None
         triples = result.get("evidence_triples", [[]])[0]
-        assert len(triples) > 0, "Perception records from AI2THOR should carry real triples"
+        assert len(triples) > 0, (
+            "Perception records from AI2THOR should carry real triples"
+        )
 
     def test_ai2thor_triplets_flow_through_to_record(self):
-        AI2THOR_PATH = Path(__file__).parent.parent / "data/raw/ai2thor/claims_all.jsonl"
+        AI2THOR_PATH = (
+            Path(__file__).parent.parent / "data/raw/ai2thor/claims_all.jsonl"
+        )
         if not AI2THOR_PATH.exists():
             pytest.skip("AI2THOR claims not available")
-        from src.core.claims.labels import load_source_trust_registry
+        from src.epistemic.registry import load_source_trust_registry
+
         reg = load_source_trust_registry(REGISTRY_PATH)
-        client = GroundedClient(seed_pool_path=SEED_POOL_PATH, ai2thor_path=AI2THOR_PATH)
+        client = GroundedClient(
+            seed_pool_path=SEED_POOL_PATH, ai2thor_path=AI2THOR_PATH
+        )
         gen = FictionalClaimGenerator(registry=reg, _client=client)
         # Generate a few records and check that perception ones have triples
         batch = gen.generate_batch(n_records=50)
         perception_recs = [
-            r for r in batch
-            if r["meta"]["template_type"] == "perception_direct"
+            r for r in batch if r["meta"]["template_type"] == "perception_direct"
         ]
-        assert perception_recs, "Expected some perception_direct records in 50-record batch"
+        assert perception_recs, (
+            "Expected some perception_direct records in 50-record batch"
+        )
         for rec in perception_recs:
             ev_triples = rec["evidence"][0]["triples"]
-            assert len(ev_triples) > 0, f"perception_direct record should have triples: {rec['id']}"
+            assert len(ev_triples) > 0, (
+                f"perception_direct record should have triples: {rec['id']}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # LLMClient (mocked)
 # ---------------------------------------------------------------------------
+
 
 class TestLLMClient:
     @staticmethod
@@ -310,7 +392,7 @@ class TestLLMClient:
         client = LLMClient(_client=self._mock_api(payload))
         specs = [
             EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
-            EvidenceSpec("supports", "apnews_web_text",  ["testimony"], 0.8, "strong"),
+            EvidenceSpec("supports", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ]
         result = client.generate(specs, "high_trust_supported")
         assert result["claim"] == "Test claim."
@@ -320,18 +402,23 @@ class TestLLMClient:
         api = MagicMock()
         api.messages.create.side_effect = Exception("API error")
         client = LLMClient(_client=api)
-        specs = [EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")]
+        specs = [
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")
+        ]
         assert client.generate(specs, "test") is None
 
     def test_invalid_response_returns_none(self):
         client = LLMClient(_client=self._mock_api("Sorry, cannot help."))
-        specs = [EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")]
+        specs = [
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong")
+        ]
         assert client.generate(specs, "test") is None
 
 
 # ---------------------------------------------------------------------------
 # FictionalClaimGenerator
 # ---------------------------------------------------------------------------
+
 
 class TestFictionalClaimGenerator:
     def test_generate_batch_count(self, registry):
@@ -351,10 +438,16 @@ class TestFictionalClaimGenerator:
         client = LocalTextClient()
         gen = FictionalClaimGenerator(registry=registry, _client=client)
         batch = gen.generate_batch(n_records=200)
-        all_types = {t for r in batch for e in r["evidence"] for t in e["evidence_types"]}
-        expected = {EvidenceType.TESTIMONY.value, EvidenceType.PERCEPTION.value,
-                    EvidenceType.INFERENCE.value, EvidenceType.COMPARISON_ANALOGY.value,
-                    EvidenceType.NON_APPREHENSION.value}
+        all_types = {
+            t for r in batch for e in r["evidence"] for t in e["evidence_types"]
+        }
+        expected = {
+            EvidenceType.TESTIMONY.value,
+            EvidenceType.PERCEPTION.value,
+            EvidenceType.INFERENCE.value,
+            EvidenceType.COMPARISON_ANALOGY.value,
+            EvidenceType.NON_APPREHENSION.value,
+        }
         assert expected <= all_types, f"Missing types: {expected - all_types}"
 
     def test_defaults_to_local_client_when_no_api_key(self, registry):
@@ -374,19 +467,26 @@ class TestFictionalClaimGenerator:
 # SyntheticDataValidator
 # ---------------------------------------------------------------------------
 
+
 class TestSyntheticDataValidator:
     def test_passes_with_sufficient_shortcut_fraction(self, registry):
         records = []
         for _ in range(40):
-            records.append(_build_record(
-                {"claim": "T.", "evidence_texts": ["E."]},
-                _TEMPLATES["low_trust_nee"], registry,
-            ))
+            records.append(
+                _build_record(
+                    {"claim": "T.", "evidence_texts": ["E."]},
+                    _TEMPLATES["low_trust_nee"],
+                    registry,
+                )
+            )
         for _ in range(60):
-            records.append(_build_record(
-                {"claim": "T.", "evidence_texts": ["E1.", "E2."]},
-                _TEMPLATES["high_trust_supported"], registry,
-            ))
+            records.append(
+                _build_record(
+                    {"claim": "T.", "evidence_texts": ["E1.", "E2."]},
+                    _TEMPLATES["high_trust_supported"],
+                    registry,
+                )
+            )
         val = SyntheticDataValidator(registry=registry)
         report = val.validate_batch(records)
         assert report.shortcut_fraction >= MIN_SHORTCUT_FRACTION
@@ -395,8 +495,11 @@ class TestSyntheticDataValidator:
 
     def test_fails_with_insufficient_shortcut_fraction(self, registry):
         records = [
-            _build_record({"claim": "T.", "evidence_texts": ["E1.", "E2."]},
-                          _TEMPLATES["high_trust_supported"], registry)
+            _build_record(
+                {"claim": "T.", "evidence_texts": ["E1.", "E2."]},
+                _TEMPLATES["high_trust_supported"],
+                registry,
+            )
             for _ in range(100)
         ]
         val = SyntheticDataValidator(registry=registry)
@@ -405,8 +508,13 @@ class TestSyntheticDataValidator:
         assert any("Shortcut fraction" in e for e in report.errors)
 
     def test_detects_missing_v3_fields(self, registry):
-        records = [_build_record({"claim": "T.", "evidence_texts": ["E."]},
-                                 _TEMPLATES["low_trust_nee"], registry)]
+        records = [
+            _build_record(
+                {"claim": "T.", "evidence_texts": ["E."]},
+                _TEMPLATES["low_trust_nee"],
+                registry,
+            )
+        ]
         records[0]["evidence"][0].pop("source_id")
         val = SyntheticDataValidator(registry=registry)
         report = val.validate_batch(records)
@@ -418,8 +526,13 @@ class TestSyntheticDataValidator:
         assert not report.passes
 
     def test_summary_contains_key_info(self, registry):
-        records = [_build_record({"claim": "T.", "evidence_texts": ["E1.", "E2."]},
-                                 _TEMPLATES["high_trust_supported"], registry)]
+        records = [
+            _build_record(
+                {"claim": "T.", "evidence_texts": ["E1.", "E2."]},
+                _TEMPLATES["high_trust_supported"],
+                registry,
+            )
+        ]
         val = SyntheticDataValidator(registry=registry)
         report = val.validate_batch(records)
         summary = report.summary()

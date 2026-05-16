@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import math
 
 import pytest
 import torch
 
-from src.core.gnn.metrics import (
+from src.model.evaluation.metrics import (
     compute_accuracy,
     compute_confusion_matrix,
     compute_ece,
@@ -19,6 +18,7 @@ from src.core.gnn.metrics import (
 
 
 # ── compute_accuracy ──────────────────────────────────────────────────────────
+
 
 class TestAccuracy:
     def test_perfect(self):
@@ -38,6 +38,7 @@ class TestAccuracy:
 
 
 # ── compute_macro_f1 ──────────────────────────────────────────────────────────
+
 
 class TestMacroF1:
     def test_perfect_f1(self):
@@ -65,6 +66,7 @@ class TestMacroF1:
 
 # ── compute_weighted_f1 ───────────────────────────────────────────────────────
 
+
 class TestWeightedF1:
     def test_perfect(self):
         preds = torch.tensor([0, 1, 2])
@@ -73,7 +75,7 @@ class TestWeightedF1:
 
     def test_weighted_differs_from_macro(self):
         # Imbalanced: class 0 has 3 examples, class 1 has 1
-        preds  = torch.tensor([0, 0, 0, 1])
+        preds = torch.tensor([0, 0, 0, 1])
         labels = torch.tensor([0, 0, 0, 1])
         macro = compute_macro_f1(preds, labels, 2)
         weighted = compute_weighted_f1(preds, labels, 2)
@@ -82,6 +84,7 @@ class TestWeightedF1:
 
 
 # ── compute_confusion_matrix ──────────────────────────────────────────────────
+
 
 class TestConfusionMatrix:
     def test_shape(self):
@@ -104,9 +107,9 @@ class TestConfusionMatrix:
         preds = torch.tensor([0, 0, 0])
         labels = torch.tensor([0, 1, 2])
         cm = compute_confusion_matrix(preds, labels, 3)
-        assert cm[0][0] == 1   # true 0, predicted 0
-        assert cm[1][0] == 1   # true 1, predicted 0
-        assert cm[2][0] == 1   # true 2, predicted 0
+        assert cm[0][0] == 1  # true 0, predicted 0
+        assert cm[1][0] == 1  # true 1, predicted 0
+        assert cm[2][0] == 1  # true 2, predicted 0
 
     def test_sum_equals_total(self):
         preds = torch.tensor([0, 1, 2, 0, 1, 2])
@@ -116,6 +119,7 @@ class TestConfusionMatrix:
 
 
 # ── compute_ece ───────────────────────────────────────────────────────────────
+
 
 class TestECE:
     def test_perfect_calibration(self):
@@ -146,9 +150,10 @@ class TestECE:
 
 # ── compute_per_group_accuracy ────────────────────────────────────────────────
 
+
 class TestPerGroupAccuracy:
     def test_two_groups_exact(self):
-        preds  = torch.tensor([0, 0, 1, 1])
+        preds = torch.tensor([0, 0, 1, 1])
         labels = torch.tensor([0, 1, 1, 1])
         groups = ["A", "A", "B", "B"]
         result = compute_per_group_accuracy(preds, labels, groups)
@@ -156,7 +161,7 @@ class TestPerGroupAccuracy:
         assert result["B"]["accuracy"] == pytest.approx(1.0)
 
     def test_support_counts(self):
-        preds  = torch.tensor([0, 1, 2, 0, 1])
+        preds = torch.tensor([0, 1, 2, 0, 1])
         labels = torch.tensor([0, 1, 2, 0, 1])
         groups = ["x", "x", "x", "y", "y"]
         result = compute_per_group_accuracy(preds, labels, groups)
@@ -164,7 +169,7 @@ class TestPerGroupAccuracy:
         assert result["y"]["support"] == 2
 
     def test_support_sums_to_total(self):
-        preds  = torch.zeros(10, dtype=torch.long)
+        preds = torch.zeros(10, dtype=torch.long)
         labels = torch.zeros(10, dtype=torch.long)
         groups = ["a"] * 4 + ["b"] * 6
         result = compute_per_group_accuracy(preds, labels, groups)
@@ -172,7 +177,7 @@ class TestPerGroupAccuracy:
         assert total == 10
 
     def test_single_group(self):
-        preds  = torch.tensor([0, 0])
+        preds = torch.tensor([0, 0])
         labels = torch.tensor([0, 1])
         groups = ["only"] * 2
         result = compute_per_group_accuracy(preds, labels, groups)
@@ -182,9 +187,10 @@ class TestPerGroupAccuracy:
 
 # ── compute_per_class_metrics ─────────────────────────────────────────────────
 
+
 class TestPerClassMetrics:
     def test_perfect_three_class(self):
-        preds  = torch.tensor([0, 1, 2])
+        preds = torch.tensor([0, 1, 2])
         labels = torch.tensor([0, 1, 2])
         result = compute_per_class_metrics(preds, labels, 3)
         for c in range(3):
@@ -193,7 +199,7 @@ class TestPerClassMetrics:
             assert result[c]["f1"] == pytest.approx(1.0)
 
     def test_support_counts(self):
-        preds  = torch.tensor([0, 1, 2, 0])
+        preds = torch.tensor([0, 1, 2, 0])
         labels = torch.tensor([0, 1, 2, 2])
         result = compute_per_class_metrics(preds, labels, 3)
         assert result[0]["support"] == 1

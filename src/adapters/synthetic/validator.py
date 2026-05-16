@@ -1,14 +1,12 @@
 """Synthetic data validator — checks shortcut-breaking and structural requirements."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from src.adapters.synthetic.fictional_generator import MIN_SHORTCUT_FRACTION
-from src.core.claims.labels import (
-    aggregate_scores,
-    derive_verdict,
-    load_source_trust_registry,
-)
+from src.epistemic.formula import aggregate_scores, derive_verdict
+from src.epistemic.registry import load_source_trust_registry
 
 
 @dataclass
@@ -17,7 +15,7 @@ class SyntheticValidationReport:
     shortcut_breaking: int = 0
     verdict_distribution: dict[str, int] = field(default_factory=dict)
     missing_v3_fields: int = 0
-    ec_mismatch: int = 0   # records where stored verdict ≠ recomputed verdict
+    ec_mismatch: int = 0  # records where stored verdict ≠ recomputed verdict
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -50,8 +48,16 @@ class SyntheticValidationReport:
         return "\n".join(lines)
 
 
-_V3_EVIDENCE_REQUIRED = {"evidence_id", "text", "triples", "modality", "stance",
-                          "evidence_types", "source_id", "inference_strength"}
+_V3_EVIDENCE_REQUIRED = {
+    "evidence_id",
+    "text",
+    "triples",
+    "modality",
+    "stance",
+    "evidence_types",
+    "source_id",
+    "inference_strength",
+}
 
 
 class SyntheticDataValidator:

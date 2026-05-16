@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.core.ports.dataset.validator import DatasetValidator
-from src.core.claims.labels import EvidenceStance, EvidenceType, Verdict
+from src.ports.validator import DatasetValidator
+from src.epistemic.enums import EvidenceStance, EvidenceType, Verdict
 
 _VALID_AVERITEC_EVIDENCE_TYPES = {
     EvidenceType.PERCEPTION.value,
@@ -23,7 +23,9 @@ class AveritecValidator(DatasetValidator):
         msgs = []
         verdict_label = (record.get("verdict") or {}).get("label")
         evidence = record.get("evidence") or []
-        evidence_types_all = (record.get("epistemic") or {}).get("evidence_types_all", [])
+        evidence_types_all = (record.get("epistemic") or {}).get(
+            "evidence_types_all", []
+        )
 
         if not evidence:
             msgs.append("AVeriTeC record has no evidence items.")

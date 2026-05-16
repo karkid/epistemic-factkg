@@ -12,7 +12,7 @@ from typing import Iterable
 
 from rdflib import Graph as RDFGraph, URIRef, Literal
 
-from src.core.graph.types import Triple, TripleList
+from src.infra.graph.types import Triple, TripleList
 
 
 def _term_to_str(t) -> str:

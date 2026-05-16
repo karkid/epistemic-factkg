@@ -15,6 +15,7 @@ The client picks the right pool based on the first spec's evidence_type:
 
 Falls back to LocalTextClient when no matching record is found in either pool.
 """
+
 from __future__ import annotations
 
 import json
@@ -80,8 +81,7 @@ class GroundedClient(SyntheticTextClient):
 
         if seed_pool_path is None:
             seed_pool_path = (
-                Path(__file__).resolve().parents[5]
-                / "data/registry/seed_pool.jsonl"
+                Path(__file__).resolve().parents[5] / "data/registry/seed_pool.jsonl"
             )
         self._load_seed_pool(Path(seed_pool_path))
 
@@ -94,6 +94,7 @@ class GroundedClient(SyntheticTextClient):
 
         if fallback is None:
             from .local_client import LocalTextClient
+
             fallback = LocalTextClient()
         self._fallback = fallback
 
@@ -126,11 +127,13 @@ class GroundedClient(SyntheticTextClient):
                     if not triples:
                         continue
                     stance = ev.get("stance", "supports")
-                    self._ai2thor[stance].append({
-                        "claim":   claim,
-                        "text":    ev.get("text", ""),
-                        "triples": triples,
-                    })
+                    self._ai2thor[stance].append(
+                        {
+                            "claim": claim,
+                            "text": ev.get("text", ""),
+                            "triples": triples,
+                        }
+                    )
 
     # ------------------------------------------------------------------
     # Generation
@@ -144,7 +147,9 @@ class GroundedClient(SyntheticTextClient):
         if not specs:
             return None
 
-        primary_type = specs[0].evidence_types[0] if specs[0].evidence_types else "testimony"
+        primary_type = (
+            specs[0].evidence_types[0] if specs[0].evidence_types else "testimony"
+        )
 
         if primary_type in _TRIPLET_TYPES:
             return self._generate_from_ai2thor(specs, template_name)
@@ -193,7 +198,9 @@ class GroundedClient(SyntheticTextClient):
         specs: list[EvidenceSpec],
         template_name: str,
     ) -> dict[str, Any] | None:
-        primary_type = specs[0].evidence_types[0] if specs[0].evidence_types else "testimony"
+        primary_type = (
+            specs[0].evidence_types[0] if specs[0].evidence_types else "testimony"
+        )
         candidates = self._pool.get(primary_type) or []
         if not candidates:
             return self._fallback.generate(specs, template_name)

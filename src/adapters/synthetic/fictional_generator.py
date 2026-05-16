@@ -35,45 +35,45 @@ inference_nee               2 academic inference IS=0.5 NEE            YES (S→
 comparison_supported        2 reuters comp IS=0.7      supported       no
 non_apprehension_absent     1 ai2thor non_app IS=0.8   supported       no
 """
+
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from src.adapters.synthetic.client.base import EvidenceSpec, SyntheticTextClient
-from src.core.claims.labels import (
-    EvidenceStance,
-    EvidenceType,
+from src.epistemic.enums import (
     ReasoningStrategy,
     Verdict,
+)
+from src.epistemic.formula import (
     aggregate_scores,
     combine_evidence_weights,
     compute_evidence_confidence,
     derive_verdict,
-    get_source_trust,
-    load_source_trust_registry,
 )
+from src.epistemic.registry import get_source_trust
 from src.utils.time import utc_now_iso
 
 MIN_SHORTCUT_FRACTION = 0.35
 
 _STRATEGY_MAP: dict[str, str] = {
-    "high_trust_supported":       ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "low_trust_nee":              ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "high_trust_refuted":         ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "low_trust_refuted_nee":      ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "conflicting":                ReasoningStrategy.CONFLICTING_EVIDENCE,
+    "high_trust_supported": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "low_trust_nee": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "high_trust_refuted": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "low_trust_refuted_nee": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "conflicting": ReasoningStrategy.CONFLICTING_EVIDENCE,
     "strong_support_weak_refute": ReasoningStrategy.TESTIMONIAL_LOOKUP,
     "weak_support_strong_refute": ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "weak_vs_weak_nee":           ReasoningStrategy.CONFLICTING_EVIDENCE,
-    "corroborating_3":            ReasoningStrategy.TESTIMONIAL_LOOKUP,
-    "perception_direct":          ReasoningStrategy.DIRECT_OBSERVATION,
-    "inference_nee":              ReasoningStrategy.MULTI_HOP_INFERENCE,
-    "comparison_supported":       ReasoningStrategy.SPATIAL_COMPARISON,
-    "non_apprehension_absent":    ReasoningStrategy.ABSENCE_DETECTION,
-    "non_apprehension_refuted":   ReasoningStrategy.ABSENCE_DETECTION,
-    "non_apprehension_weak_nee":  ReasoningStrategy.ABSENCE_DETECTION,
+    "weak_vs_weak_nee": ReasoningStrategy.CONFLICTING_EVIDENCE,
+    "corroborating_3": ReasoningStrategy.TESTIMONIAL_LOOKUP,
+    "perception_direct": ReasoningStrategy.DIRECT_OBSERVATION,
+    "inference_nee": ReasoningStrategy.MULTI_HOP_INFERENCE,
+    "comparison_supported": ReasoningStrategy.SPATIAL_COMPARISON,
+    "non_apprehension_absent": ReasoningStrategy.ABSENCE_DETECTION,
+    "non_apprehension_refuted": ReasoningStrategy.ABSENCE_DETECTION,
+    "non_apprehension_weak_nee": ReasoningStrategy.ABSENCE_DETECTION,
 }
 
 
@@ -84,6 +84,7 @@ def _to_strategy(template_name: str) -> str:
 # ---------------------------------------------------------------------------
 # Template configurations
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _TemplateConfig:
@@ -99,15 +100,17 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         name="high_trust_supported",
         description="Two independent, clear, direct evidence items supporting the claim.",
         evidence_specs=[
-            EvidenceSpec("supports", "reuters_web_text",  ["testimony"], 0.8, "strong"),
-            EvidenceSpec("supports", "apnews_web_text",   ["testimony"], 0.8, "strong"),
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
+            EvidenceSpec("supports", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ],
     ),
     "low_trust_nee": _TemplateConfig(
         name="low_trust_nee",
         description="One vague, unverified item appearing to support the claim.",
         evidence_specs=[
-            EvidenceSpec("supports", "social_media_web_text", ["testimony"], 0.6, "weak"),
+            EvidenceSpec(
+                "supports", "social_media_web_text", ["testimony"], 0.6, "weak"
+            ),
         ],
         is_shortcut_breaking=True,
     ),
@@ -115,8 +118,8 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         name="high_trust_refuted",
         description="Two independent, clear evidence items refuting the claim.",
         evidence_specs=[
-            EvidenceSpec("refutes", "reuters_web_text",  ["testimony"], 0.8, "strong"),
-            EvidenceSpec("refutes", "apnews_web_text",   ["testimony"], 0.8, "strong"),
+            EvidenceSpec("refutes", "reuters_web_text", ["testimony"], 0.8, "strong"),
+            EvidenceSpec("refutes", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ],
     ),
     "low_trust_refuted_nee": _TemplateConfig(
@@ -132,11 +135,10 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         description="Two reputable sources that directly contradict each other.",
         evidence_specs=[
             EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
-            EvidenceSpec("refutes",  "apnews_web_text",  ["testimony"], 0.8, "strong"),
+            EvidenceSpec("refutes", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ],
         is_shortcut_breaking=True,
     ),
-
     # ── Compound asymmetric trust (critical for shortcut-breaking) ────────────
     "strong_support_weak_refute": _TemplateConfig(
         name="strong_support_weak_refute",
@@ -145,9 +147,11 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
             "Claim is supported despite the presence of a refuting stance."
         ),
         evidence_specs=[
-            EvidenceSpec("supports", "reuters_web_text",       ["testimony"], 0.8, "strong"),
-            EvidenceSpec("supports", "apnews_web_text",        ["testimony"], 0.8, "strong"),
-            EvidenceSpec("refutes",  "social_media_web_text",  ["testimony"], 0.4, "weak"),
+            EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
+            EvidenceSpec("supports", "apnews_web_text", ["testimony"], 0.8, "strong"),
+            EvidenceSpec(
+                "refutes", "social_media_web_text", ["testimony"], 0.4, "weak"
+            ),
         ],
         is_shortcut_breaking=True,
     ),
@@ -158,9 +162,11 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
             "Claim is refuted despite the presence of a supporting stance."
         ),
         evidence_specs=[
-            EvidenceSpec("supports", "social_media_web_text", ["testimony"], 0.6, "weak"),
-            EvidenceSpec("refutes",  "reuters_web_text",      ["testimony"], 0.8, "strong"),
-            EvidenceSpec("refutes",  "apnews_web_text",       ["testimony"], 0.8, "strong"),
+            EvidenceSpec(
+                "supports", "social_media_web_text", ["testimony"], 0.6, "weak"
+            ),
+            EvidenceSpec("refutes", "reuters_web_text", ["testimony"], 0.8, "strong"),
+            EvidenceSpec("refutes", "apnews_web_text", ["testimony"], 0.8, "strong"),
         ],
         is_shortcut_breaking=True,
     ),
@@ -171,8 +177,10 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
             "Result is not_enough_evidence despite both stances being present."
         ),
         evidence_specs=[
-            EvidenceSpec("supports", "unknown_web",           ["testimony"], 0.5, "weak"),
-            EvidenceSpec("refutes",  "social_media_web_text", ["testimony"], 0.4, "weak"),
+            EvidenceSpec("supports", "unknown_web", ["testimony"], 0.5, "weak"),
+            EvidenceSpec(
+                "refutes", "social_media_web_text", ["testimony"], 0.4, "weak"
+            ),
         ],
         is_shortcut_breaking=True,
     ),
@@ -181,17 +189,18 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         description="Three independent sources all supporting the claim.",
         evidence_specs=[
             EvidenceSpec("supports", "reuters_web_text", ["testimony"], 0.8, "strong"),
-            EvidenceSpec("supports", "apnews_web_text",  ["testimony"], 0.8, "strong"),
-            EvidenceSpec("supports", "bbc_web_text",     ["testimony"], 0.7, "strong"),
+            EvidenceSpec("supports", "apnews_web_text", ["testimony"], 0.8, "strong"),
+            EvidenceSpec("supports", "bbc_web_text", ["testimony"], 0.7, "strong"),
         ],
     ),
-
     # ── Evidence type diversity ───────────────────────────────────────────────
     "perception_direct": _TemplateConfig(
         name="perception_direct",
         description="One direct observational item confirming the claim (simulator ground truth).",
         evidence_specs=[
-            EvidenceSpec("supports", "ai2thor_simulation", ["perception"], 1.0, "strong"),
+            EvidenceSpec(
+                "supports", "ai2thor_simulation", ["perception"], 1.0, "strong"
+            ),
         ],
     ),
     "inference_nee": _TemplateConfig(
@@ -210,22 +219,30 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         name="comparison_supported",
         description="Two statistical / numerical comparison items supporting the claim.",
         evidence_specs=[
-            EvidenceSpec("supports", "reuters_web_text", ["comparison_analogy"], 0.7, "strong"),
-            EvidenceSpec("supports", "apnews_web_text",  ["comparison_analogy"], 0.7, "strong"),
+            EvidenceSpec(
+                "supports", "reuters_web_text", ["comparison_analogy"], 0.7, "strong"
+            ),
+            EvidenceSpec(
+                "supports", "apnews_web_text", ["comparison_analogy"], 0.7, "strong"
+            ),
         ],
     ),
     "non_apprehension_absent": _TemplateConfig(
         name="non_apprehension_absent",
         description="One sensor-confirmed absence item supporting a negative claim.",
         evidence_specs=[
-            EvidenceSpec("absent", "ai2thor_simulation", ["non_apprehension"], 0.8, "absent"),
+            EvidenceSpec(
+                "absent", "ai2thor_simulation", ["non_apprehension"], 0.8, "absent"
+            ),
         ],
     ),
     "non_apprehension_refuted": _TemplateConfig(
         name="non_apprehension_refuted",
         description="Confirmed absence of something expected — refuting a positive claim.",
         evidence_specs=[
-            EvidenceSpec("refutes", "ai2thor_simulation", ["non_apprehension"], 0.8, "strong"),
+            EvidenceSpec(
+                "refutes", "ai2thor_simulation", ["non_apprehension"], 0.8, "strong"
+            ),
         ],
     ),
     "non_apprehension_weak_nee": _TemplateConfig(
@@ -235,34 +252,37 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
             "the absence, resulting in not_enough_evidence despite absent stance."
         ),
         evidence_specs=[
-            EvidenceSpec("absent", "general_web_text", ["non_apprehension"], 0.6, "weak"),
+            EvidenceSpec(
+                "absent", "general_web_text", ["non_apprehension"], 0.6, "weak"
+            ),
         ],
         is_shortcut_breaking=True,  # absent stance but verdict = NEE
     ),
 }
 
 _DEFAULT_DISTRIBUTION: dict[str, float] = {
-    "high_trust_supported":          0.06,
-    "low_trust_nee":                 0.07,
-    "high_trust_refuted":            0.06,
-    "low_trust_refuted_nee":         0.07,
-    "conflicting":                   0.07,
-    "strong_support_weak_refute":    0.09,
-    "weak_support_strong_refute":    0.09,
-    "weak_vs_weak_nee":              0.09,
-    "corroborating_3":               0.06,
-    "perception_direct":             0.07,
-    "inference_nee":                 0.07,
-    "comparison_supported":          0.06,
-    "non_apprehension_absent":       0.03,
-    "non_apprehension_refuted":      0.04,
-    "non_apprehension_weak_nee":     0.07,  # SB: absent stance but NEE
+    "high_trust_supported": 0.06,
+    "low_trust_nee": 0.07,
+    "high_trust_refuted": 0.06,
+    "low_trust_refuted_nee": 0.07,
+    "conflicting": 0.07,
+    "strong_support_weak_refute": 0.09,
+    "weak_support_strong_refute": 0.09,
+    "weak_vs_weak_nee": 0.09,
+    "corroborating_3": 0.06,
+    "perception_direct": 0.07,
+    "inference_nee": 0.07,
+    "comparison_supported": 0.06,
+    "non_apprehension_absent": 0.03,
+    "non_apprehension_refuted": 0.04,
+    "non_apprehension_weak_nee": 0.07,  # SB: absent stance but NEE
 }
 
 
 # ---------------------------------------------------------------------------
 # Generator
 # ---------------------------------------------------------------------------
+
 
 class FictionalClaimGenerator:
     """Generates shortcut-breaking synthetic v3.0 claims.
@@ -290,9 +310,13 @@ class FictionalClaimGenerator:
             self._client = _client
         elif api_key:
             from src.adapters.synthetic.llm.llm_client import LLMClient
-            self._client = LLMClient(model=model, api_key=api_key, max_tokens=max_tokens)
+
+            self._client = LLMClient(
+                model=model, api_key=api_key, max_tokens=max_tokens
+            )
         else:
             from src.adapters.synthetic.client.local_client import LocalTextClient
+
             self._client = LocalTextClient()
 
     def generate_batch(
@@ -321,6 +345,7 @@ class FictionalClaimGenerator:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_plan(n_records: int, distribution: dict[str, float]) -> dict[str, int]:
     """Allocate record counts per template type, guaranteed to sum to n_records.
@@ -362,32 +387,40 @@ def _build_record(
         ew = combine_evidence_weights(spec.evidence_types)
         ec = compute_evidence_confidence(st, ew, spec.inference_strength)
 
-        evidence_items.append({
-            "evidence_id": ev_id,
-            "text": text,
-            "triples": triples,
-            "triple_source": "ai2thor_simulation" if triples else None,
-            "modality": "web_text",
-            "stance": spec.stance,
-            "evidence_types": list(spec.evidence_types),
-            "source_id": spec.source_id,
-            "inference_strength": spec.inference_strength,
-            "source_url": None,
-            "_ec": ec,
-        })
+        evidence_items.append(
+            {
+                "evidence_id": ev_id,
+                "text": text,
+                "triples": triples,
+                "triple_source": "ai2thor_simulation" if triples else None,
+                "modality": "web_text",
+                "stance": spec.stance,
+                "evidence_types": list(spec.evidence_types),
+                "source_id": spec.source_id,
+                "inference_strength": spec.inference_strength,
+                "source_url": None,
+                "_ec": ec,
+            }
+        )
 
     support_score, refute_score = aggregate_scores(evidence_items, registry)
     verdict_label = derive_verdict(support_score, refute_score)
 
-    evidence_out = [{k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_items]
-    evidence_types_all = sorted({t for e in evidence_out for t in e.get("evidence_types", [])})
+    evidence_out = [
+        {k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_items
+    ]
+    evidence_types_all = sorted(
+        {t for e in evidence_out for t in e.get("evidence_types", [])}
+    )
 
     return {
         "schema_version": "3.0",
         "id": rec_id,
         "claim": claim,
         "verdict": {
-            "label": verdict_label.value if isinstance(verdict_label, Verdict) else verdict_label,
+            "label": verdict_label.value
+            if isinstance(verdict_label, Verdict)
+            else verdict_label,
             "justification": None,
             "derivation_method": "aggregated_from_evidence",
         },
@@ -396,9 +429,7 @@ def _build_record(
             "assignment_method": "synthetic_template",
         },
         "claim_triples": None,
-        "reasoning": {
-            "strategy": _to_strategy(template.name)
-        },
+        "reasoning": {"strategy": _to_strategy(template.name)},
         "evidence": evidence_out,
         "provenance": {
             "dataset": "synthetic",
