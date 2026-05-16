@@ -26,6 +26,10 @@ def main() -> None:
     ap.add_argument(
         "--force-rebuild", action="store_true", help="Rebuild even if .pt cache exists"
     )
+    ap.add_argument(
+        "--use-nli", action="store_true",
+        help="Append NLI stance probs to evidence features (403d, for v3-nli)",
+    )
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()
 
@@ -52,6 +56,7 @@ def main() -> None:
         pt_cache=out_path,
         featurizer=featurizer,
         force_rebuild=args.force_rebuild,
+        use_nli=args.use_nli,
     )
 
     print("=" * 60)

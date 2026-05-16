@@ -35,9 +35,11 @@ class ClaimGraphBuilder:
         self,
         registry: dict[str, dict],
         featurizer: Featurizer,
+        use_nli: bool = False,
     ) -> None:
         self.registry = registry
         self.featurizer = featurizer
+        self.use_nli = use_nli
 
     @classmethod
     def from_paths(
@@ -74,19 +76,26 @@ class ClaimGraphBuilder:
 
         # ── Evidence nodes ────────────────────────────────────────────
         n_ev = len(evidence_items)
+        ev_dim = 403 if self.use_nli else 400
         if n_ev == 0:
             # Degenerate graph — create a dummy evidence node so edges are valid
-            data[NodeType.EVIDENCE].x = torch.zeros(1, 400, dtype=torch.float32)
+            data[NodeType.EVIDENCE].x = torch.zeros(1, ev_dim, dtype=torch.float32)
             data[NodeType.EVIDENCE].stance_y = torch.tensor([2], dtype=torch.long)
             data[NodeType.EVIDENCE].is_y = torch.tensor([0.0], dtype=torch.float32)
             data[NodeType.EVIDENCE].ew = torch.tensor([0.0], dtype=torch.float32)
             data[NodeType.EVIDENCE].st = torch.tensor([0.0], dtype=torch.float32)
             n_ev = 1
         else:
+            nli_probs = None
+            if self.use_nli:
+                ev_texts = [ev.get("text", "") for ev in evidence_items]
+                nli_probs = self.featurizer.encode_nli_stance(
+                    record["claim"], ev_texts
+                )  # [N_ev, 3]
             ev_features, stance_y, is_y, ew_vals, st_vals = self._build_evidence(
-                evidence_items
+                evidence_items, nli_probs=nli_probs
             )
-            data[NodeType.EVIDENCE].x = ev_features  # [N_ev, 400]
+            data[NodeType.EVIDENCE].x = ev_features  # [N_ev, 400] or [N_ev, 403]
             data[NodeType.EVIDENCE].stance_y = stance_y  # [N_ev]
             data[NodeType.EVIDENCE].is_y = is_y  # [N_ev]
             data[NodeType.EVIDENCE].ew = ew_vals  # [N_ev]
@@ -156,7 +165,7 @@ class ClaimGraphBuilder:
         return (record.get("reasoning") or {}).get("strategy") or "testimonial_lookup"
 
     def _build_evidence(
-        self, evidence_items: list[dict]
+        self, evidence_items: list[dict], nli_probs: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         texts = [ev.get("text", "") for ev in evidence_items]
         text_embs = self.featurizer.encode_texts(texts)  # [N_ev, 384]
@@ -190,6 +199,9 @@ class ClaimGraphBuilder:
             ],
             dim=1,
         )  # [N_ev, 400]
+
+        if nli_probs is not None and nli_probs.shape[0] == ev_features.shape[0]:
+            ev_features = torch.cat([ev_features, nli_probs], dim=1)  # [N_ev, 403]
 
         return (
             ev_features,

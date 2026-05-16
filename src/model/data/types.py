@@ -123,6 +123,7 @@ def get_source_category(source_id: str, registry: dict[str, dict]) -> str:
 
 CLAIM_DIM = _EMBED_DIM + NUM_REASONING_STRATEGY  # 390
 EVIDENCE_DIM = _EMBED_DIM + NUM_MODALITY + NUM_EVIDENCE_TYPE + NUM_SOURCE_TYPE  # 400
+EVIDENCE_DIM_NLI = EVIDENCE_DIM + 3  # 403 — with NLI stance probs appended
 TRIPLE_DIM = _EMBED_DIM
 
 

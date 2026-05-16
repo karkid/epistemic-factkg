@@ -11,9 +11,11 @@ To add a new model:
 from src.model.models.baseline import BaselineHGNN
 from src.model.models.epistemichgnn import EpistemicHGNN
 from src.model.models.hybridhgnn import HybridHGNN
+from src.model.models.nlihybridhgnn import NLIHybridHGNN
 
 MODELS: dict[str, type] = {
     "v1-hgnn": EpistemicHGNN,
     "v2-hgnn": HybridHGNN,
+    "v3-nli": NLIHybridHGNN,
     "baseline": BaselineHGNN,
 }

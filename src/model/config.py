@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from src.model.data.types import (
     CLAIM_DIM,
     EVIDENCE_DIM,
+    EVIDENCE_DIM_NLI,
     TRIPLE_DIM,
     EdgeType,
     NodeType,
@@ -31,6 +32,24 @@ class GraphConfig:
     edge_types: list[EdgeTypeTuple]
     target_node: str = NodeType.EVIDENCE
     symbolic_fields: list[str] = field(default_factory=lambda: ["ew", "st"])
+
+    @classmethod
+    def v2(cls) -> GraphConfig:
+        """V2: evidence nodes include 3 NLI stance prob features (403d total)."""
+        return cls(
+            node_dims={
+                NodeType.CLAIM: CLAIM_DIM,
+                NodeType.EVIDENCE: EVIDENCE_DIM_NLI,
+                NodeType.TRIPLE: TRIPLE_DIM,
+            },
+            edge_types=[
+                (NodeType.CLAIM, EdgeType.HAS_EVIDENCE, NodeType.EVIDENCE),
+                (NodeType.EVIDENCE, EdgeType.CONNECTED_TO, NodeType.CLAIM),
+                (NodeType.EVIDENCE, EdgeType.CO_EVIDENCE, NodeType.EVIDENCE),
+                (NodeType.CLAIM, EdgeType.HAS_TRIPLE, NodeType.TRIPLE),
+                (NodeType.EVIDENCE, EdgeType.FROM_TRIPLE, NodeType.TRIPLE),
+            ],
+        )
 
     @classmethod
     def v1(cls) -> GraphConfig:

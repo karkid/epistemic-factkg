@@ -27,12 +27,14 @@ class EpistemicFactDataset(InMemoryDataset):
         registry_path: str | Path = "data/registry/source_trust_registry.jsonl",
         featurizer: Featurizer | None = None,
         force_rebuild: bool = False,
+        use_nli: bool = False,
     ):
         self._jsonl_path = Path(jsonl_path)
         self._pt_cache = Path(pt_cache)
         self._registry = load_source_trust_registry(registry_path)
         self._featurizer = featurizer or Featurizer()
         self._force_rebuild = force_rebuild
+        self._use_nli = use_nli
 
         # InMemoryDataset.__init__ triggers download/process if needed
         super().__init__(root=str(self._pt_cache.parent))
@@ -44,7 +46,7 @@ class EpistemicFactDataset(InMemoryDataset):
         return [self._pt_cache.name]
 
     def process(self) -> None:
-        builder = ClaimGraphBuilder(self._registry, self._featurizer)
+        builder = ClaimGraphBuilder(self._registry, self._featurizer, use_nli=self._use_nli)
         graphs = []
 
         with open(self._jsonl_path, "r", encoding="utf-8") as f:

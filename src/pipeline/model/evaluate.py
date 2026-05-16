@@ -17,7 +17,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from src.epistemic.registry import load_source_trust_registry
 from src.model.data.builder import ClaimGraphBuilder
+from src.model.data.featurizer import Featurizer
 from src.model.evaluation.metrics import (
     compute_accuracy,
     compute_confusion_matrix,
@@ -30,6 +32,7 @@ from src.model.evaluation.metrics import (
     compute_weighted_f1,
 )
 from src.model.models import MODELS
+from src.model.models.nlihybridhgnn import NLIHybridHGNN
 from src.model.config import GraphConfig
 from src.model.data.types import NUM_STANCE, NUM_VERDICT, VERDICT_TO_INT
 
@@ -183,8 +186,10 @@ def main() -> None:
             f"Unknown model '{args.model}'. Available: {list(MODELS)}", file=sys.stderr
         )
         sys.exit(1)
+    is_nli = MODELS.get(args.model) is NLIHybridHGNN
+    graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
     model = MODELS[args.model](
-        GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout
+        graph_cfg, args.hidden_dim, args.heads, args.dropout
     )
     model.load_state_dict(
         torch.load(args.checkpoint, map_location=device, weights_only=False)
@@ -193,7 +198,9 @@ def main() -> None:
 
     # ── Load test records ─────────────────────────────────────────────────────
     test_records = _load_test_records(Path(args.jsonl), Path(args.splits_dir))
-    builder = ClaimGraphBuilder.from_paths(args.registry, args.embed_cache)
+    registry = load_source_trust_registry(args.registry)
+    featurizer = Featurizer(cache_path=args.embed_cache)
+    builder = ClaimGraphBuilder(registry, featurizer, use_nli=is_nli)
 
     # ── Accumulators ─────────────────────────────────────────────────────────
     stance_preds: list[torch.Tensor] = []

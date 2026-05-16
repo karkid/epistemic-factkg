@@ -23,6 +23,7 @@ REPORT_DIR          := "out/reports/data"
 TRAINING_JSONL      := "out/data/training/epistemic_factkg_training.jsonl"
 TRAINING_VALIDATION := "out/reports/data/training_validation.json"
 GRAPH_DATASET       := "out/model/graphs/graph_dataset.pt"
+GRAPH_DATASET_NLI   := "out/model/graphs/graph_dataset_nli.pt"
 SPLITS_DIR          := "out/data/splits"
 MODEL_NAME          := "v1-hgnn"
 CHECKPOINTS_DIR     := "out/model/" + MODEL_NAME + "/checkpoints"
@@ -201,6 +202,18 @@ graph:
 
 
 [group("Model Pipeline")]
+[doc("Build NLI-enhanced graph dataset for v3-nli (403d evidence features)")]
+graph-nli:
+    mkdir -p out/model/graphs
+    uv run python -m src.pipeline.model.build_graphs \
+        --input {{TRAINING_JSONL}} \
+        --output {{GRAPH_DATASET_NLI}} \
+        --embed-cache out/model/graphs/embed_cache.pkl \
+        --use-nli \
+        --verbose
+
+
+[group("Model Pipeline")]
 [doc("Train a model (default: MODEL_NAME). Override: just train baseline")]
 train model=MODEL_NAME:
     mkdir -p out/model/{{model}}/checkpoints out/reports/model/{{model}}
@@ -238,3 +251,13 @@ compare model1 model2:
         --model1 {{model1}} --dir1 out/reports/model/{{model1}}/eval \
         --model2 {{model2}} --dir2 out/reports/model/{{model2}}/eval \
         --out out/reports/model/comparison_{{model1}}_vs_{{model2}}.md
+
+
+# ╔═════════════════════════════════════════════════════════════════════════════╗
+# ║  DEMO                                                                      ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+
+[group("Demo")]
+[doc("Launch the Streamlit demo app (requires trained checkpoints)")]
+app:
+    uv run streamlit run app/app.py

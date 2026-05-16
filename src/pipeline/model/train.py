@@ -16,6 +16,7 @@ from src.model.config import GraphConfig
 from src.model.data.featurizer import Featurizer
 from src.model.data.builder import ClaimGraphBuilder
 from src.model.models import MODELS
+from src.model.models.nlihybridhgnn import NLIHybridHGNN
 from src.model.training.config import TrainConfig
 from src.model.training.trainer import Trainer
 from src.model.data.types import NUM_STANCE, NUM_VERDICT
@@ -118,7 +119,8 @@ def main() -> None:
         print("Building graphs...")
     featurizer = Featurizer(cache_path=args.embed_cache)
     registry = load_source_trust_registry(args.registry)
-    builder = ClaimGraphBuilder(registry, featurizer)
+    is_nli = MODELS.get(args.model) is NLIHybridHGNN
+    builder = ClaimGraphBuilder(registry, featurizer, use_nli=is_nli)
 
     train_graphs = _build_graphs(records, train_indices, builder, "train", args.verbose)
     val_graphs = _build_graphs(records, val_indices, builder, "val", args.verbose)
@@ -158,8 +160,9 @@ def main() -> None:
             f"Unknown model '{args.model}'. Available: {list(MODELS)}", file=sys.stderr
         )
         sys.exit(1)
+    graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
     model = MODELS[args.model](
-        GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout
+        graph_cfg, args.hidden_dim, args.heads, args.dropout
     )
     config = TrainConfig(
         epochs=args.epochs,

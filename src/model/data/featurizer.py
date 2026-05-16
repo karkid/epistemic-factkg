@@ -7,7 +7,7 @@ import pickle
 from pathlib import Path
 
 import torch
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from src.model.data.types import (
     EVIDENCE_TYPE_TO_INT,
@@ -21,6 +21,7 @@ from src.model.data.types import (
 )
 
 _EMBED_MODEL = "all-MiniLM-L6-v2"
+_NLI_MODEL = "cross-encoder/nli-deberta-v3-small"
 
 
 class Featurizer:
@@ -32,6 +33,7 @@ class Featurizer:
 
     def __init__(self, cache_path: str | Path | None = None):
         self._model: SentenceTransformer | None = None
+        self._nli_model: CrossEncoder | None = None
         self._cache: dict[str, list[float]] = {}
         self._cache_path = Path(cache_path) if cache_path else None
         if self._cache_path and self._cache_path.exists():
@@ -113,6 +115,20 @@ class Featurizer:
         if idx >= 0:
             vec[idx] = 1.0
         return vec
+
+    def encode_nli_stance(self, claim: str, ev_texts: list[str]) -> torch.Tensor:
+        """Cross-encode (claim, evidence) pairs → softmax probs [N_ev, 3].
+
+        Column order: [contradiction, entailment, neutral] (MNLI label order).
+        Returns empty tensor [0, 3] for empty ev_texts.
+        """
+        if not ev_texts:
+            return torch.zeros(0, 3, dtype=torch.float32)
+        if self._nli_model is None:
+            self._nli_model = CrossEncoder(_NLI_MODEL)
+        pairs = [(claim, t) for t in ev_texts]
+        scores = self._nli_model.predict(pairs, apply_softmax=True)  # np [N, 3]
+        return torch.tensor(scores, dtype=torch.float32)
 
     def save_cache(self) -> None:
         if self._cache_path:
