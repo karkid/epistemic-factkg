@@ -25,16 +25,35 @@ When multiple Pramana apply, confidence is combined via diminishing returns:
 ## Quick Start
 
 ```bash
-just init      # Install dependencies
+just init          # Install dependencies
 
-just run       # Full pipeline: build → validate → filter → validate-training → report (logs → runs/<RUN_ID>/)
+# ── Data pipeline ─────────────────────────────────────────────
+just run data      # build → validate → report  (full data pipeline)
 
-# Or step by step:
-just build             # KG + AI2-THOR claims + convert all datasets to unified JSONL
-just validate          # Schema + semantic + Pramana checks
-just filter            # Filter unified JSONL to GNN training set (ADR-011)
-just validate-training # Validate training set against ADR-012 targets
-just report            # Dataset report (markdown + charts + training section)
+# Step by step:
+just build         # merge all sources, filter for training, split
+just validate      # schema + training-distribution checks
+just report        # markdown report + charts from validation output
+
+# ── Model pipeline ────────────────────────────────────────────
+just run model     # graph → train → eval → compare  (all registered models)
+
+# Run specific models only:
+just run model "" v1-hgnn,baseline
+
+# Step by step for a specific model:
+just graph                  # build shared PyG graph dataset (once)
+just train                  # train default model (v1-hgnn)
+just train baseline         # train a different model
+just eval                   # eval default model
+just eval baseline          # eval a different model
+
+# Multi-model:
+just run model list                     # list all registered models
+just run model train v1-hgnn,baseline   # train two models
+just run model eval  v1-hgnn,baseline   # eval two models
+just run model compare v1-hgnn,baseline # compare report
+just compare v1-hgnn baseline           # shorthand comparison
 ```
 
 ## Installation
@@ -65,40 +84,99 @@ data/raw/averitec/
 
 Claims are generated from simulation — no external download needed:
 ```bash
-just build   # runs KG generation + claim generation + conversion in sequence
+just build         # runs KG generation + claim extraction + conversion
+just build rebuild=true   # re-simulate AI2-THOR from scratch first
 ```
-Outputs: `out/knowledge_graph.ttl` (RDF graph) and `data/raw/ai2thor/claims_all.jsonl` (raw claims).
 
-## Architecture
+Outputs: `out/model/knowledge_graph.ttl` (RDF graph) and `data/raw/ai2thor/claims_all.jsonl`.
 
-**Ports & Adapters** (hexagonal) pattern — see [ADR-003](docs/adr/003-ports-and-adapters-architecture.md):
+## Model Architecture
 
-- `src/core/ports/` — abstract interfaces (`DatasetConverter`, `DatasetValidator`)
-- `src/adapters/{dataset}/` — one `converter.py` + `validator.py` per dataset
-- Adding a new dataset = implement the two ABCs + add one line to the `CONVERTERS` dict
+**EpistemicHGNN** is a neuro-symbolic heterogeneous graph neural network with three prediction heads:
 
-GNN unification happens at the epistemic layer — see [ADR-004](docs/adr/004-gnn-unification-at-epistemic-layer.md).
+```
+EpistemicEncoder  (HeteroConv, config-driven — GraphConfig.v1())
+    ↓ evidence embeddings [N_ev, hidden_dim]
+H1 StanceHead   → stance logits     [N_ev, 3]      supports / refutes / neutral
+H2 ISHead       → IS scalars        [N_ev, 1]      information strength ∈ [0,1]
+    ↓ soft symbolic EC aggregation (differentiable during training)
+VerdictHead     → verdict logits    [N_claims, 3]
+```
+
+**Multi-task loss:** `L = stance_CE + λ₁ · IS_MSE + λ₂ · verdict_CE`
+
+At inference: hard argmax stance → symbolic EC scores → VerdictHead → verdict string.
+
+## Adding a New Model
+
+1. Create `src/model/models/<name>.py` with your `nn.Module` class:
+   - Constructor: `__init__(self, graph_config, hidden_dim, heads, dropout)`
+   - `forward(data) → {"stance_logits", "is_pred", "verdict_logits"}`
+   - `predict(data) → {"stance_pred", "stance_logits", "is_pred", "verdict"}`
+
+2. Register it in `src/model/models/__init__.py`:
+   ```python
+   from src.model.models.your_model import YourModel
+   MODELS = {
+       "v1-hgnn": EpistemicHGNN,
+       "your-name": YourModel,   # ← add this line
+   }
+   ```
+
+3. Run it: `just train your-name` / `just eval your-name`
+
+## Output Structure
+
+```
+out/
+├── data/
+│   ├── intermediate/          per-source JSONLs before merge
+│   ├── unified/               merged epistemic_factkg.jsonl
+│   ├── training/              filtered training JSONL (no postulation_derivation)
+│   └── splits/                train/val/test_indices.json
+├── model/
+│   ├── graphs/                graph_dataset.pt + embed_cache.pkl  (shared)
+│   └── <model-name>/
+│       └── checkpoints/       best_model.pt
+└── reports/
+    ├── data/                  validation.json, training_validation.json, summary.md
+    │   └── plots/             dataset distribution charts
+    └── model/
+        └── <model-name>/
+            ├── training_history.json
+            ├── eval_summary.md         stance/IS/verdict with per-class tables + plots
+            └── eval/
+                ├── stance_metrics.json
+                ├── is_metrics.json
+                ├── verdict_metrics.json
+                └── plots/              confusion_matrix.png  class_f1.png  per_source_accuracy.png
+        comparison_<m1>_vs_<m2>.md      generated by just compare
+```
 
 ## Project Structure
 
 ```
 epistemic-factkg/
-├── configs/                          # Scene + claim generation config
+├── configs/                   Scene + claim generation config
 ├── data/
-│   ├── raw/                          # Source datasets
-│   ├── processed/                    # Unified v2.0 JSONL (gitignored, reproducible)
-│   └── schema/unified_schema.json    # JSON Schema Draft-07
+│   ├── raw/                   Source datasets (AVeriTeC, AI2-THOR, synthetic)
+│   └── registry/              source_trust_registry.jsonl, seed_pool.jsonl
 ├── docs/
-│   ├── adr/                          # Architecture Decision Records
-│   ├── research-overview.md
-│   ├── project-plan.md
-│   └── data-flow.md
+│   ├── adr/                   Architecture Decision Records (001–014)
+│   └── research-overview.md
 ├── src/
-│   ├── adapters/                     # One subpackage per dataset
-│   ├── core/                         # Domain logic, ABCs, claims, graph types
-│   ├── cli/                          # Thin argparse entry points
-│   ├── infra/rdf/                    # RDF/TTL I/O, SPARQL engine
-│   └── utils/                        # time, io, logger, exceptions
+│   ├── core/                  Pramana weights, schema, domain logic
+│   ├── epistemic/             Source trust registry
+│   ├── model/
+│   │   ├── models/            Model registry + one file per model class
+│   │   ├── architecture/      Encoder, StanceHead, ISHead, VerdictHead, Aggregator
+│   │   ├── data/              ClaimGraphBuilder, Featurizer, dataset utilities
+│   │   ├── evaluation/        Metrics (accuracy, F1, ECE, RMSE, Pearson), inference
+│   │   └── training/          Trainer, TrainConfig
+│   ├── pipeline/
+│   │   ├── data/              build, generate, validate, split
+│   │   └── model/             build_graphs, train, evaluate, report, orchestrate, compare
+│   └── utils/                 time, io, logger
 ├── tests/
 ├── Justfile
 └── pyproject.toml
@@ -107,40 +185,50 @@ epistemic-factkg/
 ## Key Commands
 
 ```bash
-just init              # Install dependencies
-just build             # KG + claims + convert all datasets to unified JSONL
-just validate          # Schema + semantic + Pramana checks
-just filter            # Filter unified JSONL to GNN training set (ADR-011)
-just validate-training # Validate training set against ADR-012 targets
-just report            # Dataset report (markdown + charts + training section)
-just test              # ruff format + lint + pytest
-just run               # Full pipeline with timestamped logs → runs/<RUN_ID>/
-just clean             # Delete all generated outputs (out/, data/processed/, runs/)
+just init                       # Install dependencies
+just build                      # Build dataset (merge, filter, split)
+just validate                   # Validate schema + training distribution
+just report                     # Dataset quality report (markdown + charts)
+just graph                      # Build shared PyG graph dataset
+just train [model]              # Train a model (default: v1-hgnn)
+just eval  [model]              # Evaluate on test split
+just compare model1 model2      # Side-by-side comparison markdown
+just run data                   # Full data pipeline
+just run model                  # Full model pipeline (all registered models)
+just run model list             # List registered models
+just run model train m1,m2      # Train specific models
+just run model compare m1,m2    # Compare specific models
+just lint                       # Ruff format + lint check
+just fix                        # Auto-fix lint issues
+just test                       # pytest
+just clean                      # Delete all generated outputs (out/)
 ```
 
 ## Documentation
 
 | Document | Description |
 |---|---|
-| [Research Overview](docs/research-overview.md) | Problem motivation, Pramana inspiration, related work, research gap |
-| [Project Plan](docs/project-plan.md) | Phases 1–7, risks, success metrics |
-| [Data Flow](docs/data-flow.md) | Pipeline: raw → KG → claims → unified JSONL → split |
-| [ADR-001](docs/adr/001-pramana-epistemic-framework.md) | Why Pramana as epistemic framework |
-| [ADR-002](docs/adr/002-unified-schema-v2-null-tolerant.md) | Unified null-tolerant schema design |
-| [ADR-003](docs/adr/003-ports-and-adapters-architecture.md) | Hexagonal architecture |
-| [ADR-004](docs/adr/004-gnn-unification-at-epistemic-layer.md) | GNN unification strategy |
-| [ADR-005](docs/adr/005-anupalabdhi-distinct-from-not-enough-evidence.md) | non_apprehension vs not_enough_evidence |
-| [ADR-006](docs/adr/006-diminishing-returns-combination-formula.md) | Multi-Pramana confidence formula |
-| [ADR-007](docs/adr/007-heuristic-epistemic-labeling.md) | Heuristic labeling strategy |
-| [ADR-008](docs/adr/008-heuristic-prior-weight-values.md) | Confidence weight values and rationale |
-| [ADR-009](docs/adr/009-floorplan-based-train-test-split.md) | Floorplan-based split strategy |
-| [ADR-010](docs/adr/010-rdf-as-kg-intermediate-format.md) | RDF/Turtle as KG format |
+| [Research Overview](docs/research-overview.md) | Problem motivation, Pramana inspiration, related work |
+| [ADR-001](docs/adr/001-epistemic-framework.md) | Pramana epistemic framework |
+| [ADR-002](docs/adr/002-ports-and-adapters-architecture.md) | Ports & Adapters (hexagonal) architecture |
+| [ADR-003](docs/adr/003-floorplan-based-train-test-split.md) | Floorplan-based train/dev/test split |
+| [ADR-004](docs/adr/004-rdf-as-kg-intermediate-format.md) | RDF/Turtle as KG intermediate format |
+| [ADR-005](docs/adr/005-exclude-postulation-derivation-from-training.md) | Exclude postulation_derivation from GNN training |
+| [ADR-006](docs/adr/006-dataset-composition-and-generation-strategy.md) | Dataset composition and generation strategy |
+| [ADR-007](docs/adr/007-verdict-class-reduction.md) | Reduce verdict classes from 4 to 3 |
+| [ADR-008](docs/adr/008-evaluation-protocol.md) | Evaluation protocol |
+| [ADR-009](docs/adr/009-source-trust-registry.md) | Source trust registry |
+| [ADR-010](docs/adr/010-per-evidence-epistemic-modeling.md) | Per-evidence epistemic modeling |
+| [ADR-011](docs/adr/011-evidence-labeling-rules.md) | Per-evidence labeling rules |
+| [ADR-012](docs/adr/012-shortcut-leakage-and-synthetic-data-strategy.md) | Shortcut leakage and synthetic data strategy |
+| [ADR-013](docs/adr/013-synthetic-pipeline.md) | Synthetic data pipeline |
+| [ADR-014](docs/adr/014-verdict-head-learned-thresholds.md) | Learned verdict thresholds (VerdictHead) |
 
 ## Testing
 
 ```bash
 just test
-# or separately:
+# or:
 uv run ruff format . && uv run ruff check .
 uv run pytest tests/ -v --tb=short
 ```

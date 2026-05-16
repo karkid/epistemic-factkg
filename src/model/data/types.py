@@ -10,6 +10,7 @@ from torch_geometric.data import HeteroData
 
 _EMBED_DIM = 384
 
+
 class NodeType(StrEnum):
     CLAIM = "claim"
     EVIDENCE = "evidence"

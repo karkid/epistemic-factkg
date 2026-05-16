@@ -15,7 +15,7 @@ from src.epistemic.registry import load_source_trust_registry
 from src.model.config import GraphConfig
 from src.model.data.featurizer import Featurizer
 from src.model.data.builder import ClaimGraphBuilder
-from src.model.epistemichgnn import EpistemicHGNN
+from src.model.models import MODELS
 from src.model.training.config import TrainConfig
 from src.model.training.trainer import Trainer
 from src.model.data.types import NUM_STANCE
@@ -27,9 +27,13 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--jsonl", required=True, help="Filtered training JSONL")
+    ap.add_argument("--model", default="v1-hgnn", help="Model key from MODELS registry")
+    ap.add_argument(
+        "--model-name", default="v1-hgnn", help="Display name for logs/reports"
+    )
     ap.add_argument("--splits-dir", default="out/data/splits")
-    ap.add_argument("--checkpoint-dir", default="out/model/checkpoints")
-    ap.add_argument("--report-dir", default="out/reports/model")
+    ap.add_argument("--checkpoint-dir", default="out/model/v1-hgnn/checkpoints")
+    ap.add_argument("--report-dir", default="out/reports/model/v1-hgnn")
     ap.add_argument("--registry", default="data/registry/source_trust_registry.jsonl")
     ap.add_argument("--embed-cache", default="out/model/graphs/embed_cache.pkl")
     ap.add_argument(
@@ -137,7 +141,14 @@ def main() -> None:
             )
 
     # ── Model + trainer ───────────────────────────────────────────────────────
-    model = EpistemicHGNN(GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout)
+    if args.model not in MODELS:
+        print(
+            f"Unknown model '{args.model}'. Available: {list(MODELS)}", file=sys.stderr
+        )
+        sys.exit(1)
+    model = MODELS[args.model](
+        GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout
+    )
     config = TrainConfig(
         epochs=args.epochs,
         lr=args.lr,
@@ -153,7 +164,7 @@ def main() -> None:
     trainer = Trainer(model, config, stance_class_weights=stance_weights)
 
     print(
-        f"Training EpistemicHGNN V1  |  "
+        f"Training {args.model_name}  |  "
         f"train={len(train_graphs)}  val={len(val_graphs)}  "
         f"device={args.device}  epochs={args.epochs}"
     )

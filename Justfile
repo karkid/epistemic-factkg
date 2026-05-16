@@ -20,13 +20,14 @@ KG_TTL              := "out/model/knowledge_graph.ttl"
 UNIFIED_JSONL       := "out/data/unified/epistemic_factkg.jsonl"
 VALIDATION_JSON     := "out/reports/data/validation.json"
 REPORT_DIR          := "out/reports/data"
-MODEL_REPORT_DIR    := "out/reports/model"
 TRAINING_JSONL      := "out/data/training/epistemic_factkg_training.jsonl"
 TRAINING_VALIDATION := "out/reports/data/training_validation.json"
 GRAPH_DATASET       := "out/model/graphs/graph_dataset.pt"
 SPLITS_DIR          := "out/data/splits"
-CHECKPOINTS_DIR     := "out/model/checkpoints"
-RESULTS_DIR         := "out/reports/model/eval"
+MODEL_NAME          := "v1-hgnn"
+CHECKPOINTS_DIR     := "out/model/" + MODEL_NAME + "/checkpoints"
+MODEL_REPORT_DIR    := "out/reports/model/" + MODEL_NAME
+RESULTS_DIR         := "out/reports/model/" + MODEL_NAME + "/eval"
 
 
 # ╔═════════════════════════════════════════════════════════════════════════════╗
@@ -65,12 +66,13 @@ clean:
 
 
 [group("Dev")]
-[doc("Run a pipeline or one step: just run <data|model> [STEP]")]
-run PIPELINE="" STEP="":
+[doc("Run a pipeline or step: just run <data|model> [STEP] [MODELS='all']")]
+run PIPELINE="" STEP="" MODELS="all":
     #!/usr/bin/env bash
     set -euo pipefail
     PIPELINE="{{PIPELINE}}"
     STEP="{{STEP}}"
+    MODELS="{{MODELS}}"
     case "${PIPELINE}" in
       data)
         case "${STEP}" in
@@ -84,17 +86,31 @@ run PIPELINE="" STEP="":
         ;;
       model)
         case "${STEP}" in
-          "")      just graph && just train && just eval ;;
+          list)    uv run python -m src.pipeline.model.orchestrate list ;;
+          "")      just graph && uv run python -m src.pipeline.model.orchestrate run \
+                       --models "${MODELS}" \
+                       --jsonl {{TRAINING_JSONL}} \
+                       --splits-dir {{SPLITS_DIR}} \
+                       --graph {{GRAPH_DATASET}} ;;
           build)   just graph ;;
-          train)   just train ;;
-          eval)    just eval ;;
-          *) echo "Unknown model step '${STEP}'. Available: build  train  eval"; exit 1 ;;
+          train)   uv run python -m src.pipeline.model.orchestrate train \
+                       --models "${MODELS}" \
+                       --jsonl {{TRAINING_JSONL}} \
+                       --splits-dir {{SPLITS_DIR}} ;;
+          eval)    uv run python -m src.pipeline.model.orchestrate eval \
+                       --models "${MODELS}" \
+                       --jsonl {{TRAINING_JSONL}} \
+                       --splits-dir {{SPLITS_DIR}} ;;
+          compare) uv run python -m src.pipeline.model.orchestrate compare \
+                       --models "${MODELS}" ;;
+          *) echo "Unknown model step '${STEP}'. Available: list  build  train  eval  compare"; exit 1 ;;
         esac
         ;;
       *)
-        echo "Usage: just run <data|model> [STEP]"
+        echo "Usage: just run <data|model> [STEP] [MODELS]"
         echo "  data  steps: rebuild  build  validate  report"
-        echo "  model steps: build  train  eval"
+        echo "  model steps: list  build  train  eval  compare"
+        echo "  MODELS: comma-separated names or 'all' (default)"
         exit 1
         ;;
     esac
@@ -186,15 +202,16 @@ graph:
 
 
 [group("Model Pipeline")]
-[doc("Train EpistemicHGNN (multi-head neuro-symbolic — stance + IS multi-task loss)")]
-train:
-    mkdir -p {{CHECKPOINTS_DIR}} {{MODEL_REPORT_DIR}}
+[doc("Train a model (default: MODEL_NAME). Override: just train baseline")]
+train model=MODEL_NAME:
+    mkdir -p out/model/{{model}}/checkpoints out/reports/model/{{model}}
     uv run python -m src.pipeline.model.train \
-        --dataset {{GRAPH_DATASET}} \
+        --model {{model}} \
+        --model-name {{model}} \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
-        --checkpoint-dir {{CHECKPOINTS_DIR}} \
-        --report-dir {{MODEL_REPORT_DIR}} \
+        --checkpoint-dir out/model/{{model}}/checkpoints \
+        --report-dir out/reports/model/{{model}} \
         --epochs 50 \
         --lr 1e-3 \
         --batch-size 32 \
@@ -203,11 +220,22 @@ train:
 
 
 [group("Model Pipeline")]
-[doc("Evaluate EpistemicHGNN on test set — outputs stance, IS, and verdict metrics")]
-eval:
-    mkdir -p {{RESULTS_DIR}}
+[doc("Evaluate a model on test set (default: MODEL_NAME). Override: just eval baseline")]
+eval model=MODEL_NAME:
+    mkdir -p out/reports/model/{{model}}/eval
     uv run python -m src.pipeline.model.evaluate \
-        --checkpoint {{CHECKPOINTS_DIR}}/best_model.pt \
+        --model {{model}} \
+        --model-name {{model}} \
+        --checkpoint out/model/{{model}}/checkpoints/best_model.pt \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
-        --output {{RESULTS_DIR}}
+        --output out/reports/model/{{model}}/eval
+
+
+[group("Model Pipeline")]
+[doc("Compare two evaluated models side by side: just compare v1-hgnn baseline")]
+compare model1 model2:
+    uv run python -m src.pipeline.model.compare \
+        --model1 {{model1}} --dir1 out/reports/model/{{model1}}/eval \
+        --model2 {{model2}} --dir2 out/reports/model/{{model2}}/eval \
+        --out out/reports/model/comparison_{{model1}}_vs_{{model2}}.md

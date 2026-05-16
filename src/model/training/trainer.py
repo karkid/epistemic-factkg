@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
-from src.model.epistemichgnn import EpistemicHGNN
 from src.model.data.types import NodeType
 from src.model.training.config import TrainConfig
 
@@ -29,7 +28,7 @@ class Trainer:
 
     def __init__(
         self,
-        model: EpistemicHGNN,
+        model: nn.Module,
         config: TrainConfig,
         stance_class_weights: torch.Tensor | None = None,
     ):

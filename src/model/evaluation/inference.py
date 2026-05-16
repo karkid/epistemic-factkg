@@ -5,12 +5,10 @@ from __future__ import annotations
 import torch
 from torch_geometric.data import HeteroData
 
-from src.model.epistemichgnn import EpistemicHGNN
+import torch.nn as nn
 
 
-def predict_single(
-    model: EpistemicHGNN, graph: HeteroData, device: str = "cpu"
-) -> dict:
+def predict_single(model: nn.Module, graph: HeteroData, device: str = "cpu") -> dict:
     """Run inference on a single HeteroData graph.
 
     Returns the same dict as EpistemicHGNN.predict(), with the model
@@ -27,7 +25,7 @@ def predict_single(
 
 
 def batch_predict(
-    model: EpistemicHGNN,
+    model: nn.Module,
     graphs: list[HeteroData],
     device: str = "cpu",
 ) -> list[dict]:

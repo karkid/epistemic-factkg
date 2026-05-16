@@ -7,7 +7,7 @@ Subpackages:
 - evaluation/    : metrics, inference wrapper
 - v1/            : V1-specific documentation (node dims, edge types)
 - config.py      : GraphConfig (single source of truth for architecture schema)
-- epistemichgnn.py : EpistemicHGNN (top-level model class)
+- models/        : model registry (MODELS dict) + one file per model class
 
 Design principle: Never hardcode node/edge names in architecture code.
 Everything is driven by GraphConfig — V2 extensions only need config + adapter changes.

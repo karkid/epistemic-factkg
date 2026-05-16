@@ -8,6 +8,13 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import sys
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 from src.model.data.builder import ClaimGraphBuilder
@@ -22,12 +29,112 @@ from src.model.evaluation.metrics import (
     compute_rmse,
     compute_weighted_f1,
 )
-from src.model.epistemichgnn import EpistemicHGNN
+from src.model.models import MODELS
 from src.model.config import GraphConfig
 from src.model.data.types import NUM_STANCE, NUM_VERDICT, VERDICT_TO_INT
 
 _INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}
 _INT_TO_STANCE = {0: "supports", 1: "refutes", 2: "neutral"}
+
+
+def _write_eval_plots(
+    stance_metrics: dict,
+    verdict_metrics: dict,
+    plots_dir: Path,
+) -> None:
+    """Write PNG eval plots to plots_dir: confusion matrix, per-class F1, per-source accuracy."""
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Confusion matrix heatmap ──────────────────────────────────────────────
+    confusion = verdict_metrics["confusion"]
+    labels = list(confusion.keys())
+    matrix = np.array(
+        [[confusion[t].get(p, 0) for p in labels] for t in labels], dtype=float
+    )
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(matrix, cmap="Blues")
+    ax.set_xticks(range(len(labels)))
+    ax.set_yticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=9)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+    ax.set_title("Verdict Confusion Matrix")
+    plt.colorbar(im, ax=ax)
+    for i in range(len(labels)):
+        for j in range(len(labels)):
+            ax.text(
+                j,
+                i,
+                int(matrix[i, j]),
+                ha="center",
+                va="center",
+                fontsize=10,
+                color="white" if matrix[i, j] > matrix.max() * 0.6 else "black",
+            )
+    fig.tight_layout()
+    fig.savefig(plots_dir / "confusion_matrix.png", dpi=120)
+    plt.close(fig)
+
+    # ── Per-class F1 bar chart ────────────────────────────────────────────────
+    stance_pc = stance_metrics["per_class"]
+    verdict_pc = verdict_metrics["per_class"]
+    all_classes = list(stance_pc.keys()) + list(verdict_pc.keys())
+    precisions = [m["precision"] for m in stance_pc.values()] + [
+        m["precision"] for m in verdict_pc.values()
+    ]
+    f1s = [m["f1"] for m in stance_pc.values()] + [m["f1"] for m in verdict_pc.values()]
+
+    x = np.arange(len(all_classes))
+    width = 0.35
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(x - width / 2, precisions, width, label="Precision", color="steelblue")
+    ax.bar(x + width / 2, f1s, width, label="F1", color="darkorange")
+    ax.set_xticks(x)
+    ax.set_xticklabels(all_classes, rotation=25, ha="right", fontsize=9)
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("Score")
+    ax.set_title("Per-Class Precision & F1 (Stance + Verdict)")
+    ax.axvline(x=len(stance_pc) - 0.5, color="gray", linestyle="--", linewidth=0.8)
+    ax.text(
+        len(stance_pc) / 2 - 0.5, 1.02, "Stance", ha="center", fontsize=8, color="gray"
+    )
+    ax.text(
+        len(stance_pc) + len(verdict_pc) / 2 - 0.5,
+        1.02,
+        "Verdict",
+        ha="center",
+        fontsize=8,
+        color="gray",
+    )
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(plots_dir / "class_f1.png", dpi=120)
+    plt.close(fig)
+
+    # ── Per-source accuracy bar chart ─────────────────────────────────────────
+    per_source = verdict_metrics["per_source"]
+    sources = list(per_source.keys())
+    accs = [per_source[s]["accuracy"] for s in sources]
+    ns = [per_source[s]["support"] for s in sources]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    bars = ax.bar(sources, accs, color=["#4C9BE8", "#E87B4C", "#5CBE6A"])
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("Verdict Accuracy")
+    ax.set_title("Per-Source Verdict Accuracy")
+    for bar, n in zip(bars, ns):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"n={n}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    fig.tight_layout()
+    fig.savefig(plots_dir / "per_source_accuracy.png", dpi=120)
+    plt.close(fig)
 
 
 def _load_test_records(jsonl_path: Path, splits_dir: Path) -> list[dict]:
@@ -52,6 +159,8 @@ def main() -> None:
         required=True,
         help="Filtered training JSONL (test records drawn from this)",
     )
+    ap.add_argument("--model", default="v1-hgnn", help="Model key from MODELS registry")
+    ap.add_argument("--model-name", default="v1-hgnn", help="Display name for reports")
     ap.add_argument("--registry", default="data/registry/source_trust_registry.jsonl")
     ap.add_argument("--embed-cache", default="out/model/graphs/embed_cache.pkl")
     ap.add_argument("--splits-dir", default="out/data/splits")
@@ -71,7 +180,14 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Load model ────────────────────────────────────────────────────────────
-    model = EpistemicHGNN(GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout)
+    if args.model not in MODELS:
+        print(
+            f"Unknown model '{args.model}'. Available: {list(MODELS)}", file=sys.stderr
+        )
+        sys.exit(1)
+    model = MODELS[args.model](
+        GraphConfig.v1(), args.hidden_dim, args.heads, args.dropout
+    )
     model.load_state_dict(
         torch.load(args.checkpoint, map_location=device, weights_only=True)
     )
@@ -171,15 +287,48 @@ def main() -> None:
 
     # ── Write eval_summary.md ─────────────────────────────────────────────────
     _now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _pc_rows(per_class: dict) -> str:
+        return "\n".join(
+            f"| {cls} | {m['precision']:.3f} | {m['recall']:.3f} | {m['f1']:.3f} | {m['support']} |"
+            for cls, m in per_class.items()
+        )
+
+    def _confusion_table(confusion: dict) -> str:
+        labels = list(confusion.keys())
+        header = "| True \\ Pred | " + " | ".join(labels) + " |"
+        sep = "|" + "---|" * (len(labels) + 1)
+        rows = [
+            f"| {true} | "
+            + " | ".join(str(confusion[true].get(p, 0)) for p in labels)
+            + " |"
+            for true in labels
+        ]
+        return "\n".join([header, sep] + rows)
+
+    def _source_rows(per_source: dict) -> str:
+        return "\n".join(
+            f"| {src} | {m['accuracy']:.3f} | {m['support']} |"
+            for src, m in per_source.items()
+        )
+
+    plots_dir = output_dir / "plots"
+    _write_eval_plots(stance_metrics, verdict_metrics, plots_dir)
+
     eval_md = (
         f"# Evaluation Summary\n\n"
-        f"Generated: {_now}\n\n"
+        f"**Model:** {args.model_name}  \n"
+        f"**Generated:** {_now}\n\n"
+        f"---\n\n"
         f"## Stance Classification\n\n"
         f"| Metric | Value |\n|--------|-------|\n"
         f"| Accuracy | {stance_metrics['accuracy']:.4f} |\n"
         f"| Macro F1 | {stance_metrics['macro_f1']:.4f} |\n"
         f"| ECE | {stance_metrics['ece']:.4f} |\n"
         f"| N Evidence | {stance_metrics['n_evidence']} |\n\n"
+        f"### Per-Class Breakdown\n\n"
+        f"| Class | Precision | Recall | F1 | N |\n|-------|-----------|--------|----|---|\n"
+        f"{_pc_rows(stance_metrics['per_class'])}\n\n"
         f"## Information Score (IS)\n\n"
         f"| Metric | Value |\n|--------|-------|\n"
         f"| RMSE | {is_metrics['rmse']:.4f} |\n"
@@ -192,14 +341,27 @@ def main() -> None:
         f"| Macro F1 | {verdict_metrics['macro_f1']:.4f} |\n"
         f"| Weighted F1 | {verdict_metrics['weighted_f1']:.4f} |\n"
         f"| N Claims | {verdict_metrics['n_claims']} |\n"
-        f"| Skipped | {verdict_metrics['skipped']} |\n"
+        f"| Skipped | {verdict_metrics['skipped']} |\n\n"
+        f"### Per-Class Breakdown\n\n"
+        f"| Class | Precision | Recall | F1 | N |\n|-------|-----------|--------|----|---|\n"
+        f"{_pc_rows(verdict_metrics['per_class'])}\n\n"
+        f"### Confusion Matrix\n\n"
+        f"{_confusion_table(verdict_metrics['confusion'])}\n\n"
+        f"### Per-Source Verdict Accuracy\n\n"
+        f"| Source | Accuracy | N |\n|--------|----------|---|\n"
+        f"{_source_rows(verdict_metrics['per_source'])}\n\n"
+        f"---\n\n"
+        f"## Plots\n\n"
+        f"![Confusion Matrix](plots/confusion_matrix.png)\n\n"
+        f"![Per-Class F1](plots/class_f1.png)\n\n"
+        f"![Per-Source Accuracy](plots/per_source_accuracy.png)\n"
     )
     (output_dir.parent / "eval_summary.md").write_text(eval_md)
 
     # ── Print summary ─────────────────────────────────────────────────────────
     print("=" * 60)
     print(
-        f"EpistemicHGNN V1 — {len(verdict_preds)} claims  ({int(sp_t.numel())} evidence items)"
+        f"{args.model_name} — {len(verdict_preds)} claims  ({int(sp_t.numel())} evidence items)"
     )
     print()
     print("H1 Stance")
