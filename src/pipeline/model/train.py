@@ -112,7 +112,7 @@ def main() -> None:
     if args.verbose:
         print("Loading JSONL records...")
     records = [
-        json.loads(line) for line in jsonl_path.read_text().splitlines() if line.strip()
+        json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
     if args.verbose:
