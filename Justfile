@@ -125,7 +125,6 @@ graph:
         --input {{TRAINING_JSONL}} \
         --output {{GRAPH_DATASET}} \
         --embed-cache out/model/graphs/embed_cache.pkl \
-        --device {{DEVICE}} \
         --verbose
 
 
@@ -138,7 +137,6 @@ graph-nli:
         --output {{GRAPH_DATASET_NLI}} \
         --embed-cache out/model/graphs/embed_cache.pkl \
         --use-nli \
-        --device {{DEVICE}} \
         --verbose
 
 

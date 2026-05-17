@@ -174,10 +174,15 @@ class GroundedClient(SyntheticTextClient):
         evidence_triples: list[list] = []
 
         for spec in specs:
-            # For multi-spec templates, each spec gets the same claim but
-            # potentially different AI2THOR records (for text variation)
-            pool = self._ai2thor.get(spec.stance) or candidates
-            ev_rec = random.choice(pool)
+            if spec.stance == "supports":
+                # Supporting evidence must come from the same record as the claim
+                # so the evidence text describes the same object, not a random one.
+                ev_rec = seed
+            else:
+                # Refuting/absent evidence may come from any record of the right stance.
+                pool = self._ai2thor.get(spec.stance) or candidates
+                ev_rec = random.choice(pool)
+
             text = ev_rec["text"]
             triples = ev_rec["triples"]
 

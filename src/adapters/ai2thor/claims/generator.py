@@ -60,6 +60,26 @@ class ClaimGenerator:
     def _is_valid_text(self, text: str) -> bool:
         return bool(text and text.strip())
 
+    # Boolean strings that can appear as object-type names in entity URIs but are
+    # not real physical object types (e.g. boolean property values leaked into the subject position).
+    _INVALID_OBJECT_TYPES: frozenset[str] = frozenset(
+        {"true", "false", "yes", "no", "null", "none"}
+    )
+
+    def _is_valid_triple(self, triple: Triple) -> bool:
+        """Return False for triples that would generate degenerate claims."""
+        s, p, o = triple
+        p_short = self._short_uri(str(p))
+        o_val = self._object_type_from_entity_id(str(o)).strip()
+        # mass=0.0 means the object has no meaningful weight measurement
+        if p_short == "mass" and o_val in {"0.0", "0", "0.00"}:
+            return False
+        return True
+
+    def _is_valid_absence_type(self, obj_type: str) -> bool:
+        """Return False for object-type strings that are not real physical object classes."""
+        return obj_type.strip().lower() not in self._INVALID_OBJECT_TYPES
+
     def _is_boolean_object(self, o: Term) -> bool:
         object_type = self._object_type_from_entity_id(str(o))
         if isinstance(object_type, str):
@@ -324,6 +344,9 @@ class ClaimGenerator:
             obj_type = candidates[attempts % len(candidates)]
             attempts += 1
 
+            if not self._is_valid_absence_type(obj_type):
+                continue
+
             text = self.realizer.realize_absence(obj_type)
             if not self._is_valid_text(text):
                 self.stats.skipped_empty += 1
@@ -366,6 +389,9 @@ class ClaimGenerator:
                 break
             obj_type = present_list[attempts % len(present_list)]
             attempts += 1
+
+            if not self._is_valid_absence_type(obj_type):
+                continue
 
             text = self.realizer.realize_absence(obj_type)
             if not self._is_valid_text(text):
@@ -444,6 +470,10 @@ class ClaimGenerator:
         ):
             truth_triple = self._random_triple(self.triples)
 
+            if not self._is_valid_triple(truth_triple):
+                attempts += 1
+                continue
+
             text = self.realizer.realize(truth_triple)
 
             if not self._is_valid_text(text):
@@ -487,6 +517,11 @@ class ClaimGenerator:
 
         while refuted_count < refuted_target and attempts < refuted_attempts_budget:
             truth_triple = self._random_triple(self.triples)
+
+            if not self._is_valid_triple(truth_triple):
+                attempts += 1
+                continue
+
             claim_triple = self._corrupt_triple(
                 truth_triple
             )  # Attempt to corrupt the triple, but it may return the original if no corruption is possible

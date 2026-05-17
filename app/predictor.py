@@ -130,6 +130,12 @@ class EpistemicPredictor:
         record = self._build_record(claim, resolved)
         graph = self._builder.build(record)
 
+        if graph is None:
+            raise ValueError(
+                "All evidence items were filtered (boilerplate, empty, or duplicate). "
+                "Please provide at least one non-empty evidence text."
+            )
+
         with torch.no_grad():
             out = self._model.predict(graph.data)
 

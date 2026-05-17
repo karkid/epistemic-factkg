@@ -14,12 +14,26 @@ from predictor import EpistemicPredictor
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_MODELS = {
-    "v3-nli":   "v3-nli — NLI + Hybrid  ·  81.5%",
-    "v2-hgnn":  "v2-hgnn — Hybrid       ·  79.9%",
-    "v1-hgnn":  "v1-hgnn — Pure Symbolic ·  71.2%",
-    "baseline": "baseline — No EC        ·  79.5%",
-}
+def _build_model_labels() -> dict[str, str]:
+    _EVAL_ROOT = Path("out/reports/model")
+    _META = [
+        ("v3-nli",   "NLI + Hybrid  "),
+        ("v2-hgnn",  "Hybrid        "),
+        ("v1-hgnn",  "Pure Symbolic "),
+        ("baseline", "No EC         "),
+    ]
+    result = {}
+    for key, desc in _META:
+        try:
+            acc = json.loads((_EVAL_ROOT / key / "eval" / "verdict_metrics.json").read_text())["accuracy"]
+            acc_str = f"{acc:.1%}"
+        except (FileNotFoundError, KeyError, json.JSONDecodeError):
+            acc_str = "—"
+        result[key] = f"{key} — {desc}·  {acc_str}"
+    return result
+
+
+_MODELS = _build_model_labels()
 _ALL_KEY = "all"
 
 _VERDICT_META = {
@@ -195,6 +209,13 @@ def _init_state() -> None:
         if k not in st.session_state:
             st.session_state[k] = v
 
+    # Consume the pending claim from a Random button click.
+    # We write to "claim_input" here, before the widget is instantiated, which
+    # is the only point where Streamlit allows direct session_state assignment.
+    pending = st.session_state.pop("_pending_claim", None)
+    if pending is not None:
+        st.session_state["claim_input"] = pending
+
 
 def _blank_ev() -> dict:
     return {"text": "", "source_type": "unknown", "modality": "web_text"}
@@ -221,7 +242,10 @@ def _load_random_example() -> None:
         for ev in rec.get("evidence", [])[:4]
     ] or [_blank_ev()]
 
-    st.session_state["claim_input"]        = rec["claim"]
+    # Use a staging key — writing directly to "claim_input" raises
+    # StreamlitAPIException because the widget is already instantiated.
+    # The pending value is consumed before the next render (see text_area below).
+    st.session_state["_pending_claim"]     = rec["claim"]
     st.session_state["last_claim"]         = rec["claim"]
     st.session_state["evidence_list"]      = new_evs
     st.session_state["_random_true_label"] = rec["verdict"]["label"]
@@ -258,16 +282,18 @@ def _render_evidence_cards() -> None:
             )
             c1, c2 = st.columns(2)
             with c1:
+                _m = ev.get("modality", "web_text")
                 mod = st.selectbox(
                     "Modality", _MODALITIES, key=f"mod_{i}",
-                    index=_MODALITIES.index(ev.get("modality", "web_text")),
+                    index=_MODALITIES.index(_m if _m in _MODALITIES else "web_text"),
                     format_func=lambda m: f"{_PRAMANA_SHORT[m]} · {_MODALITY_LABELS[m]}",
                 )
                 st.session_state.evidence_list[i]["modality"] = mod
             with c2:
+                _s = ev.get("source_type", "unknown")
                 src = st.selectbox(
                     "Source", _SOURCE_TYPES, key=f"src_{i}",
-                    index=_SOURCE_TYPES.index(ev.get("source_type", "unknown")),
+                    index=_SOURCE_TYPES.index(_s if _s in _SOURCE_TYPES else "unknown"),
                     format_func=lambda s: _SOURCE_LABELS[s],
                 )
                 st.session_state.evidence_list[i]["source_type"] = src

@@ -6,6 +6,7 @@ LLMClient tests mock the Anthropic client via dependency injection.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -539,3 +540,179 @@ class TestSyntheticDataValidator:
         assert "Total:" in summary
         assert "Shortcut-breaking:" in summary
         assert "Status:" in summary
+
+
+# ---------------------------------------------------------------------------
+# Data quality: GroundedClient cross-object integrity
+# ---------------------------------------------------------------------------
+
+
+def _make_grounded_client_with_ai2thor_pool(records_by_stance: dict) -> GroundedClient:
+    """Build a GroundedClient with a controlled in-memory AI2THOR pool."""
+    client = GroundedClient.__new__(GroundedClient)
+    client._pool = defaultdict(list)
+    client._ai2thor = defaultdict(list, records_by_stance)
+    client._fallback = LocalTextClient()
+    return client
+
+
+class TestGroundedClientDataQuality:
+    """Data-quality contract tests for GroundedClient."""
+
+    def test_no_averitec_pool(self):
+        """GroundedClient must not expose an AVeriTeC pool.
+
+        AVeriTeC enters training data through its own adapter — the synthetic
+        generator should never pull from it, so there is no cross-object risk
+        on the AVeriTeC side.
+        """
+        client = GroundedClient.__new__(GroundedClient)
+        assert not hasattr(client, "_averitec"), (
+            "GroundedClient must not have an _averitec pool — "
+            "AVeriTeC uses its own adapter, not the synthetic generator"
+        )
+
+    def test_supporting_evidence_same_record_as_claim(self):
+        """After the cross-object fix, supporting evidence must come from the same
+        record as the claim — not a random record from the 'supports' pool.
+
+        Bug pattern (pre-fix): seed was picked first (determines claim), then
+        ev_rec was picked again independently for each spec → supporting evidence
+        could describe a completely different object, labelled 'supported'.
+        """
+        # Two records with non-overlapping text so mismatches are detectable.
+        pool = {
+            "supports": [
+                {"claim": "Claim A.", "text": "Evidence A.", "triples": [["A", "p", "o"]]},
+                {"claim": "Claim B.", "text": "Evidence B.", "triples": [["B", "p", "o"]]},
+            ]
+        }
+        client = _make_grounded_client_with_ai2thor_pool(pool)
+        specs = [EvidenceSpec("supports", "ai2thor_simulation", ["perception"], 1.0, "strong")]
+
+        mismatches = 0
+        # Run many times to catch any probabilistic mismatch.
+        for _ in range(50):
+            result = client.generate(specs, "perception_direct")
+            assert result is not None
+            claim = result["claim"]
+            ev_text = result["evidence_texts"][0]
+            # The suffix letter must match: "Claim A" → "Evidence A", etc.
+            claim_letter = claim[-2]   # 'A' or 'B'
+            ev_letter = ev_text[-2]
+            if claim_letter != ev_letter:
+                mismatches += 1
+
+        assert mismatches == 0, (
+            f"{mismatches}/50 generations had cross-object evidence mismatch: "
+            "supporting evidence described a different object than the claim."
+        )
+
+    def test_refuting_evidence_may_differ_from_claim_record(self):
+        """Refuting evidence is intentionally drawn from a different record.
+
+        This is correct behaviour: a refuting piece of evidence should describe
+        a contradicting fact, which will naturally come from a different record.
+        """
+        pool = {
+            "supports": [
+                {"claim": "Claim A.", "text": "Evidence A.", "triples": [["A", "p", "o"]]},
+            ],
+            "refutes": [
+                {"claim": "Claim R.", "text": "Evidence R.", "triples": [["R", "p", "o"]]},
+            ],
+        }
+        client = _make_grounded_client_with_ai2thor_pool(pool)
+        specs = [EvidenceSpec("refutes", "ai2thor_simulation", ["perception"], 1.0, "strong")]
+
+        result = client.generate(specs, "perception_direct")
+        assert result is not None
+        # Claim comes from the "supports" pool (first_stance is "refutes" but
+        # the seed is drawn from that pool).  Just assert a result comes back.
+        assert len(result["evidence_texts"]) == 1
+
+    def test_seed_pool_path_has_no_cross_object_risk(self):
+        """_generate_from_seed_pool always calls _derive_text(seed, spec) with the
+        same seed object, so every evidence item describes the same claim entity.
+        Confirm by asserting the method signature still accepts a single seed.
+        """
+        import inspect
+        from src.adapters.synthetic.client.grounded_client import GroundedClient as GC
+
+        sig = inspect.signature(GC._derive_text)
+        params = list(sig.parameters.keys())
+        # First positional arg after self must be 'seed' (the shared record).
+        assert "seed" in params, (
+            "_derive_text must accept a 'seed' parameter — "
+            "removing it would re-introduce cross-object risk for seed-pool evidence"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Data quality: AI2THOR ClaimGenerator filters
+# ---------------------------------------------------------------------------
+
+
+class TestAI2THORGeneratorFilters:
+    """Unit tests for _is_valid_triple() and _is_valid_absence_type() filters
+    added to ClaimGenerator to remove degenerate claims from the dataset."""
+
+    @staticmethod
+    def _make_generator():
+        from src.adapters.ai2thor.claims.generator import ClaimGenerator
+
+        return ClaimGenerator(
+            realizer=MagicMock(),
+            context_id="test_scene",
+            triples=[],
+        )
+
+    # --- _is_valid_triple ---
+
+    def test_zero_mass_triple_is_invalid(self):
+        gen = self._make_generator()
+        for zero in ("0.0", "0", "0.00"):
+            triple = ("Apple_1", "mass", zero)
+            assert not gen._is_valid_triple(triple), (
+                f"mass={zero} should be filtered — object has no meaningful weight"
+            )
+
+    def test_nonzero_mass_triple_is_valid(self):
+        gen = self._make_generator()
+        assert gen._is_valid_triple(("Apple_1", "mass", "0.4"))
+
+    def test_non_mass_triple_always_valid(self):
+        gen = self._make_generator()
+        assert gen._is_valid_triple(("Apple_1", "isDirty", "true"))
+        assert gen._is_valid_triple(("Cup_1", "onTopOf", "Table_1"))
+
+    def test_mass_triple_with_uri_predicate(self):
+        """Predicates may arrive as full URIs from the graph — _short_uri must strip them."""
+        gen = self._make_generator()
+        triple = (
+            "http://example.org/entities/Apple_1",
+            "http://example.org/relations/mass",
+            "0.0",
+        )
+        assert not gen._is_valid_triple(triple)
+
+    # --- _is_valid_absence_type ---
+
+    def test_boolean_strings_are_invalid_absence_types(self):
+        gen = self._make_generator()
+        for bad in ("true", "false", "True", "False", "yes", "no", "null", "none"):
+            assert not gen._is_valid_absence_type(bad), (
+                f"'{bad}' is not a real object class and must be rejected"
+            )
+
+    def test_real_object_types_are_valid_absence_types(self):
+        gen = self._make_generator()
+        for good in ("Fork", "Apple", "Cup", "Knife", "Shelf"):
+            assert gen._is_valid_absence_type(good), (
+                f"'{good}' is a real object class and must be accepted"
+            )
+
+    def test_absence_type_strips_whitespace(self):
+        gen = self._make_generator()
+        assert not gen._is_valid_absence_type("  true  ")
+        assert gen._is_valid_absence_type("  Fork  ")

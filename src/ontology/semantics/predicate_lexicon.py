@@ -8,12 +8,13 @@ from typing import Dict, Optional
 
 
 class PredicateForm(StrEnum):
-    PREP = "prep"  # on, inside, under
-    ADJ = "adj"  # open, dirty, broken
-    ATTR = "attr"  # temperature, mass
-    VERB = "verb"  # contains, includes
+    PREP = "prep"          # on, inside, under
+    ADJ = "adj"            # open, dirty, broken
+    ATTR = "attr"          # temperature, mass
+    VERB = "verb"          # contains, includes
     PROP_STATE = "prop_state"  # "is a receptacle"
     PROP_VALUE = "prop_value"  # "is hot"
+    PROP_VERB = "prop_verb"    # "weighs X kg" — verb predicate with bare value object
 
 
 @dataclass(frozen=True)

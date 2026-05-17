@@ -119,20 +119,28 @@ approach achieves the same signal more simply. Deferred as future work.
 
 ---
 
-## Results (test set, n=766 claims)
+## Results (test set, n=657 scored claims; 109 skipped — no evidence after filtering)
 
-> ⚠️ Results below are from the **Option B only** version (NLI as features, H1 still
-> drives EC formula). The final architecture (A+B: NLI probs directly in EC) requires
-> retraining — run `just train v3-nli && just eval v3-nli` to update these numbers.
+Final architecture: A+B combined (NLI probs as features + NLI probs directly in EC formula),
+with AVeriTeC Q+A pre-processing (ADR-025), encoder residuals + windowed co-evidence (ADR-026),
+and full VerdictHead delegation (ADR-027).
 
-| Model    | Verdict Acc | Macro F1   | IS RMSE  | Stance Acc | averitec | synthetic |
-|----------|-------------|------------|----------|------------|----------|-----------|
-| baseline | 0.7950      | 0.8022     | 0.1190   | 0.7595     | 0.621    | 0.896     |
-| v1-hgnn  | 0.7115      | 0.7029     | 0.1193   | 0.7488     | 0.456    | 0.896     |
-| v2-hgnn  | 0.7990      | 0.8067     | 0.1161   | 0.7395     | 0.621    | 0.907     |
-| v3-nli†  | 0.8146      | 0.8200     | 0.1124   | 0.7662     | 0.627    | 0.927     |
+| Model    | Verdict Acc | Macro F1 | IS RMSE | averitec | synthetic | ai2thor |
+|----------|-------------|----------|---------|----------|-----------|---------|
+| baseline | 0.8158      | 0.8166   | 0.0981  | 0.649    | 1.000     | 0.929   |
+| v1-hgnn  | 0.7047      | 0.6883   | 0.0966  | 0.503    | 0.898     | 0.929   |
+| v2-hgnn  | 0.7412      | 0.7451   | 0.0959  | 0.592    | 0.889     | 0.894   |
+| **v3-nli** | **0.7930** | **0.7903** | **0.0947** | **0.674** | 0.881 | **1.000** |
 
-† Pre-fix results. Expected to improve further with NLI probs in EC formula.
+Key findings:
+- v3-nli achieves 100% on AI2THOR — NLI contradiction signal directly identifies absence-refuted
+  claims that textual similarity alone cannot distinguish.
+- v3-nli leads on AVeriTeC (67.4%) — Q+A pre-processing (ADR-025) provides the largest
+  single improvement (+12pp on AVeriTeC).
+- baseline dominates synthetic (100%) — synthetic data has perfect EC signal by construction;
+  the learned components add noise on patterns the EC formula already handles exactly.
+- v1-hgnn underperforms baseline (70.5% vs 81.6%) — the 2D EC bottleneck without claim
+  embedding context is insufficient; see ADR-023 for the diagnosis.
 
 ---
 

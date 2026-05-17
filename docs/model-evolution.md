@@ -208,34 +208,33 @@ stance_CE  → StanceHead        → encoder   ✓  (H1 still supervised, not in
 
 ## Comparative Results (Test Set)
 
-> v3-nli results marked † are pre-fix (NLI as features only). Re-run `just train v3-nli && just eval v3-nli` after the architecture change to update.
+657 scored claims; 109 skipped (no evidence after filtering). Includes all fixes:
+encoder residuals + windowed co-evidence (ADR-026), AVeriTeC Q+A pre-processing (ADR-025),
+full VerdictHead delegation (ADR-027).
 
-| Metric              | baseline | v1-hgnn | v2-hgnn  | v3-nli†  |
-|---------------------|----------|---------|----------|----------|
-| **Verdict Acc**     | 0.7950   | 0.7115  | 0.7990   | **0.8146** |
-| **Verdict Macro F1**| 0.8022   | 0.7029  | 0.8067   | **0.8200** |
-| Verdict W-F1        | 0.7951   | 0.7159  | 0.7989   | **0.8146** |
-| IS RMSE ↓           | 0.1190   | 0.1193  | 0.1161   | **0.1124** |
-| IS Pearson r ↑      | 0.8635   | 0.8637  | 0.8709   | **0.8797** |
-| Stance Acc          | 0.7595   | 0.7488  | 0.7395   | **0.7662** |
-| Stance Macro F1     | 0.6897   | 0.6738  | 0.6580   | **0.6808** |
-| Stance ECE ↓        | —        | —       | **0.0591** | 0.0758 |
+| Metric              | baseline   | v1-hgnn | v2-hgnn | v3-nli     |
+|---------------------|------------|---------|---------|------------|
+| **Verdict Acc**     | **0.8158** | 0.7047  | 0.7412  | 0.7930     |
+| **Verdict Macro F1**| **0.8166** | 0.6883  | 0.7451  | 0.7903     |
+| Verdict W-F1        | **0.8170** | 0.7087  | 0.7512  | 0.7974     |
+| IS RMSE ↓           | 0.0981     | 0.0966  | 0.0959  | **0.0947** |
+| IS Pearson r ↑      | 0.8989     | 0.9008  | 0.9032  | **0.9069** |
 
 ### Per-Source Verdict Accuracy
 
-| Source   | n   | baseline | v1-hgnn | v2-hgnn | v3-nli   |
-|----------|-----|----------|---------|---------|----------|
-| ai2thor  | 180 | 0.967    | 0.911   | 0.967   | **0.994** |
-| averitec | 327 | 0.621    | 0.456   | 0.621   | **0.627** |
-| synthetic| 259 | 0.896    | 0.896   | 0.907   | **0.927** |
+| Source    | n   | baseline   | v1-hgnn | v2-hgnn | v3-nli     |
+|-----------|-----|------------|---------|---------|------------|
+| ai2thor   | 85  | 0.929      | 0.929   | 0.894   | **1.000**  |
+| averitec  | 328 | 0.649      | 0.503   | 0.592   | **0.674**  |
+| synthetic | 244 | **1.000**  | 0.898   | 0.889   | 0.881      |
 
-### Per-Class Verdict F1 (v3-nli)
+### Per-Class Verdict F1 (v3-nli, final)
 
-| Class               | Precision | Recall | F1    |
-|---------------------|-----------|--------|-------|
-| supported           | 0.771     | 0.789  | 0.780 |
-| refuted             | 0.834     | 0.802  | 0.818 |
-| not_enough_evidence | 0.845     | 0.880  | **0.862** |
+| Class               | Precision | Recall | F1     |
+|---------------------|-----------|--------|--------|
+| supported           | 0.629     | 0.741  | 0.681  |
+| refuted             | 0.824     | 0.829  | 0.827  |
+| not_enough_evidence | 0.970     | 0.778  | **0.864** |
 
 ---
 
@@ -260,41 +259,59 @@ ADR-013  EpistemicHGNN v1 architecture
     │       │
     ├── ADR-023  HybridHGNN v2-hgnn
     │            (EC scores + claim_emb → verdict)
-    │            (verdict acc: 0.799, macro F1: 0.807)
     │
-    └── ADR-024  NLIHybridHGNN v3-nli  ← primary model
-                 (NLI probs [3d] appended to evidence features: 400d → 403d)
-                 (verdict acc: 0.815, macro F1: 0.820)
+    ├── ADR-024  NLIHybridHGNN v3-nli  ← primary model
+    │            (NLI probs [3d] appended to evidence features: 400d → 403d)
+    │            (NLI probs bypass H1 in EC formula)
+    │
+    ├── ADR-025  AVeriTeC Q+A evidence pre-processing for NLI
+    │            (strip Q+A prefix before NLI scoring; answer-only premise)
+    │            (AVeriTeC acc: ~55% → 67.4%)
+    │
+    ├── ADR-026  Encoder residual connections + windowed co-evidence
+    │            (skip connections at each GATConv layer; max-5 neighbours by index)
+    │            (prevents NLI feature dilution; reduces oversmoothing on dense graphs)
+    │
+    └── ADR-027  Remove _EC_NEI_MAX — full VerdictHead delegation
+                 (eliminates train-inference gap for ambiguous EC cases)
 ```
 
 ---
 
 ## Key Findings for Paper
 
-1. **The EC formula works on epistemically consistent data:** v2-hgnn outperforms
-   baseline on synthetic (+1.1pp) where EC values are mathematically grounded.
+1. **The EC formula works on epistemically consistent data:** baseline achieves 100%
+   on synthetic where EC values are mathematically grounded. The learned models add
+   complexity that does not help on these perfectly structured patterns.
 
 2. **The 2D bottleneck limits pure symbolic verdict (v1-hgnn):** aggregating all
    evidence into two scalars discards semantic context needed for verdict prediction.
+   v1-hgnn (70.5%) underperforms baseline (81.6%) despite having the EC formula.
 
-3. **Hybrid outperforms pure neural baseline (+0.45pp Macro F1):** the EC formula
-   adds real signal when combined with claim embeddings.
+3. **NLI augmentation is the decisive advantage for AVeriTeC (v3-nli):** frozen
+   DeBERTa NLI probs fed directly into the EC formula raise AVeriTeC accuracy to
+   67.4% — the best across all models (+2.5pp over baseline). The Q+A pre-processing
+   fix (ADR-025) accounts for the largest gain (~12pp on AVeriTeC alone).
 
-4. **NLI augmentation improves stance and verdict across all sources (v3-nli):**
-   appending frozen DeBERTa NLI probs to evidence features gives H1 a direct
-   claim-evidence signal. Verdict Macro F1 rises +1.33pp over v2-hgnn (0.807 → 0.820)
-   with improvements on all three sources including AVeriTeC (+0.6pp).
+4. **NLI enables perfect AI2THOR accuracy (v3-nli: 100%):** NLI contradiction signal
+   directly handles absence-refuted perception claims ("There is no fork" + "The fork
+   is made of metal" → contradiction → refuted). Textual similarity alone cannot
+   distinguish these cases.
 
-5. **AVeriTeC reveals label-trust mismatch:** crowdsourced annotations accept low-
-   trust sources as sufficient evidence; the EC formula correctly downgrades these
-   to NEI. The ceiling at ~0.627 persists across all models — annotation noise, not
-   model capacity, is the bottleneck.
+5. **Baseline dominates synthetic (100% vs 88% learned):** the EC formula is not
+   needed when patterns are perfectly consistent with the epistemic framework by
+   construction. The learned components (VerdictHead, NLI routing) add unnecessary
+   complexity for clean synthetic data.
 
-6. **IS detach is essential for interpretability:** without detach, IS drifts to
-   task-optimal values (RMSE 0.23) that do not reflect epistemic ground truth.
-   With detach, IS RMSE reaches 0.112 in v3-nli — the best across all models.
+6. **AVeriTeC is the bottleneck for all models (50–67%):** crowdsourced annotations
+   accept weak-evidence claims as "supported"; the EC formula correctly downgrades
+   these but diverges from human annotation. The ceiling is annotation noise, not
+   model capacity.
 
-7. **Neutral stance remains the hard class:** n=101 true neutrals vs 590/802 for
-   support/refute causes high recall (0.683) but low precision (0.308) for the neutral
-   stance class. This is a training-set imbalance artifact and does not harm verdict
-   quality because EC aggregation is robust to individual misclassifications.
+7. **IS detach is essential for interpretability:** IS RMSE reaches 0.095 in v3-nli
+   (best across all models). Without detach, IS drifts to task-optimal values that
+   do not reflect epistemic ground truth (RMSE ~0.23 before ADR-022).
+
+8. **Encoder residuals preserve NLI signal:** without skip connections, the GATConv
+   403d→256d projection dilutes the NLI probs before they reach H1 and the EC path.
+   Residuals ensure the original NLI features remain accessible in the final embedding.

@@ -87,7 +87,7 @@ def create_predicate_lexicon() -> PredicateLexicon:
     lex.register(
         PredicateId.mass.value,
         PredicateLexeme(
-            kind=PredicateForm.PROP_VALUE, label="mass", template_mode="value"
+            kind=PredicateForm.PROP_VERB, label="weighs", template_mode="value"
         ),
     )
     lex.register(

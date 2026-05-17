@@ -53,7 +53,7 @@ class VerdictHead(nn.Module):
         return self.mlp(scores)
 
 
-_PROJ_DIM = 64  # claim_emb bottleneck — keeps EC scores (3D) proportionally influential
+_PROJ_DIM = 16  # claim_emb bottleneck — tight regularizer; residual encoder makes 64 overfit
 
 
 class HybridVerdictHead(nn.Module):

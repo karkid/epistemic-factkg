@@ -108,6 +108,20 @@ class Ai2ThorTemplate(BaseTemplate):
             normalize=True,
         )
 
+        # Verb-value property: The fork weighs 0.4 kg.  (predicate is a verb, not "is")
+        self._templates[PredicateForm.PROP_VERB] = SentenceTemplate(
+            template="The {s} {p} {o}.",
+            fields={"s", "p", "o"},
+            normalize=True,
+        )
+
+        # Negated verb-value: The fork does not weigh 0.4 kg.
+        self._templates[PredicateForm.PROP_VERB + "_Negation"] = SentenceTemplate(
+            template="The {s} does not {p} {o}.",
+            fields={"s", "p", "o"},
+            normalize=True,
+        )
+
     # ------------------------
     # Grammar Helpers
     # ------------------------
@@ -156,8 +170,8 @@ class Ai2ThorTemplate(BaseTemplate):
             }
             return temperature_map.get(obj, obj.lower())
 
-        if predicate == "mass":
-            return f"weighs {obj} kg".lower()
+        if predicate == "weighs":  # mass predicate rendered via PROP_VERB label
+            return f"{obj} kg".lower()
 
         # Proper noun
         if obj[0].isupper():
