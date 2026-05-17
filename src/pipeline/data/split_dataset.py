@@ -134,7 +134,7 @@ def main() -> None:
     meta = {"seed": args.seed, "train_frac": args.train_frac, "val_frac": args.val_frac}
     for split, idxs in splits.items():
         out_path = out_dir / f"{split}_indices.json"
-        out_path.write_text(json.dumps({"indices": idxs, "meta": meta}, indent=2))
+        out_path.write_text(json.dumps({"indices": idxs, "meta": meta}, indent=2), encoding="utf-8")
 
     total = len(records)
     print("=" * 60)

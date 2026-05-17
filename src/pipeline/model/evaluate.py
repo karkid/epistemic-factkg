@@ -140,11 +140,11 @@ def _write_eval_plots(
 
 def _load_test_records(jsonl_path: Path, splits_dir: Path) -> list[dict]:
     records = [
-        json.loads(line) for line in jsonl_path.read_text().splitlines() if line.strip()
+        json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
     split_file = splits_dir / "test_indices.json"
     if split_file.exists():
-        indices = json.loads(split_file.read_text())["indices"]
+        indices = json.loads(split_file.read_text(encoding="utf-8"))["indices"]
         return [records[i] for i in indices if i < len(records)]
     return records
 
@@ -287,11 +287,11 @@ def main() -> None:
 
     # ── Write output files ────────────────────────────────────────────────────
     (output_dir / "stance_metrics.json").write_text(
-        json.dumps(stance_metrics, indent=2)
+        json.dumps(stance_metrics, indent=2), encoding="utf-8"
     )
-    (output_dir / "is_metrics.json").write_text(json.dumps(is_metrics, indent=2))
+    (output_dir / "is_metrics.json").write_text(json.dumps(is_metrics, indent=2), encoding="utf-8")
     (output_dir / "verdict_metrics.json").write_text(
-        json.dumps(verdict_metrics, indent=2)
+        json.dumps(verdict_metrics, indent=2), encoding="utf-8"
     )
 
     # ── Write eval_summary.md ─────────────────────────────────────────────────
@@ -365,7 +365,7 @@ def main() -> None:
         f"![Per-Class F1](plots/class_f1.png)\n\n"
         f"![Per-Source Accuracy](plots/per_source_accuracy.png)\n"
     )
-    (output_dir.parent / "eval_summary.md").write_text(eval_md)
+    (output_dir.parent / "eval_summary.md").write_text(eval_md, encoding="utf-8")
 
     # ── Print summary ─────────────────────────────────────────────────────────
     print("=" * 60)
@@ -402,7 +402,7 @@ def main() -> None:
     print("Per-source verdict accuracy:")
     for src, m in verdict_metrics["per_source"].items():
         print(f"  {src:<16}  acc={m['accuracy']:.3f}  n={m['support']}")
-    print(f"\nResults → {output_dir}/")
+    print(f"\nResults -> {output_dir}/")
     print("=" * 60)
 
 

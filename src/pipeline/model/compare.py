@@ -19,7 +19,7 @@ def _load(eval_dir: Path, filename: str) -> dict:
     path = eval_dir / filename
     if not path.exists():
         raise FileNotFoundError(f"Missing {path}")
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _delta(a: float, b: float, invert: bool = False) -> str:
@@ -108,8 +108,8 @@ def main() -> None:
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(md)
-    print(f"Comparison report → {out_path}")
+    out_path.write_text(md, encoding="utf-8")
+    print(f"Comparison report -> {out_path}")
 
 
 if __name__ == "__main__":

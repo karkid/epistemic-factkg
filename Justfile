@@ -31,7 +31,7 @@ MODEL_NAME          := "v1-hgnn"
 CHECKPOINTS_DIR     := "out/model/" + MODEL_NAME + "/checkpoints"
 MODEL_REPORT_DIR    := "out/reports/model/" + MODEL_NAME
 RESULTS_DIR         := "out/reports/model/" + MODEL_NAME + "/eval"
-DEVICE              := `uv run python -c "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')"`
+DEVICE              := env_var_or_default("DEVICE", "cpu")
 
 
 # ╔═════════════════════════════════════════════════════════════════════════════╗

@@ -70,7 +70,7 @@ def _load_split_indices(splits_dir: Path, split: str) -> list[int]:
     if not path.exists():
         print(f"Error: {path} not found. Run 'just split' first.", file=sys.stderr)
         sys.exit(1)
-    return json.loads(path.read_text())["indices"]
+    return json.loads(path.read_text(encoding="utf-8"))["indices"]
 
 
 def _build_graphs(
@@ -198,8 +198,8 @@ def main() -> None:
     ckpt_dir = Path(args.checkpoint_dir)
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / "training_history.json").write_text(json.dumps(history, indent=2))
-    print(f"Best model → {ckpt_dir}/best_model.pt")
+    (report_dir / "training_history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
+    print(f"Best model -> {ckpt_dir}/best_model.pt")
 
 
 if __name__ == "__main__":
