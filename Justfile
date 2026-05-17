@@ -34,7 +34,7 @@ MODEL_NAME          := "v1-hgnn"
 CHECKPOINTS_DIR     := "out/model/" + MODEL_NAME + "/checkpoints"
 MODEL_REPORT_DIR    := "out/reports/model/" + MODEL_NAME
 RESULTS_DIR         := "out/reports/model/" + MODEL_NAME + "/eval"
-DEVICE              := env_var_or_default("DEVICE", "cpu")
+DEVICE              := env_var_or_default("DEVICE", "")
 
 
 # ╔═════════════════════════════════════════════════════════════════════════════╗

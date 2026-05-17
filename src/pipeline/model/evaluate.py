@@ -173,8 +173,9 @@ def main() -> None:
     ap.add_argument("--hidden-dim", type=int, default=256)
     ap.add_argument("--heads", type=int, default=4)
     ap.add_argument("--dropout", type=float, default=0.3)
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--device", default=None, help="cuda or cpu (default: auto-detect)")
     args = ap.parse_args()
+    args.device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
 
     device = torch.device(args.device)
     output_dir = Path(args.output)

@@ -60,7 +60,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable inverse-frequency class weights for both stance and verdict",
     )
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--device", default=None, help="cuda or cpu (default: auto-detect)")
     ap.add_argument("--verbose", "-v", action="store_true")
     return ap
 
@@ -100,6 +100,7 @@ def _build_graphs(
 
 def main() -> None:
     args = _build_parser().parse_args()
+    args.device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
 
     jsonl_path = Path(args.jsonl)
     if not jsonl_path.exists():
