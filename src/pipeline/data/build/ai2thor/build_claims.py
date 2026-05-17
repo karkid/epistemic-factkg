@@ -43,7 +43,7 @@ _CONFIG_DEFAULTS = {
 def _load_generation_config(config_path: str) -> dict:
     """Load ai2thor.generation section from config.yaml, merging with defaults."""
     try:
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         gen = cfg.get("ai2thor", {}).get("generation", {})
         return {**_CONFIG_DEFAULTS, **gen}

@@ -24,13 +24,13 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(scope="module")
 def ai2thor_raw() -> list[dict]:
-    with open(FIXTURES / "ai2thor_sample.jsonl") as f:
+    with open(FIXTURES / "ai2thor_sample.jsonl", encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
 
 
 @pytest.fixture(scope="module")
 def averitec_raw() -> list[dict]:
-    with open(FIXTURES / "averitec_sample.json") as f:
+    with open(FIXTURES / "averitec_sample.json", encoding="utf-8") as f:
         return json.load(f)
 
 

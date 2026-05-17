@@ -3,6 +3,9 @@
 
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
+# Force UTF-8 on Windows for all Python subprocesses
+export PYTHONUTF8 := "1"
+
 [default]
 [doc("List available commands")]
 default:

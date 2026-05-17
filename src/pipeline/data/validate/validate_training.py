@@ -21,7 +21,7 @@ _ADR012_TARGETS: dict[str, int] = {
 
 def _load_targets(config_path: str) -> dict[str, int]:
     try:
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         targets = cfg.get("training", {}).get("evidence_type_targets", {})
         if targets:

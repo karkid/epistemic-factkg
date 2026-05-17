@@ -121,10 +121,10 @@ _CSS = """
 def _load_test_records() -> list[dict]:
     if not _DATA_JSONL.exists() or not _TEST_IDX.exists():
         return []
-    with open(_TEST_IDX) as f:
+    with open(_TEST_IDX, encoding="utf-8") as f:
         indices = set(json.load(f)["indices"])
     records = []
-    with open(_DATA_JSONL) as f:
+    with open(_DATA_JSONL, encoding="utf-8") as f:
         for i, line in enumerate(f):
             if i in indices:
                 records.append(json.loads(line))

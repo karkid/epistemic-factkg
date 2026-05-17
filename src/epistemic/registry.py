@@ -61,7 +61,7 @@ def load_source_trust_registry(path: str | Path) -> dict[str, dict]:
         {source_id: full registry record dict}
     """
     registry: dict[str, dict] = {}
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:

@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 @pytest.fixture(scope="module")
 def ai2thor_converted() -> list[dict]:
     conv = AI2ThorConverter()
-    with open(FIXTURES / "ai2thor_sample.jsonl") as f:
+    with open(FIXTURES / "ai2thor_sample.jsonl", encoding="utf-8") as f:
         return [
             conv.convert_one(json.loads(line), json.loads(line)["id"])
             for line in f
@@ -34,7 +34,7 @@ def ai2thor_converted() -> list[dict]:
 @pytest.fixture(scope="module")
 def averitec_converted() -> list[dict]:
     conv = AveritecConverter()
-    with open(FIXTURES / "averitec_sample.json") as f:
+    with open(FIXTURES / "averitec_sample.json", encoding="utf-8") as f:
         raw = json.load(f)
     return [
         conv.convert_one(r, f"averitec-train-{i:06d}") for i, r in enumerate(raw, 1)
@@ -320,7 +320,7 @@ class TestSummarizeFile:
         """Write converted AI2THOR fixtures to a tmp JSONL for summarize_file."""
         conv = AI2ThorConverter()
         out = tmp_path_factory.mktemp("val") / "ai2thor.jsonl"
-        with open(FIXTURES / "ai2thor_sample.jsonl") as f_in, open(out, "w") as f_out:
+        with open(FIXTURES / "ai2thor_sample.jsonl", encoding="utf-8") as f_in, open(out, "w", encoding="utf-8") as f_out:
             for line in f_in:
                 r = json.loads(line)
                 f_out.write(json.dumps(conv.convert_one(r, r["id"])) + "\n")
@@ -330,9 +330,9 @@ class TestSummarizeFile:
     def averitec_jsonl(self, tmp_path_factory) -> Path:
         conv = AveritecConverter()
         out = tmp_path_factory.mktemp("val") / "averitec.jsonl"
-        with open(FIXTURES / "averitec_sample.json") as f_in:
+        with open(FIXTURES / "averitec_sample.json", encoding="utf-8") as f_in:
             raw = json.load(f_in)
-        with open(out, "w") as f_out:
+        with open(out, "w", encoding="utf-8") as f_out:
             for i, r in enumerate(raw, 1):
                 f_out.write(
                     json.dumps(conv.convert_one(r, f"averitec-train-{i:06d}")) + "\n"
@@ -421,7 +421,7 @@ class TestSummarizeFile:
         )
         md_path = tmp_path / "report.md"
         write_validation_report_md([s], md_path, "2026-01-01T00:00:00Z")
-        content = md_path.read_text()
+        content = md_path.read_text(encoding="utf-8")
         assert "# Validation Report" in content
         assert "GNN Readiness" in content
         assert "Verdict Distribution" in content
