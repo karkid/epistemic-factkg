@@ -100,11 +100,10 @@ class NLIHybridHGNN(HybridHGNN):
         _int_to_verdict = {v: k for k, v in VERDICT_TO_INT.items()}
 
         out = self.forward(data)
-        ev = data[NodeType.EVIDENCE]
 
-        # stance_pred from NLI argmax (for interpretability display only)
-        nli_probs = ev.x[:, -3:]
-        stance_pred = nli_probs[:, [1, 0, 2]].argmax(dim=-1)  # [N_ev]
+        # Use the trained stance head — consistent with other models and evaluate.py.
+        # NLI probs still flow through _soft_verdict_logits for the EC/verdict path.
+        stance_pred = out["stance_logits"].argmax(dim=-1)  # [N_ev]
 
         # Use soft EC from forward — consistent with training
         ec = out["ec_scores"][0]  # [3] — (sup, ref, nei) for single claim
