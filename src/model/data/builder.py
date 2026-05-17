@@ -10,6 +10,7 @@ EW and ST are stored as separate tensors (not encoder input features).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import torch
@@ -25,6 +26,13 @@ from src.model.data.types import (
     EdgeType,
     NodeType,
     get_source_category,
+)
+
+
+_BOILERPLATE = frozenset(["no sensor evidence found for this object type."])
+_VAGUE_PLACEHOLDER = re.compile(
+    r"\bthe described (element|substance|compound|entity|object|material|item)\b",
+    re.IGNORECASE,
 )
 
 
@@ -65,18 +73,12 @@ class ClaimGraphBuilder:
         evidence_items = record.get("evidence", [])
 
         # Drop pre-fix AI2THOR boilerplate absence evidence (replaced by Fix A)
-        _BOILERPLATE = frozenset(["no sensor evidence found for this object type."])
         evidence_items = [
             ev for ev in evidence_items
             if (ev.get("text") or "").strip().lower() not in _BOILERPLATE
         ]
 
         # Fix I: drop evidence with unfilled synthetic template placeholders
-        import re as _re
-        _VAGUE_PLACEHOLDER = _re.compile(
-            r"\bthe described (element|substance|compound|entity|object|material|item)\b",
-            _re.IGNORECASE,
-        )
         evidence_items = [
             ev for ev in evidence_items
             if not _VAGUE_PLACEHOLDER.search(ev.get("text") or "")
