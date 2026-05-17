@@ -88,7 +88,6 @@ class HybridHGNN(nn.Module):
         eliminating the train-inference gap from hard-argmax EC computation.
         """
         _EC_DECISIVE = 0.35
-        _EC_NEI_MAX  = 0.20
 
         out = self.forward(data)
         stance_pred = out["stance_logits"].argmax(dim=-1)
@@ -101,9 +100,8 @@ class HybridHGNN(nn.Module):
             verdict = "refuted"
         elif sup > ref and sup > _EC_DECISIVE:
             verdict = "supported"
-        elif max(sup, ref) < _EC_NEI_MAX:
-            verdict = "not_enough_evidence"
         else:
+            # EC is ambiguous — let the trained VerdictHead decide.
             verdict_idx = out["verdict_logits"].argmax(dim=-1).item()
             verdict = _INT_TO_VERDICT.get(int(verdict_idx), "not_enough_evidence")
 

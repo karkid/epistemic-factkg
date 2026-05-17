@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import pickle
+import re
 from pathlib import Path
 
 import torch
@@ -22,6 +23,12 @@ from src.model.data.types import (
 
 _EMBED_MODEL = "all-MiniLM-L6-v2"
 _NLI_MODEL = "cross-encoder/nli-deberta-v3-small"
+
+# Strips "Question: ... Answer:" prefix from AVeriTeC Q+A evidence text,
+# keeping only the answer part which is what the NLI model should score.
+_QA_ANSWER_RE = re.compile(r"(?i)^.*?answer\s*:\s*", re.DOTALL)
+# Answers shorter than this are likely uninformative (dates, "No answer", etc.)
+_MIN_ANSWER_LEN = 15
 
 
 class Featurizer:
@@ -117,17 +124,34 @@ class Featurizer:
             vec[idx] = 1.0
         return vec
 
+    def _extract_nli_text(self, text: str) -> str:
+        """Strip 'Question: ... Answer:' prefix from Q+A evidence, keeping only the answer.
+
+        Falls back to the original text when:
+        - No Q+A pattern is found (non-AVeriTeC evidence)
+        - The extracted answer is too short to be informative (date, 'No answer', etc.)
+        """
+        m = _QA_ANSWER_RE.match(text)
+        if m:
+            answer = text[m.end():].strip()
+            if len(answer) >= _MIN_ANSWER_LEN:
+                return answer
+        return text
+
     def encode_nli_stance(self, claim: str, ev_texts: list[str]) -> torch.Tensor:
         """Cross-encode (claim, evidence) pairs → softmax probs [N_ev, 3].
 
         Column order: [contradiction, entailment, neutral] (MNLI label order).
+        For Q+A format evidence (AVeriTeC), only the answer part is scored so
+        the NLI model receives a natural premise instead of a Q+A wrapper.
         Returns empty tensor [0, 3] for empty ev_texts.
         """
         if not ev_texts:
             return torch.zeros(0, 3, dtype=torch.float32)
         if self._nli_model is None:
             self._nli_model = CrossEncoder(_NLI_MODEL, device=self._device)
-        pairs = [(t, claim) for t in ev_texts]   # evidence=premise, claim=hypothesis (standard NLI)
+        nli_texts = [self._extract_nli_text(t) for t in ev_texts]
+        pairs = [(t, claim) for t in nli_texts]   # evidence=premise, claim=hypothesis (standard NLI)
         scores = self._nli_model.predict(pairs, apply_softmax=True)  # np [N, 3]
         return torch.tensor(scores, dtype=torch.float32)
 

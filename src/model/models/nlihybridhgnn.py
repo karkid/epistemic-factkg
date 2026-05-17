@@ -95,7 +95,6 @@ class NLIHybridHGNN(HybridHGNN):
         for threshold checks — no train-inference gap.
         """
         _EC_DECISIVE = 0.35
-        _EC_NEI_MAX  = 0.20
 
         from src.model.data.types import VERDICT_TO_INT
         _int_to_verdict = {v: k for k, v in VERDICT_TO_INT.items()}
@@ -116,9 +115,8 @@ class NLIHybridHGNN(HybridHGNN):
             verdict = "refuted"
         elif sup > ref and sup > _EC_DECISIVE:
             verdict = "supported"
-        elif max(sup, ref) < _EC_NEI_MAX:
-            verdict = "not_enough_evidence"
         else:
+            # EC is ambiguous — let the trained VerdictHead decide.
             verdict = _int_to_verdict[int(out["verdict_logits"].argmax(dim=-1).item())]
 
         return {
