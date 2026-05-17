@@ -1,6 +1,8 @@
 # Epistemic FactKG
 # Run `just` to list all commands.
 
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+
 [default]
 [doc("List available commands")]
 default:
@@ -62,59 +64,14 @@ test:
 [group("Dev")]
 [doc("Delete all generated outputs: out/ (includes runs/), data/processed/, data/summary/")]
 clean:
-    rm -rf out/ data/processed/ data/summary/
+    uv run python -c "import shutil; [shutil.rmtree(p, ignore_errors=True) for p in ['out', 'data/processed', 'data/summary']]"
     @echo "Cleaned generated outputs."
 
 
 [group("Dev")]
 [doc("Run a pipeline or step: just run <data|model> [STEP] [MODELS='all']")]
 run PIPELINE="" STEP="" MODELS="all":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PIPELINE="{{PIPELINE}}"
-    STEP="{{STEP}}"
-    MODELS="{{MODELS}}"
-    case "${PIPELINE}" in
-      data)
-        case "${STEP}" in
-          "")        just build && just validate && just report ;;
-          rebuild)   just build rebuild=true && just validate && just report ;;
-          build)     just build ;;
-          validate)  just validate ;;
-          report)    just report ;;
-          *) echo "Unknown data step '${STEP}'. Available: rebuild  build  validate  report"; exit 1 ;;
-        esac
-        ;;
-      model)
-        case "${STEP}" in
-          list)    uv run python -m src.pipeline.model.orchestrate list ;;
-          "")      just graph && uv run python -m src.pipeline.model.orchestrate run \
-                       --models "${MODELS}" \
-                       --jsonl {{TRAINING_JSONL}} \
-                       --splits-dir {{SPLITS_DIR}} \
-                       --graph {{GRAPH_DATASET}} ;;
-          build)   just graph ;;
-          train)   uv run python -m src.pipeline.model.orchestrate train \
-                       --models "${MODELS}" \
-                       --jsonl {{TRAINING_JSONL}} \
-                       --splits-dir {{SPLITS_DIR}} ;;
-          eval)    uv run python -m src.pipeline.model.orchestrate eval \
-                       --models "${MODELS}" \
-                       --jsonl {{TRAINING_JSONL}} \
-                       --splits-dir {{SPLITS_DIR}} ;;
-          compare) uv run python -m src.pipeline.model.orchestrate compare \
-                       --models "${MODELS}" ;;
-          *) echo "Unknown model step '${STEP}'. Available: list  build  train  eval  compare"; exit 1 ;;
-        esac
-        ;;
-      *)
-        echo "Usage: just run <data|model> [STEP] [MODELS]"
-        echo "  data  steps: rebuild  build  validate  report"
-        echo "  model steps: list  build  train  eval  compare"
-        echo "  MODELS: comma-separated names or 'all' (default)"
-        exit 1
-        ;;
-    esac
+    uv run python scripts/run_pipeline.py {{PIPELINE}} {{STEP}} {{MODELS}}
 
 
 # ╔═════════════════════════════════════════════════════════════════════════════╗
@@ -125,47 +82,13 @@ run PIPELINE="" STEP="" MODELS="all":
 [group("Data Pipeline")]
 [doc("Build training data: generate synthetic, merge sources, filter, split (rebuild=true re-simulates AI2THOR first)")]
 build rebuild="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    REBUILD_FLAG=""
-    if [ "{{rebuild}}" = "true" ]; then
-        REBUILD_FLAG="--rebuild --config {{CONFIG}} --out-rdf {{KG_TTL}} --ai2thor-dir {{AI2THOR_RAW_DIR}}"
-    elif [ ! -f "{{AI2THOR_CLAIMS}}" ]; then
-        echo "Error: {{AI2THOR_CLAIMS}} not found. Run 'just build rebuild=true' to generate it." >&2
-        exit 1
-    fi
-    if [ ! -f "{{SYNTHETIC_JSONL}}" ]; then
-        echo "--- generating synthetic claims ---"
-        mkdir -p {{SYNTHETIC_RAW_DIR}}
-        uv run python -m src.pipeline.data.generate synthetic \
-            --config {{CONFIG}} \
-            --registry {{REGISTRY}} \
-            --seed-pool {{SEED_POOL}} \
-            --ai2thor-claims {{AI2THOR_CLAIMS}} \
-            --output {{SYNTHETIC_JSONL}}
-    fi
-    mkdir -p out/data/unified out/data/training out/data/intermediate
-    uv run python -m src.pipeline.data.build \
-        $REBUILD_FLAG \
-        --registry {{REGISTRY}} \
-        --averitec {{RAW_AVERITEC_TRAIN}} {{RAW_AVERITEC_DEV}} \
-        --ai2thor {{AI2THOR_CLAIMS}} \
-        --synthetic {{SYNTHETIC_JSONL}} \
-        --unified-out {{UNIFIED_JSONL}} \
-        --training-out {{TRAINING_JSONL}} \
-        --intermediate-dir out/data/intermediate
-    mkdir -p {{SPLITS_DIR}}
-    uv run python -m src.pipeline.data.split_dataset \
-        --input {{TRAINING_JSONL}} \
-        --output-dir {{SPLITS_DIR}} \
-        --seed 42 \
-        --verbose
+    uv run python scripts/build_data.py {{rebuild}}
 
 
 [group("Data Pipeline")]
 [doc("Validate unified JSONL schema + training Pramana distribution (ADR-012)")]
 validate:
-    mkdir -p {{REPORT_DIR}}
+    uv run python -c "import pathlib; pathlib.Path('{{REPORT_DIR}}').mkdir(parents=True, exist_ok=True)"
     uv run python -m src.pipeline.data.validate unified \
         --files {{UNIFIED_JSONL}} \
         --out {{VALIDATION_JSON}}
@@ -193,7 +116,7 @@ report:
 [group("Model Pipeline")]
 [doc("Build PyG HeteroData graph dataset from filtered training JSONL")]
 graph:
-    mkdir -p out/model/graphs
+    uv run python -c "import pathlib; pathlib.Path('out/model/graphs').mkdir(parents=True, exist_ok=True)"
     uv run python -m src.pipeline.model.build_graphs \
         --input {{TRAINING_JSONL}} \
         --output {{GRAPH_DATASET}} \
@@ -204,7 +127,7 @@ graph:
 [group("Model Pipeline")]
 [doc("Build NLI-enhanced graph dataset for v3-nli (403d evidence features)")]
 graph-nli:
-    mkdir -p out/model/graphs
+    uv run python -c "import pathlib; pathlib.Path('out/model/graphs').mkdir(parents=True, exist_ok=True)"
     uv run python -m src.pipeline.model.build_graphs \
         --input {{TRAINING_JSONL}} \
         --output {{GRAPH_DATASET_NLI}} \
@@ -216,7 +139,7 @@ graph-nli:
 [group("Model Pipeline")]
 [doc("Train a model (default: MODEL_NAME). Override: just train baseline")]
 train model=MODEL_NAME:
-    mkdir -p out/model/{{model}}/checkpoints out/reports/model/{{model}}
+    uv run python -c "import pathlib; [pathlib.Path(p).mkdir(parents=True, exist_ok=True) for p in ['out/model/{{model}}/checkpoints', 'out/reports/model/{{model}}']]"
     uv run python -m src.pipeline.model.train \
         --model {{model}} \
         --model-name {{model}} \
@@ -234,7 +157,7 @@ train model=MODEL_NAME:
 [group("Model Pipeline")]
 [doc("Evaluate a model on test set (default: MODEL_NAME). Override: just eval baseline")]
 eval model=MODEL_NAME:
-    mkdir -p out/reports/model/{{model}}/eval
+    uv run python -c "import pathlib; pathlib.Path('out/reports/model/{{model}}/eval').mkdir(parents=True, exist_ok=True)"
     uv run python -m src.pipeline.model.evaluate \
         --model {{model}} \
         --model-name {{model}} \
