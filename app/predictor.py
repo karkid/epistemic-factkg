@@ -40,6 +40,8 @@ _SOURCE_ID_TYPE_MAP: list[tuple[str, str]] = [
     ("social", "social_media"),
     ("twitter", "social_media"),
     ("reddit", "social_media"),
+    ("ai2thor", "simulation"),
+    ("simulation", "simulation"),
 ]
 
 _ARCHIVE_RE = re.compile(r"web\.archive\.org/web/\d+[^/]*/(.+)")
@@ -49,6 +51,7 @@ _SOURCE_TYPE_DEFAULTS: dict[str, tuple[str, float]] = {
     "academic": ("academic_pdf", 0.85),
     "government": ("government_web_text", 0.85),
     "social_media": ("social_media_web_text", 0.35),
+    "simulation": ("ai2thor_simulation", 1.0),
     "unknown": ("unknown_web", 0.40),
 }
 
@@ -190,15 +193,21 @@ class EpistemicPredictor:
 
     def predict_from_record(self, record: dict) -> dict:
         """Run prediction on a raw training/test record dict."""
+        raw_ev = record.get("evidence", [])
         evidence_items = [
             {
                 "text": ev["text"],
                 "source_type": self._source_id_to_type(ev.get("source_id", "")),
                 "modality": ev.get("modality", "web_text"),
             }
-            for ev in record.get("evidence", [])
+            for ev in raw_ev
         ]
-        return self.predict(record["claim"], evidence_items)
+        result = self.predict(record["claim"], evidence_items)
+        for i, bd in enumerate(result["evidence_breakdown"]):
+            if i < len(raw_ev):
+                bd["triples"] = raw_ev[i].get("triples") or []
+        result["claim_triples"] = record.get("claim_triples") or []
+        return result
 
     # ------------------------------------------------------------------
     # Private helpers

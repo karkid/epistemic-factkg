@@ -64,6 +64,34 @@ class ClaimGraphBuilder:
         data = HeteroData()
         evidence_items = record.get("evidence", [])
 
+        # Drop pre-fix AI2THOR boilerplate absence evidence (replaced by Fix A)
+        _BOILERPLATE = frozenset(["no sensor evidence found for this object type."])
+        evidence_items = [
+            ev for ev in evidence_items
+            if (ev.get("text") or "").strip().lower() not in _BOILERPLATE
+        ]
+
+        # Fix I: drop evidence with unfilled synthetic template placeholders
+        import re as _re
+        _VAGUE_PLACEHOLDER = _re.compile(
+            r"\bthe described (element|substance|compound|entity|object|material|item)\b",
+            _re.IGNORECASE,
+        )
+        evidence_items = [
+            ev for ev in evidence_items
+            if not _VAGUE_PLACEHOLDER.search(ev.get("text") or "")
+        ]
+
+        # Fix J: drop near-duplicate evidence items (first 80 chars fingerprint)
+        _seen_ev: set[str] = set()
+        _deduped = []
+        for ev in evidence_items:
+            key = (ev.get("text") or "").strip().lower()[:80]
+            if key not in _seen_ev:
+                _seen_ev.add(key)
+                _deduped.append(ev)
+        evidence_items = _deduped
+
         # ── Claim node ────────────────────────────────────────────────
         strategy = self._extract_strategy(record)
         claim_text_emb = self.featurizer.encode_texts([record["claim"]])  # [1, 384]

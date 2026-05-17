@@ -60,6 +60,7 @@ class EpistemicHGNN(nn.Module):
         Returns:
             stance_logits  : [N_ev, 3]
             is_pred        : [N_ev, 1]
+            ec_scores      : [N_claims, 3]  — (sup, ref, nei) soft EC scores
             verdict_logits : [N_claims, 3]  — from soft symbolic scores
         """
         x_dict = self.encoder(data)
@@ -69,11 +70,12 @@ class EpistemicHGNN(nn.Module):
         is_pred = self.is_head(ev_emb)  # [N_ev, 1]
 
         # Soft symbolic scores — differentiable (uses softmax probs, not argmax)
-        verdict_logits = self._soft_verdict_logits(data, stance_logits, is_pred.detach())
+        ec_scores, verdict_logits = self._soft_verdict_logits(data, stance_logits, is_pred.detach())
 
         return {
             "stance_logits": stance_logits,
             "is_pred": is_pred,
+            "ec_scores": ec_scores,
             "verdict_logits": verdict_logits,
         }
 
@@ -81,25 +83,34 @@ class EpistemicHGNN(nn.Module):
     def predict(self, data: HeteroData) -> dict:
         """Full neuro-symbolic inference for a single graph.
 
-        Returns stance/IS/symbolic scores for interpretability,
-        plus the learned VerdictHead verdict string.
+        Uses soft EC scores from forward (same path as training) for thresholds,
+        eliminating the train-inference gap from hard-argmax EC computation.
         """
+        _EC_DECISIVE = 0.35
+        _EC_NEI_MAX  = 0.20
+
         out = self.forward(data)
         stance_pred = out["stance_logits"].argmax(dim=-1)
 
-        ev = data[NodeType.EVIDENCE]
-        support_score, refute_score = self.aggregator.compute_scores(
-            stance_pred, out["is_pred"], ew=ev.ew, st=ev.st
-        )
+        ec = out["ec_scores"][0]  # [3] — (sup, ref, nei) for single claim
+        sup = float(ec[0])
+        ref = float(ec[1])
 
-        verdict_idx = out["verdict_logits"].argmax(dim=-1).item()
-        verdict = _INT_TO_VERDICT.get(int(verdict_idx), "not_enough_evidence")
+        if ref > sup and ref > _EC_DECISIVE:
+            verdict = "refuted"
+        elif sup > ref and sup > _EC_DECISIVE:
+            verdict = "supported"
+        elif max(sup, ref) < _EC_NEI_MAX:
+            verdict = "not_enough_evidence"
+        else:
+            verdict_idx = out["verdict_logits"].argmax(dim=-1).item()
+            verdict = _INT_TO_VERDICT.get(int(verdict_idx), "not_enough_evidence")
 
         return {
             **out,
             "stance_pred": stance_pred,
-            "support_score": support_score,
-            "refute_score": refute_score,
+            "support_score": sup,
+            "refute_score": ref,
             "verdict": verdict,
         }
 
@@ -110,12 +121,12 @@ class EpistemicHGNN(nn.Module):
         data: HeteroData,
         stance_logits: torch.Tensor,
         is_pred: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute per-claim soft symbolic scores and map through VerdictHead.
 
-        Uses the batch pointer (data["evidence"].batch) to group evidence
-        items by claim. Falls back to a single claim when batch pointer is
-        absent (single-graph inference).
+        Returns (ec_scores [N_claims, 3], verdict_logits [N_claims, 3]).
+        Uses the batch pointer to group evidence by claim; falls back to a
+        single claim when batch pointer is absent (single-graph inference).
         """
         ev = data[NodeType.EVIDENCE]
         batch_ptr = getattr(ev, "batch", None)
@@ -127,11 +138,11 @@ class EpistemicHGNN(nn.Module):
             )
 
         stance_probs = torch.softmax(stance_logits, dim=-1)
-        scores = torch.zeros(n_claims, 2, device=stance_logits.device)
+        scores = torch.zeros(n_claims, 3, device=stance_logits.device)
 
         for c in range(n_claims):
             mask = batch_ptr == c
-            sup, ref = self.aggregator.compute_soft_scores(
+            sup, ref, nei = self.aggregator.compute_soft_scores(
                 stance_probs[mask],
                 is_pred[mask],
                 ew=ev.ew[mask],
@@ -139,5 +150,6 @@ class EpistemicHGNN(nn.Module):
             )
             scores[c, 0] = sup
             scores[c, 1] = ref
+            scores[c, 2] = nei
 
-        return self.verdict_head(scores)  # [n_claims, 3]
+        return scores, self.verdict_head(scores)  # [n_claims, 3], [n_claims, 3]

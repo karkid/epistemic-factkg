@@ -126,7 +126,7 @@ class Featurizer:
             return torch.zeros(0, 3, dtype=torch.float32)
         if self._nli_model is None:
             self._nli_model = CrossEncoder(_NLI_MODEL)
-        pairs = [(claim, t) for t in ev_texts]
+        pairs = [(t, claim) for t in ev_texts]   # evidence=premise, claim=hypothesis (standard NLI)
         scores = self._nli_model.predict(pairs, apply_softmax=True)  # np [N, 3]
         return torch.tensor(scores, dtype=torch.float32)
 

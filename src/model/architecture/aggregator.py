@@ -25,7 +25,7 @@ class SymbolicAggregator:
         is_pred: torch.Tensor,  # [N_ev] or [N_ev,1]
         ew: torch.Tensor,  # [N_ev]
         st: torch.Tensor,  # [N_ev]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Differentiable soft symbolic scores for end-to-end training.
 
         Uses softmax stance probabilities instead of argmax so gradients
@@ -33,6 +33,7 @@ class SymbolicAggregator:
 
         soft_support = 1 - ∏(1 - EC_i * p_support_i)
         soft_refute  = 1 - ∏(1 - EC_i * p_refute_i)
+        soft_nei     = 1 - max(soft_support, soft_refute)
         """
         is_flat = is_pred.view(-1).float()
         ec = 1.0 - (1.0 - st.float()) ** (ew.float() * is_flat)
@@ -42,8 +43,9 @@ class SymbolicAggregator:
 
         support_score = 1.0 - torch.prod(1.0 - ec * p_support)
         refute_score = 1.0 - torch.prod(1.0 - ec * p_refute)
+        nei_score = 1.0 - torch.clamp(torch.max(support_score, refute_score), 0.0, 1.0)
 
-        return support_score.unsqueeze(0), refute_score.unsqueeze(0)  # [1], [1]
+        return support_score.unsqueeze(0), refute_score.unsqueeze(0), nei_score.unsqueeze(0)
 
     def compute_scores(
         self,
@@ -51,8 +53,8 @@ class SymbolicAggregator:
         is_pred: torch.Tensor,  # [N_ev] or [N_ev,1] float from H2
         ew: torch.Tensor,  # [N_ev] float — pre-computed epistemic weight
         st: torch.Tensor,  # [N_ev] float — source trust from registry
-    ) -> tuple[float, float]:
-        """Return (support_score, refute_score) ∈ [0.0, 1.0]."""
+    ) -> tuple[float, float, float]:
+        """Return (support_score, refute_score, nei_score) ∈ [0.0, 1.0]."""
         is_flat = is_pred.view(-1).float()
         ew_flat = ew.view(-1).float()
         st_flat = st.view(-1).float()
@@ -64,8 +66,9 @@ class SymbolicAggregator:
 
         support_score = _aggregate(ec, support_mask)
         refute_score = _aggregate(ec, refute_mask)
+        nei_score = 1.0 - max(float(support_score), float(refute_score))
 
-        return float(support_score), float(refute_score)
+        return float(support_score), float(refute_score), nei_score
 
     def get_verdict(self, support_score: float, refute_score: float) -> str:
         if support_score >= 0.75 and refute_score < 0.40:

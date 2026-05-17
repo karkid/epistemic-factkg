@@ -339,7 +339,7 @@ class ClaimGenerator:
                 evidence_triples=[],
                 evidence_urls=[],
                 source_type=EvidenceType.NON_APPREHENSION,
-                evidence_extract="No sensor evidence found for this object type.",
+                evidence_extract=f"Sensor didn't find {obj_type} in the scene.",
             )
 
             if not self._is_new_claim(instance):
@@ -383,7 +383,7 @@ class ClaimGenerator:
                 evidence_triples=[ev_triple],
                 evidence_urls=[],
                 source_type=EvidenceType.NON_APPREHENSION,
-                evidence_extract=self.realizer.realize(ev_triple),
+                evidence_extract=f"There is a {obj_type} in this scene.",
             )
 
             if not self._is_new_claim(instance):

@@ -33,9 +33,8 @@ class StanceHead(nn.Module):
 
 
 class VerdictHead(nn.Module):
-    """Learned verdict calibration: maps (support_score, refute_score) → 3-class logits.
+    """Learned verdict calibration: maps (support_score, refute_score, nei_score) → 3-class logits.
 
-    Replaces hard-coded thresholds (0.75 / 0.40) with a learned Linear(2→3).
     Trained with claim-level CrossEntropyLoss against annotated verdicts.
     The EC formula (symbolic aggregation) is unchanged — this head only
     learns where the decision boundaries sit for each dataset's annotation style.
@@ -43,35 +42,39 @@ class VerdictHead(nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        self.linear = nn.Linear(2, 3)
+        self.linear = nn.Linear(3, 3)
 
     def forward(self, scores: torch.Tensor) -> torch.Tensor:
-        """scores: [N_claims, 2] — (support_score, refute_score) per claim."""
+        """scores: [N_claims, 3] — (support_score, refute_score, nei_score) per claim."""
         return self.linear(scores)
+
+
+_PROJ_DIM = 16  # claim_emb bottleneck — keeps EC scores (3D) proportionally influential
 
 
 class HybridVerdictHead(nn.Module):
     """Verdict head that fuses symbolic EC scores with the claim node embedding.
 
-    Input : EC scores [N_claims, 2] + claim embedding [N_claims, hidden_dim]
+    Input : EC scores [N_claims, 3] + claim embedding [N_claims, hidden_dim]
     Output: logits [N_claims, 3]
 
-    The fusion lets the head use both the interpretable epistemic signal
-    (support_score / refute_score from the EC formula) and the full semantic
-    context from the encoder, so neither source of information is discarded.
+    claim_emb is projected to _PROJ_DIM before concatenation so EC scores (3D)
+    are ~16% of the input rather than 0.8%, preventing claim_emb from dominating.
     """
 
     def __init__(self, hidden_dim: int = 256) -> None:
         super().__init__()
+        self.claim_proj = nn.Sequential(nn.Linear(hidden_dim, _PROJ_DIM), nn.ReLU())
         self.mlp = nn.Sequential(
-            nn.Linear(hidden_dim + 2, hidden_dim // 2),
+            nn.Linear(_PROJ_DIM + 3, _PROJ_DIM),
             nn.ReLU(),
-            nn.Linear(hidden_dim // 2, 3),
+            nn.Linear(_PROJ_DIM, 3),
         )
 
     def forward(self, scores: torch.Tensor, claim_emb: torch.Tensor) -> torch.Tensor:
-        """scores: [N_claims, 2], claim_emb: [N_claims, hidden_dim]."""
-        return self.mlp(torch.cat([scores, claim_emb], dim=1))
+        """scores: [N_claims, 3], claim_emb: [N_claims, hidden_dim]."""
+        proj = self.claim_proj(claim_emb)
+        return self.mlp(torch.cat([scores, proj], dim=1))
 
 
 class ISHead(nn.Module):

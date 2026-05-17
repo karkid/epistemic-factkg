@@ -100,6 +100,24 @@ _IS_FROM_ANSWER_TYPE: dict[str, float] = {
 }
 
 
+
+def _qa_to_evidence_text(
+    qtext: str, ans_text: str, boolean_explanation: str | None
+) -> str:
+    """Format a Q+A pair as a meaningful evidence sentence for NLI.
+
+    AVeriTeC boolean answers always carry a boolean_explanation — include it so
+    NLI has enough signal to assign stance. For non-boolean answers the question
+    gives context the bare answer may lack (e.g. "Yes" is meaningless without it).
+    """
+    if boolean_explanation:
+        return (
+            f"Question: {qtext} Answer: {ans_text}. "
+            f"Explanation: {boolean_explanation}"
+        )
+    return f"Question: {qtext} Answer: {ans_text}"
+
+
 def _normalize_label(label) -> Verdict:
     if not label:
         return Verdict.NOT_ENOUGH_EVIDENCE
@@ -238,6 +256,7 @@ class AveritecConverter(DatasetConverter):
             for ai, a in enumerate(q.get("answers") or [], start=1):
                 evidence_id = f"{rec_id}-q{qi}-a{ai}"
                 ans_text = str(a.get("answer") or "").strip()
+                boolean_explanation = (a.get("boolean_explanation") or "").strip() or None
                 source_medium = a.get("source_medium")
                 source_url = str(a.get("source_url") or "").strip()
                 ans_type_key = str(a.get("answer_type") or "").strip().lower()
@@ -245,7 +264,7 @@ class AveritecConverter(DatasetConverter):
                 modality = _medium_to_modality(
                     source_medium, source_url=source_url, answer_type=ans_type
                 )
-                text = f"{qtext} {ans_text}".strip() if qtext else ans_text
+                text = _qa_to_evidence_text(qtext, ans_text, boolean_explanation) if qtext else ans_text
 
                 source_id = _resolve_evidence_source(
                     source_url, modality, self._registry

@@ -110,10 +110,7 @@ class ClaimInstance:
                     "triple_source": "ground_truth",
                     "modality": "simulation_state",
                     "stance": (
-                        EvidenceStance.ABSENT.value
-                        if pramana == EvidenceType.NON_APPREHENSION.value
-                        and self.label == Verdict.SUPPORTED.value
-                        else EvidenceStance.SUPPORTS.value
+                        EvidenceStance.SUPPORTS.value
                         if self.label == Verdict.SUPPORTED.value
                         else EvidenceStance.REFUTES.value
                     ),

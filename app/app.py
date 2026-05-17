@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import random
 from collections import Counter
@@ -14,20 +15,21 @@ from predictor import EpistemicPredictor
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _MODELS = {
-    "v3-nli":   "v3-nli  —  NLI + Hybrid (Best)",
-    "v2-hgnn":  "v2-hgnn  —  Hybrid",
-    "v1-hgnn":  "v1-hgnn  —  Pure Symbolic",
-    "baseline": "baseline  —  No EC Formula",
+    "v3-nli":   "v3-nli — NLI + Hybrid  ·  81.5%",
+    "v2-hgnn":  "v2-hgnn — Hybrid       ·  79.9%",
+    "v1-hgnn":  "v1-hgnn — Pure Symbolic ·  71.2%",
+    "baseline": "baseline — No EC        ·  79.5%",
 }
 _ALL_KEY = "all"
 
 _VERDICT_META = {
-    "supported":           ("🟢", "SUPPORTED",           "#1a7a4a"),
-    "refuted":             ("🔴", "REFUTED",              "#c0392b"),
-    "not_enough_evidence": ("🟡", "NOT ENOUGH EVIDENCE",  "#7d6608"),
+    "supported":           ("✓", "SUPPORTED",           "#1d6340"),
+    "refuted":             ("✗", "REFUTED",              "#9b2226"),
+    "not_enough_evidence": ("~", "NOT ENOUGH EVIDENCE",  "#7f4f24"),
 }
-_VERDICT_LABELS   = ["supported", "refuted", "not_enough_evidence"]
-_STANCE_ICON      = {"supports": "🟢", "refutes": "🔴", "neutral": "⚪"}
+_VERDICT_LABELS  = ["supported", "refuted", "not_enough_evidence"]
+_VERDICT_CSS     = {"supported": "sup", "refuted": "ref", "not_enough_evidence": "nei"}
+_STANCE_CHIP_CLS = {"supports": "chip-green", "refutes": "chip-red", "neutral": "chip-gray"}
 
 _MODALITIES = ["web_text", "pdf", "image", "video", "audio", "web_table"]
 _MODALITY_LABELS = {
@@ -57,6 +59,60 @@ _SOURCE_LABELS = {
 
 _DATA_JSONL = Path("out/data/training/epistemic_factkg_training.jsonl")
 _TEST_IDX   = Path("out/data/splits/test_indices.json")
+
+_CSS = """
+<style>
+:root {
+  --bg-page:#f8f9fa; --bg-card:#ffffff; --border:#e2e6ea;
+  --text-primary:#212529; --text-secondary:#6c757d; --text-muted:#adb5bd;
+  --green:#1d6340; --green-bg:#e6f4ed; --green-text:#1d6340;
+  --red:#9b2226;   --red-bg:#fce8e8;   --red-text:#9b2226;
+  --amber:#7f4f24; --amber-bg:#fff8e7; --amber-text:#7f4f24;
+  --blue:#1a4bbd;  --blue-bg:#e7f1ff;
+  --purple:#6b46c1;--purple-bg:#f3e8ff;
+  --layer-input:#6c757d; --layer-encoder:#1a4bbd; --layer-stance:#b45309;
+  --layer-nli:#6b46c1;   --layer-ec:#1d6340;      --layer-verdict:#9b2226;
+}
+.arch-box {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-left:4px solid var(--layer-input); border-radius:6px;
+  padding:10px 14px; margin:4px 0;
+  font-family:'JetBrains Mono',monospace; font-size:0.82rem;
+}
+.arch-box.enc     { border-left-color:var(--layer-encoder); }
+.arch-box.stance  { border-left-color:var(--layer-stance);  }
+.arch-box.nli     { border-left-color:var(--layer-nli);     }
+.arch-box.ec      { border-left-color:var(--layer-ec);      }
+.arch-box.verdict { border-left-color:var(--layer-verdict); }
+.arch-box-title {
+  font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em;
+  color:var(--text-muted); margin-bottom:6px;
+}
+.chip {
+  display:inline-block; padding:1px 7px; border-radius:10px;
+  font-size:0.72rem; font-weight:600; margin:1px; line-height:1.5;
+}
+.chip-green  { background:var(--green-bg);  color:var(--green-text); }
+.chip-red    { background:var(--red-bg);    color:var(--red-text);   }
+.chip-amber  { background:var(--amber-bg);  color:var(--amber-text); }
+.chip-gray   { background:#f1f3f5;          color:#495057;           }
+.chip-blue   { background:var(--blue-bg);   color:var(--blue);       }
+.chip-purple { background:var(--purple-bg); color:var(--purple);     }
+.verdict-card {
+  border:2px solid var(--border); border-radius:10px;
+  padding:16px; text-align:center; margin:8px 0;
+}
+.verdict-card.sup { background:var(--green-bg); border-color:var(--green); color:var(--green); }
+.verdict-card.ref { background:var(--red-bg);   border-color:var(--red);   color:var(--red);   }
+.verdict-card.nei { background:var(--amber-bg); border-color:var(--amber); color:var(--amber); }
+.verdict-label { font-size:1.6rem; font-weight:700; }
+.verdict-conf  { font-size:0.85rem; margin-top:4px; }
+.minibar-wrap  { display:flex; border-radius:4px; overflow:hidden; height:8px; }
+.minibar-seg   { height:100%; }
+.triple-row    { display:flex; align-items:center; gap:6px; margin:3px 0; flex-wrap:wrap; }
+.stProgress > div > div > div { border-radius:3px; }
+</style>
+"""
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
@@ -102,19 +158,18 @@ def _render_sidebar() -> str:
         )
 
         st.divider()
-        with st.expander("EC Formula"):
+        with st.expander("Reference"):
+            st.markdown("**EC Formula**")
             st.code("EC = 1 − (1 − ST)^(EW × IS)", language=None)
             st.caption("ST = Source Trust · EW = Evidence Weight · IS = Inference Strength")
-
-        with st.expander("Pramana"):
+            st.markdown("**Pramana**")
             st.markdown(
                 "| Modality | Sanskrit |\n|---|---|\n"
                 "| Web / PDF | Shabda |\n"
                 "| Image / Video | Pratyaksha |\n"
                 "| Table | Upamana |"
             )
-
-        with st.expander("Model accuracy"):
+            st.markdown("**Model Accuracy**")
             st.markdown(
                 "| Model | Acc | F1 |\n|---|---|---|\n"
                 "| v3-nli | **0.815** | **0.820** |\n"
@@ -133,9 +188,8 @@ def _init_state() -> None:
         "evidence_list":      [_blank_ev()],
         "last_claim":         "",
         "_random_true_label": None,
-        "eval_rows":          None,   # list[dict] from last eval run
-        "eval_model":         None,
-        "inspect_idx":        None,   # index into eval_rows for inspection
+        "eval_rows":          None,
+        "inspect_idx":        None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -153,7 +207,6 @@ def _load_random_example() -> None:
         return
     rec = random.choice(records)
 
-    # Clear stale widget keys so Streamlit picks up new values
     old_n = len(st.session_state.get("evidence_list", []))
     for i in range(old_n + 6):
         for prefix in ("ev_", "mod_", "src_"):
@@ -168,10 +221,9 @@ def _load_random_example() -> None:
         for ev in rec.get("evidence", [])[:4]
     ] or [_blank_ev()]
 
-    # Set widget key directly — value= is only used on first render
-    st.session_state["claim_input"]      = rec["claim"]
-    st.session_state["last_claim"]       = rec["claim"]
-    st.session_state["evidence_list"]    = new_evs
+    st.session_state["claim_input"]        = rec["claim"]
+    st.session_state["last_claim"]         = rec["claim"]
+    st.session_state["evidence_list"]      = new_evs
     st.session_state["_random_true_label"] = rec["verdict"]["label"]
     for i, ev in enumerate(new_evs):
         st.session_state[f"ev_{i}"]  = ev["text"]
@@ -221,168 +273,284 @@ def _render_evidence_cards() -> None:
                 st.session_state.evidence_list[i]["source_type"] = src
 
 
+# ── HTML helpers ──────────────────────────────────────────────────────────────
+
+def _chip(text: str, cls: str = "chip-gray") -> str:
+    return f'<span class="chip {cls}">{text}</span>'
+
+
+def _arch_box(css_class: str, step: str, title: str, body_html: str) -> None:
+    st.markdown(
+        f'<div class="arch-box {css_class}">'
+        f'<div class="arch-box-title">{step} &nbsp; {title}</div>'
+        f"{body_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _arch_arrow(label: str = "") -> None:
+    if label:
+        inner = (
+            f"↓ &thinsp; <em style='color:var(--text-muted);font-size:0.75rem'>{label}</em>"
+        )
+    else:
+        inner = "↓"
+    st.markdown(
+        f'<div style="text-align:center;color:var(--text-muted);padding:4px 0">{inner}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _triple_label(uri: str) -> str:
+    seg = uri.split("/")[-1]
+    return seg.split("|")[0] or seg
+
+
+def _render_triple(triple: list) -> str:
+    if not triple or len(triple) < 3:
+        return ""
+    s = _triple_label(str(triple[0]))
+    p = str(triple[1])
+    o = _triple_label(str(triple[2]))
+    arrow = '<span style="color:var(--text-muted);font-size:0.75rem">→</span>'
+    return (
+        f'<div class="triple-row">'
+        f'{_chip(s, "chip-blue")}{arrow}'
+        f'{_chip(p, "chip-purple")}{arrow}'
+        f'{_chip(o, "chip-green")}'
+        f"</div>"
+    )
+
+
+def _render_verdict_card(result: dict) -> None:
+    verdict = result["verdict"]
+    probs   = result["verdict_probs"]
+    icon, label, _ = _VERDICT_META.get(verdict, ("?", verdict.upper(), "#888"))
+    css_cls = _VERDICT_CSS.get(verdict, "nei")
+    conf    = max(probs) * 100
+    color_vars = ["green", "red", "amber"]
+    segs = "".join(
+        f'<div class="minibar-seg" style="background:var(--{c});width:{p * 100:.1f}%"></div>'
+        for c, p in zip(color_vars, probs)
+    )
+    p0, p1, p2 = probs[0], probs[1], probs[2]
+    st.markdown(
+        f'<div class="verdict-card {css_cls}">'
+        f'<div class="verdict-label">{icon} {label}</div>'
+        f'<div class="verdict-conf">{conf:.1f}% confidence</div>'
+        f'<div class="minibar-wrap" style="width:220px;margin:8px auto 0">{segs}</div>'
+        f'<div style="font-size:0.70rem;margin-top:3px">'
+        f"sup {p0:.0%} &middot; ref {p1:.0%} &middot; nei {p2:.0%}"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
 # ── Architecture flow ─────────────────────────────────────────────────────────
 
-def _node(title: str, body_md: str) -> None:
-    """Render one layer node: bordered box with title + computed values."""
-    with st.container(border=True):
-        st.caption(title)
-        st.markdown(body_md)
-
-
-def _arrow(label: str = "") -> None:
-    txt = f"&nbsp;&nbsp;&nbsp;&nbsp;↓ &nbsp; *{label}*" if label else "&nbsp;&nbsp;&nbsp;&nbsp;↓"
-    st.markdown(txt, unsafe_allow_html=True)
+def _ev_table(headers: list[str], rows_data: list[list[str]]) -> str:
+    th = "".join(
+        f'<th style="padding:2px 5px;text-align:{"left" if j == 0 else "center"}">{h}</th>'
+        for j, h in enumerate(headers)
+    )
+    trs = ""
+    for row in rows_data:
+        tds = "".join(
+            f'<td style="padding:2px 5px;text-align:{"left" if j == 0 else "center"}">{cell}</td>'
+            for j, cell in enumerate(row)
+        )
+        trs += f"<tr>{tds}</tr>"
+    return (
+        '<table style="font-size:0.75rem;border-collapse:collapse;width:100%">'
+        f"<tr>{th}</tr>{trs}</table>"
+    )
 
 
 def _render_arch_flow(result: dict, model_key: str) -> None:
-    """Visual NN architecture flow with actual computed values at each layer."""
     is_nli    = model_key == "v3-nli"
     has_ec    = result["has_ec"]
     breakdown = result["evidence_breakdown"]
     n_ev      = len(breakdown)
-    ev_dim    = "403d  (400 + NLI 3d)" if is_nli else "400d"
+    ev_dim    = "403d (400 + NLI 3d)" if is_nli else "400d"
 
     # ── ① INPUT ──────────────────────────────────────────────────────────────
-    lines = [f"**Claim** → `390d`", f"**Evidence ×{n_ev}** → `{ev_dim}`"]
+    input_html = f"<div>Claim <b>390d</b> &nbsp;·&nbsp; Evidence &times;{n_ev} <b>{ev_dim}</b></div>"
     if is_nli:
+        nli_rows = []
         for i, ev in enumerate(breakdown):
-            nli = ev.get("nli_probs")
-            if nli:
-                lines.append(
-                    f"&nbsp;&nbsp;&nbsp;ev{i+1} NLI: "
-                    f"entail `{nli['entailment']:.3f}` · "
-                    f"contra `{nli['contradiction']:.3f}` · "
-                    f"neutral `{nli['neutral']:.3f}`"
-                )
-    _node("① INPUT FEATURES", "\n\n".join(lines))
+            nli = ev.get("nli_probs") or {}
+            e = nli.get("entailment", 0)
+            c = nli.get("contradiction", 0)
+            n = nli.get("neutral", 0)
+            nli_rows.append([
+                f"ev{i + 1}",
+                _chip(f"{e:.3f}", "chip-green" if e > 0.5 else "chip-gray"),
+                _chip(f"{c:.3f}", "chip-red" if c > 0.5 else "chip-gray"),
+                _chip(f"{n:.3f}", "chip-gray"),
+            ])
+        input_html += _ev_table(["ev", "entail", "contra", "neutral"], nli_rows)
+    _arch_box("", "①", "INPUT FEATURES", input_html)
 
-    _arrow("HeteroConv · GAT · 4 heads · 2 layers")
+    _arch_arrow("HeteroConv · GAT 4 heads · 2 layers")
 
-    # ── ② ENCODER OUTPUT ─────────────────────────────────────────────────────
-    _node(
-        "② GNN ENCODER OUTPUT",
-        "`claim_emb` → `256d`  ·  `ev_emb ×" + str(n_ev) + "` → `256d`\n\n"
-        "*Claim info flows into ev_emb via has_evidence / connected_to edges.*",
+    # ── ② ENCODER ────────────────────────────────────────────────────────────
+    _arch_box(
+        "enc", "②", "GNN ENCODER",
+        f"<div>claim_emb <b>256d</b> &nbsp;&middot;&nbsp; ev_emb &times;{n_ev} <b>256d</b></div>"
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">'
+        "Claim context flows into ev_emb via has_evidence / connected_to edges</div>",
     )
 
-    _arrow("parallel heads")
+    _arch_arrow("parallel heads")
 
-    # ── ③ H1 ‖ H2 ─────────────────────────────────────────────────────────
+    # ── ③ H1 ‖ H2 ─────────────────────────────────────────────────────────────
     c_h1, c_h2 = st.columns(2)
     with c_h1:
-        rows = ["| ev | stance | conf |", "|---|---|---|"]
+        h1_rows = []
         for i, ev in enumerate(breakdown):
-            icon = _STANCE_ICON.get(ev["stance"], "⚪")
-            rows.append(f"| ev{i+1} | {icon} {ev['stance']} | `{ev['stance_confidence']:.0%}` |")
-        _node("③a STANCE HEAD (H1)  Linear(256→3)", "\n".join(rows))
+            stance = ev["stance"]
+            conf   = ev["stance_confidence"]
+            h1_rows.append([
+                f"ev{i + 1}",
+                _chip(stance, _STANCE_CHIP_CLS.get(stance, "chip-gray")),
+                _chip(f"{conf:.0%}", "chip-gray"),
+            ])
+        _arch_box("stance", "③a", "STANCE HEAD (H1) &nbsp; Linear(256→3)",
+                  _ev_table(["ev", "stance", "conf"], h1_rows))
+
     with c_h2:
-        rows = ["| ev | IS pred |", "|---|---|"]
+        h2_rows = []
         for i, ev in enumerate(breakdown):
-            rows.append(f"| ev{i+1} | `{ev['is_score']:.3f}` |")
-        _node("③b IS HEAD (H2)  Linear(256→1)", "\n".join(rows))
+            is_val = ev["is_score"]
+            is_cls = "chip-green" if is_val > 0.5 else "chip-amber" if is_val > 0.3 else "chip-gray"
+            h2_rows.append([f"ev{i + 1}", _chip(f"{is_val:.3f}", is_cls)])
+        _arch_box("stance", "③b", "IS HEAD (H2) &nbsp; Linear(256→1)",
+                  _ev_table(["ev", "IS score"], h2_rows))
 
     # ── ④ NLI bypass (v3-nli only) ───────────────────────────────────────────
     if is_nli:
-        _arrow("v3-nli: NLI bypasses H1 in EC formula")
-        nli_rows = [
-            "| ev | entail→sup | contra→ref | neutral | EC stance |",
-            "|---|---|---|---|---|",
-        ]
+        _arch_arrow("v3-nli: NLI bypasses H1 in EC formula")
+        nli_rows4 = []
         for i, ev in enumerate(breakdown):
             nli = ev.get("nli_probs") or {}
             sup_p = nli.get("entailment", 0)
             ref_p = nli.get("contradiction", 0)
             neu_p = nli.get("neutral", 0)
-            best  = max(("sup", sup_p), ("ref", ref_p), ("neu", neu_p), key=lambda x: x[1])
-            icon  = {"sup": "🟢", "ref": "🔴", "neu": "⚪"}.get(best[0], "⚪")
-            nli_rows.append(
-                f"| ev{i+1} | `{sup_p:.3f}` | `{ref_p:.3f}` | `{neu_p:.3f}` | {icon} `{best[0]}` |"
+            best_lbl, _ = max(
+                [("sup", sup_p), ("ref", ref_p), ("neu", neu_p)], key=lambda x: x[1]
             )
-        _node(
-            "④ NLI CROSS-ENCODER BYPASS  (frozen DeBERTa-v3-small)",
-            "\n".join(nli_rows) + "\n\n"
-            "*Reorder: [contra, entail, neutral] → [ref, sup, neutral] for EC formula.*",
+            ec_cls = {"sup": "chip-green", "ref": "chip-red", "neu": "chip-gray"}.get(best_lbl, "chip-gray")
+            nli_rows4.append([
+                f"ev{i + 1}",
+                _chip(f"{sup_p:.3f}", "chip-green" if sup_p > 0.5 else "chip-gray"),
+                _chip(f"{ref_p:.3f}", "chip-red" if ref_p > 0.5 else "chip-gray"),
+                _chip(f"{neu_p:.3f}", "chip-gray"),
+                _chip(best_lbl, ec_cls),
+            ])
+        nli_note = (
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">'
+            "Reorder: [contra, entail, neutral] → [ref, sup, neutral] for EC formula</div>"
+        )
+        _arch_box(
+            "nli", "④",
+            "NLI CROSS-ENCODER BYPASS &nbsp; (frozen DeBERTa-v3-small)",
+            _ev_table(["ev", "entail→sup", "contra→ref", "neutral", "EC stance"], nli_rows4)
+            + nli_note,
         )
 
     # ── ⑤ EC FORMULA ─────────────────────────────────────────────────────────
     if has_ec:
-        num = "⑤" if not is_nli else "⑤"
-        _arrow()
-        ec_rows = [
-            "| ev | ST | EW | IS | EC = 1−(1−ST)^(EW×IS) |",
-            "|---|---|---|---|---|",
-        ]
+        _arch_arrow()
+        ec_rows = []
         for i, ev in enumerate(breakdown):
-            ec_rows.append(
-                f"| ev{i+1} | `{ev['source_trust']:.2f}` | `{ev['evidence_weight']:.2f}` "
-                f"| `{ev['is_score']:.3f}` | **`{ev['ec_score']:.3f}`** |"
-            )
-        _node(f"{num} EC FORMULA  EC = 1 − (1−ST)^(EW × IS)", "\n".join(ec_rows))
+            ec_val = ev["ec_score"]
+            st_val = ev["source_trust"]
+            ew_val = ev["evidence_weight"]
+            is_val = ev["is_score"]
+            ec_cls = "chip-green" if ec_val > 0.5 else "chip-amber" if ec_val > 0.2 else "chip-gray"
+            ec_rows.append([
+                f"ev{i + 1}",
+                _chip(f"{st_val:.2f}", "chip-gray"),
+                _chip(f"{ew_val:.2f}", "chip-gray"),
+                _chip(f"{is_val:.3f}", "chip-gray"),
+                _chip(f"{ec_val:.3f}", ec_cls),
+            ])
+        _arch_box("ec", "⑤", "EC FORMULA &nbsp; EC = 1−(1−ST)^(EW×IS)",
+                  _ev_table(["ev", "ST", "EW", "IS", "EC"], ec_rows))
 
     # ── ⑥ EC AGGREGATION ─────────────────────────────────────────────────────
     if has_ec:
-        _arrow("1 − ∏(1 − EC_i × p_stance_i)  across all evidence")
+        _arch_arrow("1 − ∏(1 − ECᵢ × p_stanceᵢ)  across all evidence")
         sup = result["support_score"]
         ref = result["refute_score"]
-        agg_num = "⑥"
-        with st.container(border=True):
-            st.caption(f"{agg_num} EC AGGREGATION")
-            ca, cb = st.columns(2)
-            with ca:
-                st.progress(min(sup, 1.0), text=f"🟢 support  `{sup:.3f}`")
-            with cb:
-                st.progress(min(ref, 1.0), text=f"🔴 refute   `{ref:.3f}`")
+        sup_w = min(sup * 100, 100)
+        ref_w = min(ref * 100, 100)
+        sup_chip = _chip(f"support {sup:.3f}", "chip-green" if sup > 0.35 else "chip-gray")
+        ref_chip = _chip(f"refute {ref:.3f}", "chip-red" if ref > 0.35 else "chip-gray")
+
+        def _bar(color: str, width: float) -> str:
+            return (
+                f'<div style="background:#e9ecef;border-radius:3px;height:6px;margin:3px 0">'
+                f'<div style="background:var(--{color});height:100%;width:{width:.1f}%;border-radius:3px"></div>'
+                f"</div>"
+            )
+
+        bars = (
+            f'<div style="margin:4px 0">{sup_chip}{_bar("green", sup_w)}</div>'
+            f'<div style="margin:4px 0">{ref_chip}{_bar("red", ref_w)}</div>'
+        )
+        _arch_box("ec", "⑥", "EC AGGREGATION", bars)
 
     # ── ⑦ VERDICT HEAD ───────────────────────────────────────────────────────
     vh_num = "⑦" if has_ec else "④"
-    _arrow()
+    _arch_arrow()
     if has_ec:
-        head_desc = (
-            "cat([scores `2d`, claim_emb `256d`]) → `258d`\n\n"
-            "Linear(258→128) → ReLU → Dropout → Linear(128→3)"
+        head_html = (
+            "<div>cat([EC scores <b>2d</b>, claim_emb <b>256d</b>]) → <b>258d</b>"
+            " → Linear(258→128) → ReLU → Dropout → Linear(128→3)</div>"
         )
     else:
-        head_desc = "Linear(256→128) → ReLU → Dropout → Linear(128→3)"
+        head_html = "<div>Linear(256→128) → ReLU → Dropout → Linear(128→3)</div>"
 
     probs = result["verdict_probs"]
-    prob_lines = []
+    prob_colors = {"supported": "green", "refuted": "red", "not_enough_evidence": "amber"}
+    prob_chip_cls = {"supported": "chip-green", "refuted": "chip-red", "not_enough_evidence": "chip-amber"}
+    short_labels  = {"supported": "supported", "refuted": "refuted", "not_enough_evidence": "NEI"}
+
+    prob_rows_html = ""
     for lbl, p in zip(_VERDICT_LABELS, probs):
-        icon = _VERDICT_META[lbl][0]
-        bar  = "█" * int(p * 20) + "░" * (20 - int(p * 20))
-        prob_lines.append(f"{icon} `{lbl}` &nbsp; `{bar}` &nbsp; `{p:.1%}`")
+        p_w    = p * 100
+        color  = prob_colors[lbl]
+        cls    = prob_chip_cls[lbl]
+        slbl   = short_labels[lbl]
+        prob_rows_html += (
+            f'<div style="margin:4px 0;display:flex;align-items:center;gap:6px">'
+            f'{_chip(slbl, cls)}'
+            f'<div style="flex:1;background:#e9ecef;border-radius:3px;height:6px">'
+            f'<div style="background:var(--{color});height:100%;width:{p_w:.1f}%;border-radius:3px"></div>'
+            f"</div>"
+            f'<span style="font-size:0.75rem;min-width:38px">{p:.1%}</span>'
+            f"</div>"
+        )
+    _arch_box("verdict", vh_num, "VERDICT HEAD", head_html + prob_rows_html)
 
-    _node(
-        f"{vh_num} VERDICT HEAD",
-        head_desc + "\n\n" + "\n\n".join(prob_lines),
-    )
-
-    # ── ⑧ FINAL VERDICT ──────────────────────────────────────────────────────
-    _arrow()
-    verdict = result["verdict"]
-    icon, label, color = _VERDICT_META.get(verdict, ("❓", verdict.upper(), "#888"))
-    st.markdown(
-        f"<div style='border:2px solid {color}; border-radius:6px; padding:12px 18px; "
-        f"font-size:1.3rem; font-weight:700; color:{color}; text-align:center;'>"
-        f"{icon} {label}</div>",
-        unsafe_allow_html=True,
-    )
+    # ── Final verdict ─────────────────────────────────────────────────────────
+    _arch_arrow()
+    _render_verdict_card(result)
 
 
 # ── Layer-wise reasoning display ──────────────────────────────────────────────
 
 def _render_layerwise(result: dict, model_key: str, true_label: str | None = None) -> None:
-    """Minimal layer-by-layer reasoning trace."""
-    is_nli   = (model_key == "v3-nli")
-    has_ec   = result["has_ec"]
-    verdict  = result["verdict"]
-    v_icon   = _VERDICT_META.get(verdict, ("❓",))[0]
+    is_nli    = (model_key == "v3-nli")
+    has_ec    = result["has_ec"]
+    verdict   = result["verdict"]
+    v_icon    = _VERDICT_META.get(verdict, ("?",))[0]
     breakdown = result["evidence_breakdown"]
 
-    # ── optional true-label header ────────────────────────────────────────────
     if true_label is not None:
-        t_icon = _VERDICT_META.get(true_label, ("❓",))[0]
-        match = verdict == true_label
+        t_icon = _VERDICT_META.get(true_label, ("?",))[0]
+        match  = verdict == true_label
         st.markdown(
             f"{'✅' if match else '❌'} &nbsp; "
             f"True: **{t_icon} {true_label}** &nbsp;·&nbsp; "
@@ -391,57 +559,51 @@ def _render_layerwise(result: dict, model_key: str, true_label: str | None = Non
         )
         st.divider()
 
-    # ── per-evidence layers ───────────────────────────────────────────────────
     for i, ev in enumerate(breakdown):
-        text_preview = ev["text_short"][:100] + ("…" if len(ev["text_short"]) > 100 else "")
-        st.markdown(f"**Evidence {i + 1}**  ·  *{text_preview}*")
+        preview = ev["text_short"][:100] + ("…" if len(ev["text_short"]) > 100 else "")
+        st.markdown(f"**Evidence {i + 1}**  ·  *{preview}*")
 
         rows: list[tuple[str, str]] = []
 
         if is_nli and ev.get("nli_probs"):
             nli = ev["nli_probs"]
+            e, c, n = nli["entailment"], nli["contradiction"], nli["neutral"]
             rows.append((
                 "① NLI cross-encoder",
-                f"entail `{nli['entailment']:.1%}` &nbsp; "
-                f"contra `{nli['contradiction']:.1%}` &nbsp; "
-                f"neutral `{nli['neutral']:.1%}`",
+                f"entail `{e:.1%}` &nbsp; contra `{c:.1%}` &nbsp; neutral `{n:.1%}`",
             ))
 
-        s_icon = _STANCE_ICON.get(ev["stance"], "⚪")
+        stance = ev["stance"]
+        s_icon = {"supports": "🟢", "refutes": "🔴", "neutral": "⚪"}.get(stance, "⚪")
         rows.append((
             "② Stance head (H1)",
-            f"{s_icon} **{ev['stance']}** &nbsp; conf `{ev['stance_confidence']:.0%}`",
+            f"{s_icon} **{stance}** &nbsp; conf `{ev['stance_confidence']:.0%}`",
         ))
-
-        rows.append((
-            "③ IS head (H2)",
-            f"`{ev['is_score']:.3f}`",
-        ))
+        rows.append(("③ IS head (H2)", f"`{ev['is_score']:.3f}`"))
 
         if has_ec:
+            ec = ev["ec_score"]
+            st_v = ev["source_trust"]
+            ew   = ev["evidence_weight"]
+            is_v = ev["is_score"]
             rows.append((
                 "④ EC formula",
-                f"`{ev['ec_score']:.3f}` &nbsp; "
-                f"ST `{ev['source_trust']:.2f}` · EW `{ev['evidence_weight']:.2f}` · IS `{ev['is_score']:.3f}`",
+                f"`{ec:.3f}` &nbsp; ST `{st_v:.2f}` · EW `{ew:.2f}` · IS `{is_v:.3f}`",
             ))
 
-        rows.append((
-            "⑤ Pramana",
-            f"{_PRAMANA_SHORT.get(ev['modality'], '—')} · "
-            f"{_MODALITY_LABELS.get(ev['modality'], ev['modality'])} · "
-            f"{_SOURCE_LABELS.get(ev['source_type'], ev['source_type'])}",
-        ))
+        pram = _PRAMANA_SHORT.get(ev.get("modality", "web_text"), "—")
+        mod  = _MODALITY_LABELS.get(ev.get("modality", "web_text"), ev.get("modality", ""))
+        src  = _SOURCE_LABELS.get(ev.get("source_type", "unknown"), ev.get("source_type", ""))
+        rows.append(("⑤ Pramana", f"{pram} · {mod} · {src}"))
 
-        # render as mini table
-        tbl = "| Layer | Value |\n|---|---|\n"
-        for label, value in rows:
-            tbl += f"| {label} | {value} |\n"
+        tbl = "| Layer | Value |\n|---|---|\n" + "".join(
+            f"| {label} | {value} |\n" for label, value in rows
+        )
         st.markdown(tbl)
 
         if i < len(breakdown) - 1:
             st.markdown("")
 
-    # ── aggregation + verdict ─────────────────────────────────────────────────
     st.divider()
 
     if has_ec:
@@ -460,7 +622,7 @@ def _render_layerwise(result: dict, model_key: str, true_label: str | None = Non
                 st.progress(p, text=f"{icon} {p:.0%}")
     else:
         probs = result["verdict_probs"]
-        st.markdown("**⑥ Verdict head**")
+        st.markdown("**④ Verdict head**")
         for lbl, p in zip(_VERDICT_LABELS, probs):
             icon = _VERDICT_META[lbl][0]
             st.progress(p, text=f"{icon} {p:.0%}")
@@ -468,7 +630,87 @@ def _render_layerwise(result: dict, model_key: str, true_label: str | None = Non
     st.markdown(f"**Final verdict: {v_icon} {verdict.upper().replace('_', ' ')}**")
 
 
-# ── Verify tab results ────────────────────────────────────────────────────────
+# ── Debug view ────────────────────────────────────────────────────────────────
+
+def _render_debug_view(result: dict, claim: str) -> None:
+    breakdown = result["evidence_breakdown"]
+    is_nli    = any(ev.get("nli_probs") is not None for ev in breakdown)
+    has_ec    = result["has_ec"]
+
+    st.markdown("**Claim**")
+    st.markdown(f"> {claim}")
+
+    claim_triples = result.get("claim_triples") or []
+    if claim_triples:
+        st.markdown("*Claim triples:*")
+        st.markdown(
+            "".join(_render_triple(t) for t in claim_triples),
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("**Evidence Items**")
+    for i, ev in enumerate(breakdown):
+        stance   = ev["stance"]
+        s_cls    = _STANCE_CHIP_CLS.get(stance, "chip-gray")
+        label_tx = ev["text_short"][:60]
+
+        with st.expander(f"Evidence {i + 1} · {stance} · {label_tx}", expanded=False):
+            st.markdown(ev["text"])
+            triples = ev.get("triples") or []
+            if triples:
+                st.markdown("*Triples:*")
+                st.markdown(
+                    "".join(_render_triple(t) for t in triples),
+                    unsafe_allow_html=True,
+                )
+            st.divider()
+
+            pram    = _PRAMANA_SHORT.get(ev.get("modality", "web_text"), "Shabda")
+            mod_lbl = _MODALITY_LABELS.get(ev.get("modality", "web_text"), ev.get("modality", ""))
+            src_lbl = _SOURCE_LABELS.get(ev.get("source_type", "unknown"), ev.get("source_type", ""))
+            ec_val  = ev.get("ec_score", 0.0)
+            ec_cls  = "chip-green" if ec_val > 0.5 else "chip-amber" if ec_val > 0.2 else "chip-gray"
+
+            prop_rows: list[tuple[str, str]] = [
+                ("Pramana",          _chip(pram, "chip-blue")),
+                ("Modality",         _chip(mod_lbl, "chip-gray")),
+                ("Source type",      _chip(src_lbl, "chip-gray")),
+                ("Source trust",     f"`{ev.get('source_trust', 0):.3f}`"),
+                ("Evidence weight",  f"`{ev.get('evidence_weight', 0):.3f}`"),
+                ("IS score",         f"`{ev.get('is_score', 0):.3f}`"),
+            ]
+            if has_ec:
+                prop_rows.append(("EC score", _chip(f"{ec_val:.3f}", ec_cls)))
+            prop_rows.append(("Stance",            _chip(stance, s_cls)))
+            prop_rows.append(("Stance confidence", f"`{ev.get('stance_confidence', 0):.3f}`"))
+
+            nli = ev.get("nli_probs")
+            if is_nli and nli:
+                e_val = nli["entailment"]
+                c_val = nli["contradiction"]
+                n_val = nli["neutral"]
+                prop_rows.extend([
+                    ("NLI entailment",    _chip(f"{e_val:.3f}", "chip-green" if e_val > 0.5 else "chip-gray")),
+                    ("NLI contradiction", _chip(f"{c_val:.3f}", "chip-red" if c_val > 0.5 else "chip-gray")),
+                    ("NLI neutral",       _chip(f"{n_val:.3f}", "chip-gray")),
+                ])
+
+            tbl = "| Property | Value |\n|---|---|\n" + "".join(
+                f"| {prop} | {val} |\n" for prop, val in prop_rows
+            )
+            st.markdown(tbl, unsafe_allow_html=True)
+
+    st.markdown("**Verdict Summary**")
+    _render_verdict_card(result)
+
+    if has_ec:
+        sup = result.get("support_score", 0.0)
+        ref = result.get("refute_score", 0.0)
+        st.progress(min(sup, 1.0), text=f"🟢 support  {sup:.3f}")
+        st.progress(min(ref, 1.0), text=f"🔴 refute   {ref:.3f}")
+
+
+# ── Compare results (All Models) ──────────────────────────────────────────────
 
 def _render_compare_results(results: dict[str, dict | str]) -> None:
     cols = st.columns(4)
@@ -480,15 +722,9 @@ def _render_compare_results(results: dict[str, dict | str]) -> None:
                 st.info("—")
                 continue
             if isinstance(result, str):
-                st.error(result[:60])
+                st.error(result[:80])
                 continue
-            icon, label, color = _VERDICT_META.get(result["verdict"], ("❓", "UNKNOWN", "#888"))
-            st.markdown(
-                f"<span style='color:{color}; font-weight:700;'>{icon} {label}</span>",
-                unsafe_allow_html=True,
-            )
-            for lbl, p in zip(_VERDICT_LABELS, result["verdict_probs"]):
-                st.progress(p, text=f"{_VERDICT_META[lbl][0]} {p:.0%}")
+            _render_verdict_card(result)
             if result["has_ec"]:
                 s, r = result["support_score"], result["refute_score"]
                 st.caption(f"EC sup `{s:.3f}` ref `{r:.3f}`")
@@ -499,8 +735,96 @@ def _render_compare_results(results: dict[str, dict | str]) -> None:
         None,
     )
     if best:
-        st.markdown(f"*Layerwise trace — **{best}***")
+        st.markdown(f"*Layer trace — **{best}***")
         _render_layerwise(results[best], best)
+
+
+# ── Evaluation export helpers ─────────────────────────────────────────────────
+
+_PLACEHOLDER_TEXTS = frozenset([
+    "no sensor evidence found for this object type.",
+    "no evidence found.",
+])
+_QA_PREFIXES = ("q:", "did ", "does ", "is ", "are ", "was ", "were ", "have ", "has ", "can ", "could ", "would ")
+
+
+def _failure_pattern(row: dict) -> str:
+    if row["pred"] is None:
+        return "error"
+    if row["pred"] == row["true"]:
+        return "correct"
+    result = row.get("result") or {}
+    has_ec = result.get("has_ec", False)
+    sup = result.get("support_score", 0.0)
+    ref = result.get("refute_score", 0.0)
+    if has_ec:
+        if ref > 0.35 and row["pred"] != "refuted":
+            return "ec_override_fix"
+        if sup > 0.35 and row["pred"] != "supported":
+            return "ec_override_fix"
+        if max(sup, ref) < 0.20:
+            return "all_neutral_ec"
+    bd = result.get("evidence_breakdown") or []
+    if any((ev.get("text") or "").strip().lower() in _PLACEHOLDER_TEXTS for ev in bd):
+        return "placeholder_ev"
+    if any((ev.get("text") or "").lower().lstrip().startswith(_QA_PREFIXES) for ev in bd):
+        return "qa_format_ev"
+    return "genuine_error"
+
+
+def _build_eval_export(rows: list[dict]) -> str:
+    export = []
+    for row in rows:
+        result = row.get("result") or {}
+        probs  = result.get("verdict_probs") or [0.0, 0.0, 0.0]
+        sup    = result.get("support_score", 0.0)
+        ref    = result.get("refute_score", 0.0)
+        bd     = result.get("evidence_breakdown") or []
+        pred   = row.get("pred")
+        true   = row.get("true", "")
+
+        has_placeholder = any(
+            (ev.get("text") or "").strip().lower() in _PLACEHOLDER_TEXTS for ev in bd
+        )
+        has_qa = any(
+            (ev.get("text") or "").lower().lstrip().startswith(_QA_PREFIXES) for ev in bd
+        )
+        ec_disagrees = (ref > 0.35 and pred != "refuted") or (sup > 0.35 and pred != "supported")
+
+        # Evidence summary: keep full breakdown for diagnosis
+        evidence_summary = [
+            {
+                "text":               ev.get("text", ""),
+                "stance":             ev.get("stance"),
+                "stance_confidence":  ev.get("stance_confidence"),
+                "is_score":           ev.get("is_score"),
+                "source_trust":       ev.get("source_trust"),
+                "evidence_weight":    ev.get("evidence_weight"),
+                "ec_score":           ev.get("ec_score"),
+                "pramana":            ev.get("pramana"),
+                "source_type":        ev.get("source_type"),
+                "nli_probs":          ev.get("nli_probs"),
+            }
+            for ev in bd
+        ]
+
+        export.append({
+            "model":             row.get("model", ""),
+            "source_dataset":    row.get("source", ""),
+            "claim":             row.get("claim", ""),
+            "true_label":        true,
+            "predicted_label":   pred,
+            "correct":           pred == true if pred is not None else None,
+            "support_score":     round(sup, 4),
+            "refute_score":      round(ref, 4),
+            "verdict_probs":     {"supported": round(probs[0], 4), "refuted": round(probs[1], 4), "nei": round(probs[2], 4)},
+            "has_placeholder_ev": has_placeholder,
+            "has_qa_ev":         has_qa,
+            "ec_disagrees":      ec_disagrees,
+            "failure_pattern":   _failure_pattern(row),
+            "evidence":          evidence_summary,
+        })
+    return json.dumps(export, indent=2, ensure_ascii=False)
 
 
 # ── Evaluate tab ──────────────────────────────────────────────────────────────
@@ -520,9 +844,7 @@ def _render_evaluate_tab(selected_key: str) -> None:
         fixed = st.checkbox("Fixed seed", value=False)
         seed  = st.number_input("Seed", value=42, step=1, label_visibility="collapsed") if fixed else None
 
-    run = st.button("▶ Run", type="primary")
-
-    if run:
+    if st.button("▶ Run", type="primary"):
         rng    = random.Random(seed)
         sample = rng.sample(records, min(n, len(records)))
         prog   = st.progress(0.0, text="Loading…")
@@ -537,7 +859,7 @@ def _render_evaluate_tab(selected_key: str) -> None:
             for rec in sample:
                 step += 1
                 prog.progress(step / total, text=f"{m} · {step}/{total}")
-                true = rec["verdict"]["label"]
+                true   = rec["verdict"]["label"]
                 source = rec.get("provenance", {}).get("dataset", "?")
                 if isinstance(pred, str):
                     rows.append({"model": m, "claim": rec["claim"], "true": true,
@@ -553,8 +875,7 @@ def _render_evaluate_tab(selected_key: str) -> None:
                                  "error": str(exc)})
 
         prog.empty()
-        st.session_state["eval_rows"]  = rows
-        st.session_state["eval_model"] = models_to_eval[0] if len(models_to_eval) == 1 else _ALL_KEY
+        st.session_state["eval_rows"]   = rows
         st.session_state["inspect_idx"] = None
 
     rows = st.session_state.get("eval_rows")
@@ -573,38 +894,60 @@ def _render_evaluate_tab(selected_key: str) -> None:
 
         correct = sum(r["pred"] == r["true"] for r in valid)
         acc     = correct / len(valid)
-        tp: Counter = Counter(); fp: Counter = Counter(); fn: Counter = Counter()
+        tp: Counter = Counter()
+        fp: Counter = Counter()
+        fn: Counter = Counter()
         for r in valid:
             t, p = r["true"], r["pred"]
-            if t == p:  tp[t] += 1
-            else:       fp[p] += 1; fn[t] += 1
+            if t == p:
+                tp[t] += 1
+            else:
+                fp[p] += 1
+                fn[t] += 1
         f1s = []
         for lbl in _VERDICT_LABELS:
-            pr = tp[lbl] / (tp[lbl] + fp[lbl]) if tp[lbl] + fp[lbl] else 0
-            re = tp[lbl] / (tp[lbl] + fn[lbl]) if tp[lbl] + fn[lbl] else 0
-            f1s.append(2 * pr * re / (pr + re) if pr + re else 0)
+            pr = tp[lbl] / (tp[lbl] + fp[lbl]) if tp[lbl] + fp[lbl] else 0.0
+            re = tp[lbl] / (tp[lbl] + fn[lbl]) if tp[lbl] + fn[lbl] else 0.0
+            f1s.append(2 * pr * re / (pr + re) if pr + re else 0.0)
         mf1 = sum(f1s) / len(f1s)
 
         with st.container(border=True):
             st.markdown(f"**{m}**")
             c1, c2, c3 = st.columns(3)
-            c1.metric("Accuracy",  f"{acc:.1%}")
-            c2.metric("Macro F1",  f"{mf1:.3f}")
-            c3.metric("n",         f"{len(valid)}/{len(mrows)}")
-
+            c1.metric("Accuracy", f"{acc:.1%}")
+            c2.metric("Macro F1", f"{mf1:.3f}")
+            c3.metric("n",        f"{len(valid)}/{len(mrows)}")
             fc = st.columns(3)
             for i, lbl in enumerate(_VERDICT_LABELS):
-                fc[i].metric(
-                    f"{_VERDICT_META[lbl][0]} F1",
-                    f"{f1s[i]:.3f}",
-                    help=lbl,
-                )
+                fc[i].metric(f"{_VERDICT_META[lbl][0]} F1", f"{f1s[i]:.3f}", help=lbl)
+
+    # ── download button ───────────────────────────────────────────────────────
+    valid_rows = [r for r in rows if r.get("pred") is not None]
+    if valid_rows:
+        json_data = _build_eval_export(rows)
+        c_dl, c_pat = st.columns([2, 5])
+        with c_dl:
+            st.download_button(
+                "⬇ Download JSON",
+                json_data,
+                file_name="eval_results.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+        with c_pat:
+            patterns = Counter(_failure_pattern(r) for r in rows)
+            pat_parts = []
+            for pat in ["correct", "ec_override_fix", "all_neutral_ec",
+                        "placeholder_ev", "qa_format_ev", "genuine_error", "error"]:
+                n = patterns.get(pat, 0)
+                if n:
+                    pat_parts.append(f"`{pat}` ×{n}")
+            st.caption("  ·  ".join(pat_parts))
 
     st.divider()
 
     # ── inspection table ─────────────────────────────────────────────────────
-    st.markdown("**Predictions** — click Inspect to trace layer-wise reasoning")
-
+    st.markdown("**Predictions** — expand to trace layer-wise reasoning")
     inspect_model = all_models[0] if len(all_models) == 1 else st.selectbox(
         "Show predictions for", all_models, label_visibility="collapsed"
     )
@@ -614,22 +957,23 @@ def _render_evaluate_tab(selected_key: str) -> None:
         if row["pred"] is None:
             continue
         ok     = row["pred"] == row["true"]
-        t_icon = _VERDICT_META.get(row["true"],  ("❓",))[0]
-        p_icon = _VERDICT_META.get(row["pred"],  ("❓",))[0]
+        t_icon = _VERDICT_META.get(row["true"], ("?",))[0]
+        p_icon = _VERDICT_META.get(row["pred"], ("?",))[0]
         marker = "✅" if ok else "❌"
 
+        claim_snip = row["claim"][:70] + ("…" if len(row["claim"]) > 70 else "")
         with st.expander(
-            f"{marker}  {row['source']}  ·  "
-            f"{row['claim'][:70]}{'…' if len(row['claim']) > 70 else ''}  "
-            f"[{t_icon}→{p_icon}]",
+            f"{marker}  {row['source']}  ·  {claim_snip}  [{t_icon}→{p_icon}]",
             expanded=False,
         ):
             if row["result"] is not None:
-                t_a, t_t = st.tabs(["Architecture Flow", "Layer Table"])
+                t_a, t_t, t_d = st.tabs(["Architecture Flow", "Layer Table", "Debug"])
                 with t_a:
                     _render_arch_flow(row["result"], inspect_model)
                 with t_t:
                     _render_layerwise(row["result"], inspect_model, true_label=row["true"])
+                with t_d:
+                    _render_debug_view(row["result"], row["claim"])
             else:
                 st.error(row.get("error", "no result"))
 
@@ -643,10 +987,7 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    st.markdown(
-        "<style>.stProgress > div > div > div { border-radius:3px; }</style>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(_CSS, unsafe_allow_html=True)
 
     selected_key = _render_sidebar()
     _init_state()
@@ -711,11 +1052,14 @@ def main() -> None:
                             st.error(str(exc))
                             return
                     st.markdown("---")
-                    t_arch, t_table = st.tabs(["Architecture Flow", "Layer Table"])
+                    _render_verdict_card(result)
+                    t_arch, t_table, t_debug = st.tabs(["Architecture Flow", "Layer Table", "Debug"])
                     with t_arch:
                         _render_arch_flow(result, selected_key)
                     with t_table:
                         _render_layerwise(result, selected_key)
+                    with t_debug:
+                        _render_debug_view(result, claim.strip())
 
     # ── Evaluate ──────────────────────────────────────────────────────────────
     with tab_eval:
