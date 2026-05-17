@@ -109,6 +109,12 @@ _REGISTRY_TYPE_TO_CATEGORY: dict[str, str] = {
     "knowledge_graph": "academic",
     "social_media": "social_media",
     "simulation": "simulation",
+    # Previously unmapped — fall to unknown encoder slot rather than silent mismatch
+    "web_archive": "unknown",
+    "llm_generated": "unknown",
+    "ngo_or_org": "unknown",
+    "web_text": "unknown",
+    "unknown": "unknown",
 }
 
 

@@ -30,7 +30,11 @@ class EpistemicFactDataset(InMemoryDataset):
         use_nli: bool = False,
     ):
         self._jsonl_path = Path(jsonl_path)
-        self._pt_cache = Path(pt_cache)
+        _pt_cache = Path(pt_cache)
+        # Namespace cache by NLI flag so 400d and 403d graphs never collide
+        if use_nli and not _pt_cache.stem.endswith("_nli"):
+            _pt_cache = _pt_cache.with_stem(_pt_cache.stem + "_nli")
+        self._pt_cache = _pt_cache
         self._registry = load_source_trust_registry(registry_path)
         self._featurizer = featurizer or Featurizer()
         self._force_rebuild = force_rebuild
@@ -60,6 +64,8 @@ class EpistemicFactDataset(InMemoryDataset):
                     continue
 
                 cg = builder.build(record)
+                if cg is None:
+                    continue  # skip records with no evidence after filtering
                 if cg.label < 0:
                     continue  # skip unmapped verdicts (e.g. conflicting_evidence if any slip through)
 

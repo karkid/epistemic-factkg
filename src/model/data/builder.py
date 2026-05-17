@@ -55,11 +55,11 @@ class ClaimGraphBuilder:
     # Public API
     # ------------------------------------------------------------------
 
-    def build(self, record: dict) -> ClaimGraph:
+    def build(self, record: dict) -> ClaimGraph | None:
         """Convert a single v3.0 record to a ClaimGraph.
 
-        Returns None implicitly only if verdict is unknown — callers should
-        filter to training evidence types before calling build().
+        Returns None if no evidence remains after filtering, or if verdict is
+        unknown. Callers should filter to training evidence types before calling build().
         """
         data = HeteroData()
         evidence_items = record.get("evidence", [])
@@ -82,11 +82,14 @@ class ClaimGraphBuilder:
             if not _VAGUE_PLACEHOLDER.search(ev.get("text") or "")
         ]
 
-        # Fix J: drop near-duplicate evidence items (first 80 chars fingerprint)
+        # Drop evidence items with empty or whitespace-only text
+        evidence_items = [ev for ev in evidence_items if (ev.get("text") or "").strip()]
+
+        # Fix J: drop near-duplicate evidence items (full-text fingerprint)
         _seen_ev: set[str] = set()
         _deduped = []
         for ev in evidence_items:
-            key = (ev.get("text") or "").strip().lower()[:80]
+            key = (ev.get("text") or "").strip().lower()
             if key not in _seen_ev:
                 _seen_ev.add(key)
                 _deduped.append(ev)
@@ -104,30 +107,23 @@ class ClaimGraphBuilder:
 
         # ── Evidence nodes ────────────────────────────────────────────
         n_ev = len(evidence_items)
-        ev_dim = 403 if self.use_nli else 400
         if n_ev == 0:
-            # Degenerate graph — create a dummy evidence node so edges are valid
-            data[NodeType.EVIDENCE].x = torch.zeros(1, ev_dim, dtype=torch.float32)
-            data[NodeType.EVIDENCE].stance_y = torch.tensor([2], dtype=torch.long)
-            data[NodeType.EVIDENCE].is_y = torch.tensor([0.0], dtype=torch.float32)
-            data[NodeType.EVIDENCE].ew = torch.tensor([0.0], dtype=torch.float32)
-            data[NodeType.EVIDENCE].st = torch.tensor([0.0], dtype=torch.float32)
-            n_ev = 1
-        else:
-            nli_probs = None
-            if self.use_nli:
-                ev_texts = [ev.get("text", "") for ev in evidence_items]
-                nli_probs = self.featurizer.encode_nli_stance(
-                    record["claim"], ev_texts
-                )  # [N_ev, 3]
-            ev_features, stance_y, is_y, ew_vals, st_vals = self._build_evidence(
-                evidence_items, nli_probs=nli_probs
-            )
-            data[NodeType.EVIDENCE].x = ev_features  # [N_ev, 400] or [N_ev, 403]
-            data[NodeType.EVIDENCE].stance_y = stance_y  # [N_ev]
-            data[NodeType.EVIDENCE].is_y = is_y  # [N_ev]
-            data[NodeType.EVIDENCE].ew = ew_vals  # [N_ev]
-            data[NodeType.EVIDENCE].st = st_vals  # [N_ev]
+            return None  # no evidence remains after filtering — skip record
+
+        nli_probs = None
+        if self.use_nli:
+            ev_texts = [ev.get("text", "") for ev in evidence_items]
+            nli_probs = self.featurizer.encode_nli_stance(
+                record["claim"], ev_texts
+            )  # [N_ev, 3]
+        ev_features, stance_y, is_y, ew_vals, st_vals = self._build_evidence(
+            evidence_items, nli_probs=nli_probs
+        )
+        data[NodeType.EVIDENCE].x = ev_features  # [N_ev, 400] or [N_ev, 403]
+        data[NodeType.EVIDENCE].stance_y = stance_y  # [N_ev]
+        data[NodeType.EVIDENCE].is_y = is_y  # [N_ev]
+        data[NodeType.EVIDENCE].ew = ew_vals  # [N_ev]
+        data[NodeType.EVIDENCE].st = st_vals  # [N_ev]
 
         # ── Triple nodes (AI2THOR only) ───────────────────────────────
         triple_texts, has_triple_idx, from_triple_idx = self._collect_triples(
@@ -153,11 +149,18 @@ class ClaimGraphBuilder:
             NodeType.EVIDENCE, EdgeType.CONNECTED_TO, NodeType.CLAIM
         ].edge_index = torch.stack([ev_range, claim_idx])  # [2, N_ev]
 
-        # evidence → evidence (fully connected within claim)
+        # evidence → evidence (windowed co-evidence: max 5 nearest neighbours per node)
+        # Fully-connected O(N²) caused over-smoothing for dense AVeriTeC claims (max 16 ev).
+        _MAX_CO_EV = 5
         if n_ev > 1:
-            src, dst = zip(
-                *[(i, j) for i in range(n_ev) for j in range(n_ev) if i != j]
-            )
+            pairs = []
+            for i in range(n_ev):
+                near = sorted(
+                    [j for j in range(n_ev) if j != i], key=lambda j: abs(j - i)
+                )
+                for j in near[:_MAX_CO_EV]:
+                    pairs.append((i, j))
+            src, dst = zip(*pairs)
             data[
                 NodeType.EVIDENCE, EdgeType.CO_EVIDENCE, NodeType.EVIDENCE
             ].edge_index = torch.tensor([list(src), list(dst)], dtype=torch.long)

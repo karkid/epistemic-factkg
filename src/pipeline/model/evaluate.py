@@ -199,7 +199,7 @@ def main() -> None:
     # ── Load test records ─────────────────────────────────────────────────────
     test_records = _load_test_records(Path(args.jsonl), Path(args.splits_dir))
     registry = load_source_trust_registry(args.registry)
-    featurizer = Featurizer(cache_path=args.embed_cache)
+    featurizer = Featurizer(cache_path=args.embed_cache, device=args.device)
     builder = ClaimGraphBuilder(registry, featurizer, use_nli=is_nli)
 
     # ── Accumulators ─────────────────────────────────────────────────────────
@@ -218,6 +218,10 @@ def main() -> None:
             try:
                 g = builder.build(record)
             except Exception:
+                skipped += 1
+                continue
+
+            if g is None:
                 skipped += 1
                 continue
 

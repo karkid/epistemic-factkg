@@ -86,9 +86,13 @@ def _build_graphs(
     for rec in subset:
         try:
             g = builder.build(rec)
-            graphs.append(g.data)
         except Exception:
             skipped += 1
+            continue
+        if g is None:
+            skipped += 1
+            continue
+        graphs.append(g.data)
     if verbose:
         print(f"  {split_name}: {len(graphs)} graphs  ({skipped} skipped)")
     return graphs
@@ -117,7 +121,7 @@ def main() -> None:
 
     if args.verbose:
         print("Building graphs...")
-    featurizer = Featurizer(cache_path=args.embed_cache)
+    featurizer = Featurizer(cache_path=args.embed_cache, device=args.device)
     registry = load_source_trust_registry(args.registry)
     is_nli = MODELS.get(args.model) is NLIHybridHGNN
     builder = ClaimGraphBuilder(registry, featurizer, use_nli=is_nli)

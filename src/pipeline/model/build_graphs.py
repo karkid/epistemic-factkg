@@ -30,6 +30,7 @@ def main() -> None:
         "--use-nli", action="store_true",
         help="Append NLI stance probs to evidence features (403d, for v3-nli)",
     )
+    ap.add_argument("--device", default=None, help="Embedding device: cuda or cpu (default: auto-detect)")
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()
 
@@ -50,7 +51,7 @@ def main() -> None:
     if args.verbose:
         print(f"Building graph dataset from {in_path}...")
 
-    featurizer = Featurizer(cache_path=args.embed_cache)
+    featurizer = Featurizer(cache_path=args.embed_cache, device=args.device)
     dataset = EpistemicFactDataset(
         jsonl_path=in_path,
         pt_cache=out_path,

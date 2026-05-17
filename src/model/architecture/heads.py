@@ -42,14 +42,18 @@ class VerdictHead(nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        self.linear = nn.Linear(3, 3)
+        self.mlp = nn.Sequential(
+            nn.Linear(3, 32),
+            nn.ReLU(),
+            nn.Linear(32, 3),
+        )
 
     def forward(self, scores: torch.Tensor) -> torch.Tensor:
         """scores: [N_claims, 3] — (support_score, refute_score, nei_score) per claim."""
-        return self.linear(scores)
+        return self.mlp(scores)
 
 
-_PROJ_DIM = 16  # claim_emb bottleneck — keeps EC scores (3D) proportionally influential
+_PROJ_DIM = 64  # claim_emb bottleneck — keeps EC scores (3D) proportionally influential
 
 
 class HybridVerdictHead(nn.Module):

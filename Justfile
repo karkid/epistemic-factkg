@@ -31,6 +31,7 @@ MODEL_NAME          := "v1-hgnn"
 CHECKPOINTS_DIR     := "out/model/" + MODEL_NAME + "/checkpoints"
 MODEL_REPORT_DIR    := "out/reports/model/" + MODEL_NAME
 RESULTS_DIR         := "out/reports/model/" + MODEL_NAME + "/eval"
+DEVICE              := `uv run python -c "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')"`
 
 
 # ╔═════════════════════════════════════════════════════════════════════════════╗
@@ -121,6 +122,7 @@ graph:
         --input {{TRAINING_JSONL}} \
         --output {{GRAPH_DATASET}} \
         --embed-cache out/model/graphs/embed_cache.pkl \
+        --device {{DEVICE}} \
         --verbose
 
 
@@ -133,6 +135,7 @@ graph-nli:
         --output {{GRAPH_DATASET_NLI}} \
         --embed-cache out/model/graphs/embed_cache.pkl \
         --use-nli \
+        --device {{DEVICE}} \
         --verbose
 
 
@@ -150,7 +153,7 @@ train model=MODEL_NAME:
         --epochs 100 \
         --lr 3e-4 \
         --batch-size 32 \
-        --device cpu \
+        --device {{DEVICE}} \
         --verbose
 
 
@@ -164,7 +167,8 @@ eval model=MODEL_NAME:
         --checkpoint out/model/{{model}}/checkpoints/best_model.pt \
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
-        --output out/reports/model/{{model}}/eval
+        --output out/reports/model/{{model}}/eval \
+        --device {{DEVICE}}
 
 
 [group("Model Pipeline")]

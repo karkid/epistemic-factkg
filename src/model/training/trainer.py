@@ -49,9 +49,11 @@ class Trainer:
             if verdict_class_weights is not None
             else None
         )
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
+        self.optimizer = torch.optim.Adam(
+            model.parameters(), lr=config.lr, weight_decay=config.weight_decay
+        )
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", patience=8, factor=0.5
+            self.optimizer, mode="min", patience=12, factor=0.5
         )
 
         self._best_val_loss = float("inf")

@@ -24,6 +24,19 @@ from pathlib import Path
 from src.model.models import MODELS
 
 
+def _auto_device() -> str:
+    """Return 'cuda' if a CUDA GPU is available, else 'cpu'."""
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
+
+
+def _resolve_device(device: str | None) -> str:
+    return device if device else _auto_device()
+
+
 def _resolve_models(models_arg: str) -> list[str]:
     """Return model name list from 'all' or 'm1,m2,...'."""
     if not models_arg or models_arg.strip().lower() == "all":
@@ -68,6 +81,7 @@ def cmd_list(_args: argparse.Namespace) -> None:
 
 def cmd_train(args: argparse.Namespace) -> None:
     models = _resolve_models(args.models)
+    device = _resolve_device(args.device)
     for model in models:
         print(f"\n{'=' * 60}\nTraining: {model}\n{'=' * 60}")
         Path(f"out/model/{model}/checkpoints").mkdir(parents=True, exist_ok=True)
@@ -98,7 +112,7 @@ def cmd_train(args: argparse.Namespace) -> None:
                 "--batch-size",
                 str(args.batch_size),
                 "--device",
-                args.device,
+                device,
                 "--verbose",
             ]
         )
@@ -106,6 +120,7 @@ def cmd_train(args: argparse.Namespace) -> None:
 
 def cmd_eval(args: argparse.Namespace) -> None:
     models = _resolve_models(args.models)
+    device = _resolve_device(getattr(args, "device", None))
     for model in models:
         ckpt = _checkpoint(model)
         if not Path(ckpt).exists():
@@ -132,6 +147,8 @@ def cmd_eval(args: argparse.Namespace) -> None:
                 args.splits_dir,
                 "--output",
                 _results_dir(model),
+                "--device",
+                device,
             ]
         )
 
@@ -204,7 +221,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         epochs=args.epochs,
         lr=args.lr,
         batch_size=args.batch_size,
-        device=args.device,
+        device=_resolve_device(args.device),
     )
     cmd_train(train_args)
 
@@ -212,6 +229,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         models=",".join(models),
         jsonl=args.jsonl,
         splits_dir=args.splits_dir,
+        device=_resolve_device(args.device),
     )
     cmd_eval(eval_args)
 
@@ -248,7 +266,11 @@ def main() -> None:
         p.add_argument("--epochs", type=int, default=50)
         p.add_argument("--lr", type=float, default=1e-3)
         p.add_argument("--batch-size", type=int, default=32)
-        p.add_argument("--device", default="cpu")
+        p.add_argument(
+            "--device",
+            default=None,
+            help="cuda or cpu (default: auto-detect)",
+        )
 
     p_train = sub.add_parser("train", help="Train specified models")
     _add_models(p_train)

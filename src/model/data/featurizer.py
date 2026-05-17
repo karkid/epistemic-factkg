@@ -31,7 +31,8 @@ class Featurizer:
     keyed by text hash so re-runs skip re-embedding expensive text.
     """
 
-    def __init__(self, cache_path: str | Path | None = None):
+    def __init__(self, cache_path: str | Path | None = None, device: str | None = None):
+        self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._model: SentenceTransformer | None = None
         self._nli_model: CrossEncoder | None = None
         self._cache: dict[str, list[float]] = {}
@@ -42,7 +43,7 @@ class Featurizer:
 
     def _model_(self) -> SentenceTransformer:
         if self._model is None:
-            self._model = SentenceTransformer(_EMBED_MODEL)
+            self._model = SentenceTransformer(_EMBED_MODEL, device=self._device)
         return self._model
 
     def _hash(self, text: str) -> str:
@@ -125,7 +126,7 @@ class Featurizer:
         if not ev_texts:
             return torch.zeros(0, 3, dtype=torch.float32)
         if self._nli_model is None:
-            self._nli_model = CrossEncoder(_NLI_MODEL)
+            self._nli_model = CrossEncoder(_NLI_MODEL, device=self._device)
         pairs = [(t, claim) for t in ev_texts]   # evidence=premise, claim=hypothesis (standard NLI)
         scores = self._nli_model.predict(pairs, apply_softmax=True)  # np [N, 3]
         return torch.tensor(scores, dtype=torch.float32)

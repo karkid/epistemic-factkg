@@ -83,12 +83,15 @@ class EpistemicEncoder(nn.Module):
             if (src, rel, dst) in data.edge_types
         }
 
-        # Layer 1
-        x_dict = self.conv1(x_dict, edge_index_dict)
-        x_dict = {k: self.act(self.dropout(v)) for k, v in x_dict.items()}
+        # Layer 1 with residual skip (preserves projected node features, incl. claim text)
+        x0 = x_dict
+        x1 = self.conv1(x0, edge_index_dict)
+        x1 = {k: self.act(self.dropout(v)) for k, v in x1.items()}
+        x1 = {k: x1[k] + x0[k] if k in x0 else x1[k] for k in x1}
 
-        # Layer 2
-        x_dict = self.conv2(x_dict, edge_index_dict)
-        x_dict = {k: self.act(v) for k, v in x_dict.items()}
+        # Layer 2 with residual skip
+        x2 = self.conv2(x1, edge_index_dict)
+        x2 = {k: self.act(v) for k, v in x2.items()}
+        x2 = {k: x2[k] + x1[k] if k in x1 else x2[k] for k in x2}
 
-        return x_dict
+        return x2

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 class TrainConfig:
     epochs: int = 100
     lr: float = 3e-4
+    weight_decay: float = 1e-4
     batch_size: int = 32
     dropout: float = 0.3
     hidden_dim: int = 256
