@@ -21,6 +21,7 @@ from src.model.models.nlihybridhgnn import NLIHybridHGNN
 from src.model.training.config import TrainConfig
 from src.model.training.trainer import Trainer
 from src.model.data.types import NUM_STANCE, NUM_VERDICT
+from src.pipeline.model.hparam_search import load_best_hparams
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -103,8 +104,20 @@ def _build_graphs(
 
 
 def main() -> None:
-    args = _build_parser().parse_args()
-    args.device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
+    parser = _build_parser()
+
+    # Apply saved hparams as defaults — CLI args always override them.
+    # Parse model arg first (without full validation) to look up the right file.
+    _pre, _ = parser.parse_known_args()
+    hparams = load_best_hparams(_pre.model)
+    if hparams:
+        parser.set_defaults(**hparams)
+        print(f"Loaded hparams for '{_pre.model}' from configs/hparams/{_pre.model}_best_hparams.json")
+
+    args = parser.parse_args()
+    # device: None means auto-detect (TrainConfig handles it, but train.py also needs it)
+    if not args.device:
+        args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     jsonl_path = Path(args.jsonl)
     if not jsonl_path.exists():

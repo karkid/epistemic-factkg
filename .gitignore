@@ -208,6 +208,10 @@ output/
 out/*
 !out/.gitkeep
 
+# Optuna study database — large binary, not committed (best_hparams.json IS committed)
+optuna_study*.db
+*.optuna.db
+
 # Visualization outputs
 visualizations/
 *.html

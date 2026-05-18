@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+def _default_device() -> str:
+    """Auto-detect best available device: cuda > mps > cpu."""
+    import torch  # local import — avoids torch import at module level
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 @dataclass
@@ -16,7 +27,7 @@ class TrainConfig:
     heads: int = 4
     is_loss_weight: float = 0.5  # λ₁: stance + λ₁*is + λ₂*verdict
     verdict_loss_weight: float = 1.0  # λ₂
-    device: str = "cpu"
+    device: str = field(default_factory=_default_device)  # auto: cuda > mps > cpu
     checkpoint_dir: str = "out/model/checkpoints"
     report_dir: str = "out/reports/model"
-    patience: int = 20
+    patience: int = 5

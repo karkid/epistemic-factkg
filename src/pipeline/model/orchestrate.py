@@ -22,6 +22,7 @@ from itertools import combinations
 from pathlib import Path
 
 from src.model.models import MODELS
+from src.pipeline.model.hparam_search import hparams_path
 
 
 def _auto_device() -> str:
@@ -190,9 +191,36 @@ def cmd_compare(args: argparse.Namespace) -> None:
         )
 
 
+def cmd_hparam_search(args: argparse.Namespace) -> None:
+    models = _resolve_models(args.models)
+    for model in models:
+        if not args.force and hparams_path(model).exists():
+            print(f"[hparam] {model}: already have hparams — skipping (--force to re-run)")
+            continue
+        print(f"\n{'=' * 60}\nHparam search: {model}\n{'=' * 60}")
+        _run([
+            "uv", "run", "python", "-m", "src.pipeline.model.hparam_search",
+            "--model", model,
+            "--jsonl", args.jsonl,
+            "--splits-dir", args.splits_dir,
+            "--n-trials", str(args.n_trials),
+            "--batch-size", str(args.batch_size),
+        ])
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     models = _resolve_models(args.models)
     print(f"Running full pipeline for: {models}")
+
+    # Ensure hparams exist for all models before training (skip already-done).
+    cmd_hparam_search(argparse.Namespace(
+        models=",".join(models),
+        jsonl=args.jsonl,
+        splits_dir=args.splits_dir,
+        n_trials=args.n_trials,
+        batch_size=args.batch_size,
+        force=False,
+    ))
 
     # Train + eval per model
     train_args = argparse.Namespace(
@@ -218,6 +246,13 @@ def cmd_run(args: argparse.Namespace) -> None:
     if len(models) >= 2:
         compare_args = argparse.Namespace(models=",".join(models))
         cmd_compare(compare_args)
+
+
+def cmd_run_rebuild(args: argparse.Namespace) -> None:
+    for cache in Path("out/model/graphs").glob("split_cache_*.pkl"):
+        cache.unlink()
+        print(f"Removed graph cache: {cache}")
+    cmd_run(args)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -253,6 +288,9 @@ def main() -> None:
             help="cuda or cpu (default: auto-detect)",
         )
 
+    def _add_hparam_hp(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--n-trials", type=int, default=30)
+
     p_train = sub.add_parser("train", help="Train specified models")
     _add_models(p_train)
     _add_data(p_train)
@@ -265,18 +303,34 @@ def main() -> None:
     p_compare = sub.add_parser("compare", help="Generate comparison report")
     _add_models(p_compare)
 
-    p_run = sub.add_parser("run", help="Full pipeline: train + eval + compare")
+    p_hparam = sub.add_parser("hparam-search", help="Hyperparameter search for specified models")
+    _add_models(p_hparam)
+    _add_data(p_hparam)
+    _add_hparam_hp(p_hparam)
+    p_hparam.add_argument("--batch-size", type=int, default=32)
+    p_hparam.add_argument("--force", action="store_true", help="Re-run even if hparams file already exists")
+
+    p_run = sub.add_parser("run", help="Full pipeline: hparam-search + train + eval + compare")
     _add_models(p_run)
     _add_data(p_run)
     _add_train_hp(p_run)
+    _add_hparam_hp(p_run)
+
+    p_rebuild = sub.add_parser("run-rebuild", help="Clear graph caches then run full pipeline")
+    _add_models(p_rebuild)
+    _add_data(p_rebuild)
+    _add_train_hp(p_rebuild)
+    _add_hparam_hp(p_rebuild)
 
     args = ap.parse_args()
     {
         "list": cmd_list,
+        "hparam-search": cmd_hparam_search,
         "train": cmd_train,
         "eval": cmd_eval,
         "compare": cmd_compare,
         "run": cmd_run,
+        "run-rebuild": cmd_run_rebuild,
     }[args.command](args)
 
 

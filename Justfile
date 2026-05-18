@@ -141,6 +141,18 @@ graph-nli:
 
 
 [group("Model Pipeline")]
+[doc("Hyperparameter search via Optuna — saves best params to configs/hparams/best_hparams.json (reused by `just train` automatically)")]
+hparam-search model=MODEL_NAME n_trials="30":
+    uv run python -c "import pathlib; pathlib.Path('configs/hparams').mkdir(parents=True, exist_ok=True)"
+    uv run python -m src.pipeline.model.hparam_search \
+        --model {{model}} \
+        --jsonl {{TRAINING_JSONL}} \
+        --splits-dir {{SPLITS_DIR}} \
+        --n-trials {{n_trials}} \
+        --batch-size 32
+
+
+[group("Model Pipeline")]
 [doc("Train a model (default: MODEL_NAME). Override: just train baseline")]
 train model=MODEL_NAME:
     uv run python -c "import pathlib; [pathlib.Path(p).mkdir(parents=True, exist_ok=True) for p in ['out/model/{{model}}/checkpoints', 'out/reports/model/{{model}}']]"
@@ -153,7 +165,7 @@ train model=MODEL_NAME:
         --report-dir out/reports/model/{{model}} \
         --epochs 100 \
         --lr 3e-4 \
-        --batch-size 16 \
+        --batch-size 32 \
         --device {{DEVICE}} \
         --verbose
 

@@ -10,6 +10,7 @@ dependencies = [
     "jsonschema>=4.26.0",
     "matplotlib>=3.10.8",
     "nbconvert>=7.17.1",
+    "optuna>=4.8.0",
     "owlrl>=7.1.4",
     "pandas>=2.2.0",
     "pyvis>=0.3.2",

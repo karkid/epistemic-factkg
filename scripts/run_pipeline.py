@@ -46,16 +46,18 @@ def main() -> None:
     elif pipeline == "model":
         if step == "list":
             uv("src.pipeline.model.orchestrate", "list")
+        elif step == "hparam-search":
+            uv("src.pipeline.model.orchestrate", "hparam-search",
+               "--models", models,
+               "--jsonl", TRAINING_JSONL,
+               "--splits-dir", SPLITS_DIR)
         elif step in ("", "all"):
             uv("src.pipeline.model.orchestrate", "run",
                "--models", models,
                "--jsonl", TRAINING_JSONL,
                "--splits-dir", SPLITS_DIR)
         elif step == "rebuild":
-            for cache in Path("out/model/graphs").glob("split_cache_*.pkl"):
-                cache.unlink()
-                print(f"Removed graph cache: {cache}")
-            uv("src.pipeline.model.orchestrate", "run",
+            uv("src.pipeline.model.orchestrate", "run-rebuild",
                "--models", models,
                "--jsonl", TRAINING_JSONL,
                "--splits-dir", SPLITS_DIR)
