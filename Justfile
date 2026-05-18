@@ -153,7 +153,7 @@ train model=MODEL_NAME:
         --report-dir out/reports/model/{{model}} \
         --epochs 100 \
         --lr 3e-4 \
-        --batch-size 32 \
+        --batch-size 16 \
         --device {{DEVICE}} \
         --verbose
 

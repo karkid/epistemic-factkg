@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 
 def just(*args: str) -> None:
@@ -47,6 +48,14 @@ def main() -> None:
         if step == "list":
             uv("src.pipeline.model.orchestrate", "list")
         elif step in ("", "all"):
+            if not Path(GRAPH_DATASET).exists():
+                just("graph")
+            uv("src.pipeline.model.orchestrate", "run",
+               "--models", models,
+               "--jsonl", TRAINING_JSONL,
+               "--splits-dir", SPLITS_DIR,
+               "--graph", GRAPH_DATASET)
+        elif step == "rebuild":
             just("graph")
             uv("src.pipeline.model.orchestrate", "run",
                "--models", models,

@@ -40,6 +40,7 @@ class Featurizer:
 
     def __init__(self, cache_path: str | Path | None = None, device: str | None = None):
         self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self._nli_device = "cpu"  # CrossEncoder only runs at graph-build time, not training
         self._model: SentenceTransformer | None = None
         self._nli_model: CrossEncoder | None = None
         self._cache: dict[str, list[float]] = {}
@@ -149,7 +150,7 @@ class Featurizer:
         if not ev_texts:
             return torch.zeros(0, 3, dtype=torch.float32)
         if self._nli_model is None:
-            self._nli_model = CrossEncoder(_NLI_MODEL, device=self._device)
+            self._nli_model = CrossEncoder(_NLI_MODEL, device=self._nli_device)
         nli_texts = [self._extract_nli_text(t) for t in ev_texts]
         pairs = [(t, claim) for t in nli_texts]   # evidence=premise, claim=hypothesis (standard NLI)
         scores = self._nli_model.predict(pairs, apply_softmax=True)  # np [N, 3]
