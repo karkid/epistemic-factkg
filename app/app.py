@@ -74,24 +74,35 @@ _SOURCE_LABELS = {
 _DATA_JSONL = Path("out/data/training/epistemic_factkg_training.jsonl")
 _TEST_IDX   = Path("out/data/splits/test_indices.json")
 
+_MODEL_DESCRIPTIONS: dict[str, str] = {
+    "baseline": "GNN encoder → VerdictHead only. No epistemic confidence formula.",
+    "v1-hgnn":  "Adds EC formula. H1 stance + H2 IS feed a symbolic decision at 0.35.",
+    "v2-hgnn":  "Hybrid: EC aggregation jointly feeds VerdictHead as extra input.",
+    "v3-nli":   "v2-hgnn + frozen DeBERTa-v3-small NLI replaces H1 in the EC path.",
+}
+
 _CSS = """
 <style>
 :root {
-  --bg-page:#f8f9fa; --bg-card:#ffffff; --border:#e2e6ea;
-  --text-primary:#212529; --text-secondary:#6c757d; --text-muted:#adb5bd;
-  --green:#1d6340; --green-bg:#e6f4ed; --green-text:#1d6340;
-  --red:#9b2226;   --red-bg:#fce8e8;   --red-text:#9b2226;
-  --amber:#7f4f24; --amber-bg:#fff8e7; --amber-text:#7f4f24;
-  --blue:#1a4bbd;  --blue-bg:#e7f1ff;
-  --purple:#6b46c1;--purple-bg:#f3e8ff;
-  --layer-input:#6c757d; --layer-encoder:#1a4bbd; --layer-stance:#b45309;
-  --layer-nli:#6b46c1;   --layer-ec:#1d6340;      --layer-verdict:#9b2226;
+  --bg-page:#fafafa; --bg-card:#ffffff; --border:#e5e7eb;
+  --text-primary:#111827; --text-secondary:#6b7280; --text-muted:#9ca3af;
+  --green:#15803d; --green-bg:#f0fdf4; --green-text:#166534;
+  --red:#991b1b;   --red-bg:#fff1f2;   --red-text:#991b1b;
+  --amber:#92400e; --amber-bg:#fffbeb; --amber-text:#92400e;
+  --blue:#1d4ed8;  --blue-bg:#eff6ff;
+  --purple:#6d28d9;--purple-bg:#f5f3ff;
+  --layer-input:#6b7280; --layer-encoder:#1d4ed8; --layer-stance:#b45309;
+  --layer-nli:#6d28d9;   --layer-ec:#15803d;      --layer-verdict:#991b1b;
+  --radius:8px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -1px rgba(0,0,0,.04);
 }
 .arch-box {
   background:var(--bg-card); border:1px solid var(--border);
-  border-left:4px solid var(--layer-input); border-radius:6px;
+  border-left:4px solid var(--layer-input); border-radius:var(--radius);
   padding:10px 14px; margin:4px 0;
-  font-family:'JetBrains Mono',monospace; font-size:0.82rem;
+  font-family:'JetBrains Mono',ui-monospace,monospace; font-size:0.82rem;
+  box-shadow:var(--shadow);
 }
 .arch-box.enc     { border-left-color:var(--layer-encoder); }
 .arch-box.stance  { border-left-color:var(--layer-stance);  }
@@ -103,28 +114,47 @@ _CSS = """
   color:var(--text-muted); margin-bottom:6px;
 }
 .chip {
-  display:inline-block; padding:1px 7px; border-radius:10px;
-  font-size:0.72rem; font-weight:600; margin:1px; line-height:1.5;
+  display:inline-block; padding:1px 8px; border-radius:10px;
+  font-size:0.72rem; font-weight:600; margin:1px; line-height:1.6;
 }
 .chip-green  { background:var(--green-bg);  color:var(--green-text); }
 .chip-red    { background:var(--red-bg);    color:var(--red-text);   }
 .chip-amber  { background:var(--amber-bg);  color:var(--amber-text); }
-.chip-gray   { background:#f1f3f5;          color:#495057;           }
+.chip-gray   { background:#f3f4f6;          color:#374151;           }
 .chip-blue   { background:var(--blue-bg);   color:var(--blue);       }
 .chip-purple { background:var(--purple-bg); color:var(--purple);     }
 .verdict-card {
-  border:2px solid var(--border); border-radius:10px;
-  padding:16px; text-align:center; margin:8px 0;
+  border:1.5px solid var(--border); border-radius:var(--radius);
+  padding:18px 20px; text-align:center; margin:8px 0;
+  box-shadow:var(--shadow-md);
 }
-.verdict-card.sup { background:var(--green-bg); border-color:var(--green); color:var(--green); }
-.verdict-card.ref { background:var(--red-bg);   border-color:var(--red);   color:var(--red);   }
-.verdict-card.nei { background:var(--amber-bg); border-color:var(--amber); color:var(--amber); }
-.verdict-label { font-size:1.6rem; font-weight:700; }
-.verdict-conf  { font-size:0.85rem; margin-top:4px; }
-.minibar-wrap  { display:flex; border-radius:4px; overflow:hidden; height:8px; }
+.verdict-card.sup { background:var(--green-bg); border-color:var(--green); color:var(--green-text); }
+.verdict-card.ref { background:var(--red-bg);   border-color:var(--red);   color:var(--red-text);   }
+.verdict-card.nei { background:var(--amber-bg); border-color:var(--amber); color:var(--amber-text); }
+.verdict-label { font-size:1.45rem; font-weight:700; letter-spacing:-0.01em; }
+.verdict-conf  { font-size:0.82rem; margin-top:4px; opacity:0.85; }
+.minibar-wrap  { display:flex; border-radius:4px; overflow:hidden; height:6px; }
 .minibar-seg   { height:100%; }
 .triple-row    { display:flex; align-items:center; gap:6px; margin:3px 0; flex-wrap:wrap; }
 .stProgress > div > div > div { border-radius:3px; }
+.decision-path {
+  border-radius:6px; padding:8px 12px;
+  font-size:0.82rem; font-weight:500; margin:6px 0;
+  border-left:3px solid; line-height:1.5;
+}
+.dp-sup      { background:var(--green-bg); border-color:var(--green); color:var(--green-text); }
+.dp-ref      { background:var(--red-bg);   border-color:var(--red);   color:var(--red-text);   }
+.dp-conflict { background:var(--amber-bg); border-color:var(--amber); color:var(--amber-text); }
+.dp-weak     { background:#f9fafb; border-color:var(--text-muted);   color:var(--text-secondary); }
+.dp-baseline { background:#f9fafb; border-color:var(--layer-verdict); color:var(--layer-verdict); }
+.model-desc {
+  font-size:0.78rem; color:var(--text-secondary); background:#f9fafb;
+  border-radius:6px; padding:7px 10px; margin:6px 0 0;
+  line-height:1.5; border:1px solid var(--border);
+}
+.page-header { display:flex; align-items:baseline; gap:10px; margin-bottom:2px; }
+.page-title  { font-size:1.55rem; font-weight:700; color:var(--text-primary); letter-spacing:-0.02em; margin:0; }
+.page-badge  { font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:10px; background:var(--blue-bg); color:var(--blue); }
 </style>
 """
 
@@ -153,46 +183,28 @@ def _get_predictor(model_name: str) -> EpistemicPredictor | str:
         return str(e)
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Model selector helper ────────────────────────────────────────────────────
 
-def _render_sidebar() -> str:
-    with st.sidebar:
-        st.markdown("## Epistemic FactKG")
-        st.caption("Neuro-symbolic fact verification")
-        st.divider()
-
-        st.markdown("**Model**")
-        model_keys    = list(_MODELS.keys()) + [_ALL_KEY]
-        model_display = list(_MODELS.values()) + ["All Models (compare)"]
-        idx = st.radio(
-            "model_radio",
-            range(len(model_keys)),
-            format_func=lambda i: model_display[i],
-            label_visibility="collapsed",
-        )
-
-        st.divider()
-        with st.expander("Reference"):
-            st.markdown("**EC Formula**")
-            st.code("EC = 1 − (1 − ST)^(EW × IS)", language=None)
-            st.caption("ST = Source Trust · EW = Evidence Weight · IS = Inference Strength")
-            st.markdown("**Pramana**")
-            st.markdown(
-                "| Modality | Sanskrit |\n|---|---|\n"
-                "| Web / PDF | Shabda |\n"
-                "| Image / Video | Pratyaksha |\n"
-                "| Table | Upamana |"
-            )
-            st.markdown("**Model Accuracy**")
-            st.markdown(
-                "| Model | Acc | F1 |\n|---|---|---|\n"
-                "| v3-nli | **0.815** | **0.820** |\n"
-                "| v2-hgnn | 0.799 | 0.807 |\n"
-                "| baseline | 0.795 | 0.802 |\n"
-                "| v1-hgnn | 0.712 | 0.703 |"
-            )
-
-    return model_keys[idx]
+def _model_selector(widget_key: str, allow_all: bool = False) -> str:
+    """Compact horizontal model radio; returns the selected model key."""
+    keys   = list(_MODELS.keys())
+    labels = list(_MODELS.values())
+    if allow_all:
+        keys.append(_ALL_KEY)
+        labels.append("All Models")
+    idx = st.radio(
+        "Model",
+        range(len(keys)),
+        format_func=lambda i: labels[i],
+        horizontal=True,
+        key=widget_key,
+        label_visibility="collapsed",
+    )
+    selected = keys[idx]
+    desc = _MODEL_DESCRIPTIONS.get(selected, "")
+    if desc:
+        st.caption(desc)
+    return selected
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
@@ -221,18 +233,27 @@ def _blank_ev() -> dict:
     return {"text": "", "source_type": "unknown", "modality": "web_text"}
 
 
-def _load_random_example() -> None:
-    records = _load_test_records()
-    if not records:
-        st.warning("Test data not found.")
-        return
-    rec = random.choice(records)
+@st.cache_data(show_spinner=False)
+def _load_all_records_indexed() -> dict[str, dict]:
+    """All JSONL records keyed by their `id` field (row index as fallback)."""
+    if not _DATA_JSONL.exists():
+        return {}
+    result: dict[str, dict] = {}
+    with open(_DATA_JSONL, encoding="utf-8") as f:
+        for i, line in enumerate(f):
+            line = line.strip()
+            if line:
+                r = json.loads(line)
+                result[r.get("id", str(i))] = r
+    return result
 
+
+def _load_record_into_state(rec: dict) -> None:
+    """Push a record's claim + evidence into session state for the Verify tab."""
     old_n = len(st.session_state.get("evidence_list", []))
     for i in range(old_n + 6):
-        for prefix in ("ev_", "mod_", "src_"):
-            st.session_state.pop(f"{prefix}{i}", None)
-
+        for pfx in ("ev_", "mod_", "src_"):
+            st.session_state.pop(f"{pfx}{i}", None)
     new_evs = [
         {
             "text":        ev.get("text", ""),
@@ -241,18 +262,25 @@ def _load_random_example() -> None:
         }
         for ev in rec.get("evidence", [])[:4]
     ] or [_blank_ev()]
-
     # Use a staging key — writing directly to "claim_input" raises
     # StreamlitAPIException because the widget is already instantiated.
     # The pending value is consumed before the next render (see text_area below).
     st.session_state["_pending_claim"]     = rec["claim"]
     st.session_state["last_claim"]         = rec["claim"]
     st.session_state["evidence_list"]      = new_evs
-    st.session_state["_random_true_label"] = rec["verdict"]["label"]
+    st.session_state["_random_true_label"] = rec.get("verdict", {}).get("label")
     for i, ev in enumerate(new_evs):
         st.session_state[f"ev_{i}"]  = ev["text"]
         st.session_state[f"mod_{i}"] = ev["modality"]
         st.session_state[f"src_{i}"] = ev["source_type"]
+
+
+def _load_random_example() -> None:
+    records = _load_test_records()
+    if not records:
+        st.warning("Test data not found.")
+        return
+    _load_record_into_state(random.choice(records))
 
 
 # ── Evidence card rendering ───────────────────────────────────────────────────
@@ -300,6 +328,73 @@ def _render_evidence_cards() -> None:
 
 
 # ── HTML helpers ──────────────────────────────────────────────────────────────
+
+def _render_decision_path(result: dict) -> None:
+    """Callout showing which symbolic decision path produced this verdict."""
+    if not result["has_ec"]:
+        st.markdown(
+            '<div class="decision-path dp-baseline">▶ Baseline — VerdictHead only (no EC formula)</div>',
+            unsafe_allow_html=True,
+        )
+        return
+    sup = result["support_score"]
+    ref = result["refute_score"]
+    _EC = 0.35
+    if sup > _EC and ref > _EC:
+        st.markdown(
+            f'<div class="decision-path dp-conflict">⚡ Conflicting evidence — '
+            f'sup {sup:.3f} & ref {ref:.3f} both >{_EC} → VerdictHead decides</div>',
+            unsafe_allow_html=True,
+        )
+    elif sup > _EC:
+        st.markdown(
+            f'<div class="decision-path dp-sup">✓ Symbolic override — '
+            f'EC support {sup:.3f} >{_EC} → SUPPORTED</div>',
+            unsafe_allow_html=True,
+        )
+    elif ref > _EC:
+        st.markdown(
+            f'<div class="decision-path dp-ref">✗ Symbolic override — '
+            f'EC refute {ref:.3f} >{_EC} → REFUTED</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="decision-path dp-weak">~ EC weak — '
+            f'sup {sup:.3f}, ref {ref:.3f} both ≤{_EC} → VerdictHead decides</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_arch_pipeline_bar(model_key: str) -> None:
+    """Horizontal coloured pipeline strip summarising the model stages."""
+    stages: list[tuple[str, str]] = [
+        ("#6b7280", "① Input"),
+        ("#1d4ed8", "② GNN Encoder"),
+        ("#b45309", "③ H1+H2"),
+    ]
+    if model_key == "v3-nli":
+        stages.append(("#6d28d9", "④ NLI Bypass"))
+    if model_key != "baseline":
+        stages.append(("#15803d", "⑤⑥ EC Formula"))
+    stages.append(("#991b1b", "⑦ VerdictHead"))
+
+    def _pill(color: str, label: str) -> str:
+        return (
+            f'<span style="background:{color};color:#fff;padding:3px 11px;'
+            f'border-radius:12px;font-size:0.72rem;font-weight:600;white-space:nowrap">{label}</span>'
+        )
+
+    pills = ' <span style="color:#9ca3af;font-size:0.85rem">→</span> '.join(
+        _pill(c, lbl) for c, lbl in stages
+    )
+    st.markdown(
+        f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;'
+        f'padding:10px 14px;background:#f8fafc;border:1px solid #e5e7eb;'
+        f'border-radius:8px;margin-bottom:10px">{pills}</div>',
+        unsafe_allow_html=True,
+    )
+
 
 def _chip(text: str, cls: str = "chip-gray") -> str:
     return f'<span class="chip {cls}">{text}</span>'
@@ -393,6 +488,7 @@ def _ev_table(headers: list[str], rows_data: list[list[str]]) -> str:
 
 
 def _render_arch_flow(result: dict, model_key: str) -> None:
+    _render_arch_pipeline_bar(model_key)
     is_nli    = model_key == "v3-nli"
     has_ec    = result["has_ec"]
     breakdown = result["evidence_breakdown"]
@@ -853,24 +949,353 @@ def _build_eval_export(rows: list[dict]) -> str:
     return json.dumps(export, indent=2, ensure_ascii=False)
 
 
+# ── Data tab ──────────────────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner=False)
+def _load_dataset_stats() -> dict | None:
+    if not _DATA_JSONL.exists():
+        return None
+    records = [
+        json.loads(l) for l in _DATA_JSONL.read_text(encoding="utf-8").splitlines() if l.strip()
+    ]
+    from collections import Counter as _Counter
+    verdicts   = _Counter(r.get("verdict", {}).get("label", "unknown") for r in records)
+    sources    = _Counter(r.get("provenance", {}).get("dataset", "unknown") for r in records)
+    modalities = _Counter()
+    for r in records:
+        for ev in r.get("evidence", []):
+            modalities[ev.get("modality", "unknown")] += 1
+    splits: dict[str, int] = {}
+    for split in ("train", "val", "test"):
+        p = Path("out/data/splits") / f"{split}_indices.json"
+        if p.exists():
+            try:
+                splits[split] = len(json.loads(p.read_text(encoding="utf-8"))["indices"])
+            except Exception:
+                splits[split] = 0
+    return {
+        "total":      len(records),
+        "verdicts":   dict(verdicts),
+        "sources":    dict(sources),
+        "modalities": dict(modalities),
+        "splits":     splits,
+    }
+
+
+def _render_data_tab() -> None:
+    import pandas as pd
+    stats = _load_dataset_stats()
+    if stats is None:
+        st.info(f"Training JSONL not found: `{_DATA_JSONL}`")
+        return
+
+    sp = stats["splits"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Records", stats["total"])
+    c2.metric("Train",         sp.get("train", "—"))
+    c3.metric("Val",           sp.get("val",   "—"))
+    c4.metric("Test",          sp.get("test",  "—"))
+
+    st.markdown("---")
+    c_v, c_s = st.columns(2)
+    with c_v:
+        st.markdown("#### Verdict Distribution")
+        st.bar_chart(pd.DataFrame.from_dict(stats["verdicts"], orient="index", columns=["count"]))
+    with c_s:
+        st.markdown("#### Source Dataset")
+        st.bar_chart(pd.DataFrame.from_dict(stats["sources"], orient="index", columns=["count"]))
+
+    st.markdown("#### Evidence Modality Distribution")
+    st.bar_chart(pd.DataFrame.from_dict(stats["modalities"], orient="index", columns=["count"]))
+
+
+# ── Reference tab ─────────────────────────────────────────────────────────────
+
+def _render_reference_tab() -> None:
+    c_l, c_r = st.columns(2)
+    with c_l:
+        st.markdown("### EC Formula")
+        st.code("EC_i = 1 − (1 − ST_i)^(EW_i × IS_i)", language=None)
+        st.markdown(
+            "| Symbol | Meaning | Range |\n|--------|---------|-------|\n"
+            "| ST | Source Trust | [0, 1] |\n"
+            "| EW | Evidence Weight (stance prob.) | [0, 1] |\n"
+            "| IS | Inference Strength | [0, 1] |\n"
+            "| EC | Epistemic Confidence | [0, 1] |"
+        )
+
+        st.markdown("### Decision Logic  `threshold = 0.35`")
+        st.markdown(
+            "| Condition | Outcome |\n|-----------|---------|\n"
+            "| sup > 0.35 **and** ref > 0.35 | Conflicting → VerdictHead |\n"
+            "| sup > 0.35 only | Symbolic override → **SUPPORTED** |\n"
+            "| ref > 0.35 only | Symbolic override → **REFUTED** |\n"
+            "| neither > 0.35 | EC weak → VerdictHead |\n"
+            "| baseline model | VerdictHead always |"
+        )
+
+        st.markdown("### Source Trust Scale")
+        st.markdown(
+            "| Source Type | Default ST |\n|-------------|------------|\n"
+            "| academic | 0.95 |\n"
+            "| government | 0.90 |\n"
+            "| news | 0.75 |\n"
+            "| unknown | 0.60 |\n"
+            "| social_media | 0.40 |"
+        )
+
+    with c_r:
+        st.markdown("### Pramana (Epistemic Modalities)")
+        st.markdown(
+            "| Modality | Pramana | Meaning |\n|----------|---------|----------|\n"
+            "| Web Text / PDF | Shabda | Testimony |\n"
+            "| Image / Video / Audio | Pratyaksha | Perception |\n"
+            "| Web Table | Upamana | Comparison |"
+        )
+
+        st.markdown("### Model Architecture")
+        st.markdown(
+            "| Model | EC | NLI | Notes |\n|-------|-----|-----|-------|\n"
+            "| baseline | ✗ | ✗ | GNN → VerdictHead only |\n"
+            "| v1-hgnn  | ✓ | ✗ | Symbolic override at threshold |\n"
+            "| v2-hgnn  | ✓ | ✗ | EC scalar also feeds VerdictHead |\n"
+            "| v3-nli   | ✓ | ✓ | DeBERTa-v3-small NLI replaces H1 |"
+        )
+
+        st.markdown("### Inference Strength (IS)")
+        st.markdown(
+            "IS is a regression head output ∈ [0, 1] representing how strongly "
+            "the evidence logically supports or refutes the claim — independent of stance direction. "
+            "High IS + strong stance → high EC → likely symbolic override."
+        )
+
+        st.markdown("### Verdict Classes")
+        st.markdown(
+            "| Label | Symbol | Meaning |\n|-------|--------|----------|\n"
+            "| supported | ✓ | Evidence confirms the claim |\n"
+            "| refuted | ✗ | Evidence contradicts the claim |\n"
+            "| not_enough_evidence | ~ | Insufficient or conflicting evidence |"
+        )
+
+
+# ── Reports tab ───────────────────────────────────────────────────────────────
+
+_REPORTS_ROOT = Path("out/reports/model")
+
+
+def _load_verdict_metrics(model_key: str) -> dict | None:
+    p = _REPORTS_ROOT / model_key / "eval" / "verdict_metrics.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _load_stance_metrics(model_key: str) -> dict | None:
+    p = _REPORTS_ROOT / model_key / "eval" / "stance_metrics.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _load_is_metrics(model_key: str) -> dict | None:
+    p = _REPORTS_ROOT / model_key / "eval" / "is_metrics.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _load_training_history(model_key: str) -> dict | None:
+    p = _REPORTS_ROOT / model_key / "training_history.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _render_model_report(model_key: str) -> None:
+    vm = _load_verdict_metrics(model_key)
+    sm = _load_stance_metrics(model_key)
+    im = _load_is_metrics(model_key)
+    th = _load_training_history(model_key)
+
+    if vm is None and th is None:
+        st.info(f"No report files found for **{model_key}** — run `just run model` to generate them.")
+        return
+
+    # ── Top metric cards ─────────────────────────────────────────────────────
+    if vm:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Verdict Accuracy", f"{vm['accuracy']:.1%}")
+        c2.metric("Macro F1",          f"{vm['macro_f1']:.3f}")
+        c3.metric("Weighted F1",       f"{vm['weighted_f1']:.3f}")
+        skipped = vm.get("skipped", 0)
+        c4.metric("Claims Evaluated",  f"{vm['n_claims']}",
+                  delta=f"-{skipped} skipped" if skipped else None,
+                  delta_color="inverse" if skipped else "off")
+
+    # ── Training loss curve ───────────────────────────────────────────────────
+    if th is not None:
+        # Support both old format (bare list) and new format (dict with "history" key)
+        if isinstance(th, list):
+            history, cov = th, None
+        else:
+            history = th.get("history", [])
+            cov = th.get("data_coverage")
+
+        if history:
+            st.markdown("#### Training Loss")
+            import pandas as pd
+            df_loss = pd.DataFrame(
+                [{"Epoch": h["epoch"], "Train": h.get("train_loss"), "Val": h.get("val_loss")}
+                 for h in history]
+            ).set_index("Epoch")
+            st.line_chart(df_loss)
+
+        if cov:
+            st.markdown("#### Data Coverage")
+            col_t, col_v = st.columns(2)
+            with col_t:
+                st.markdown("**Train**")
+                st.markdown(
+                    f"Graphs: **{cov.get('train_graphs', '—')}** / "
+                    f"{cov.get('train_total', '—')} total  "
+                    f"(skipped {cov.get('train_skipped', 0)})"
+                )
+            with col_v:
+                st.markdown("**Val**")
+                st.markdown(
+                    f"Graphs: **{cov.get('val_graphs', '—')}** / "
+                    f"{cov.get('val_total', '—')} total  "
+                    f"(skipped {cov.get('val_skipped', 0)})"
+                )
+
+    if not vm:
+        st.info("Verdict metrics not found — run evaluation to generate them.")
+        return
+
+    # ── Verdict tabs: breakdown / plots ──────────────────────────────────────
+    t_plots, t_verdict, t_stance, t_is, t_skipped = st.tabs(
+        ["Plots", "Verdict", "Stance", "Inf. Strength", "Skipped IDs"]
+    )
+
+    with t_plots:
+        plots_dir = _REPORTS_ROOT / model_key / "eval" / "plots"
+        imgs = [
+            (plots_dir / "confusion_matrix.png",   "Confusion Matrix"),
+            (plots_dir / "class_f1.png",            "Per-Class F1"),
+            (plots_dir / "per_source_accuracy.png", "Per-Source Accuracy"),
+        ]
+        cols = st.columns(len(imgs))
+        for col, (img_path, caption) in zip(cols, imgs):
+            if img_path.exists():
+                col.image(str(img_path), caption=caption, use_container_width=True)
+            else:
+                col.caption(f"_{caption} — not generated yet_")
+
+    with t_verdict:
+        st.markdown("##### Per-Class Breakdown")
+        rows = [
+            {"Class": cls, "Precision": m["precision"], "Recall": m["recall"],
+             "F1": m["f1"], "N": m["support"]}
+            for cls, m in vm.get("per_class", {}).items()
+        ]
+        if rows:
+            import pandas as pd
+            st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+
+        conf = vm.get("confusion")
+        if conf:
+            st.markdown("##### Confusion Matrix")
+            labels = list(vm.get("per_class", {}).keys()) or [str(i) for i in range(len(conf))]
+            import pandas as pd
+            st.dataframe(
+                pd.DataFrame(conf, index=labels, columns=labels),
+                use_container_width=True,
+            )
+
+        per_src = vm.get("per_source")
+        if per_src:
+            st.markdown("##### Per-Source Accuracy")
+            import pandas as pd
+            st.dataframe(
+                pd.DataFrame(
+                    [{"Source": s, "Accuracy": m["accuracy"], "N": m["support"]}
+                     for s, m in per_src.items()]
+                ).set_index("Source"),
+                use_container_width=True,
+            )
+
+    with t_stance:
+        if sm:
+            ca, cb, cc = st.columns(3)
+            ca.metric("Accuracy",  f"{sm['accuracy']:.1%}")
+            cb.metric("Macro F1",  f"{sm['macro_f1']:.3f}")
+            cc.metric("ECE",       f"{sm['ece']:.4f}")
+            rows = [
+                {"Class": cls, "Precision": m["precision"], "Recall": m["recall"],
+                 "F1": m["f1"], "N": m["support"]}
+                for cls, m in sm.get("per_class", {}).items()
+            ]
+            if rows:
+                import pandas as pd
+                st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+        else:
+            st.caption("stance_metrics.json not found.")
+
+    with t_is:
+        if im:
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("RMSE",       f"{im['rmse']:.4f}")
+            c2.metric("Pearson r",  f"{im['pearson_r']:.4f}")
+            c3.metric("Pred Mean",  f"{im['pred_mean']:.4f}")
+            c4.metric("True Mean",  f"{im['true_mean']:.4f}")
+        else:
+            st.caption("is_metrics.json not found.")
+
+    with t_skipped:
+        skipped_ids = vm.get("skipped_ids", [])
+        if skipped_ids:
+            st.caption(f"{len(skipped_ids)} claims skipped during evaluation.")
+            import pandas as pd
+            st.dataframe(
+                pd.DataFrame({"Claim ID": skipped_ids}),
+                use_container_width=True,
+                height=min(400, 36 * len(skipped_ids) + 38),
+            )
+        else:
+            st.success("No claims were skipped during evaluation.")
+
+
+def _render_reports_tab() -> None:
+    model_keys = list(_MODELS.keys())
+    tabs = st.tabs([f"  {k}  " for k in model_keys])
+    for tab, mk in zip(tabs, model_keys):
+        with tab:
+            _render_model_report(mk)
+
+
 # ── Evaluate tab ──────────────────────────────────────────────────────────────
 
-def _render_evaluate_tab(selected_key: str) -> None:
+def _render_evaluate_tab(selected_key: str, *, state_key: str = "eval") -> None:
     records = _load_test_records()
     if not records:
         st.warning(f"Test data not found.\n- `{_DATA_JSONL}`\n- `{_TEST_IDX}`")
         return
 
+    st.caption(f"{len(records)} test records available")
     models_to_eval = list(_MODELS.keys()) if selected_key == _ALL_KEY else [selected_key]
 
     c_n, c_seed = st.columns([3, 2])
     with c_n:
-        n = st.slider("Samples", 5, min(len(records), 1000), 20, 5)
+        n = st.slider("Samples", 5, min(len(records), 1000), 20, 5, key=f"{state_key}_samples")
     with c_seed:
-        fixed = st.checkbox("Fixed seed", value=False)
-        seed  = st.number_input("Seed", value=42, step=1, label_visibility="collapsed") if fixed else None
+        fixed = st.checkbox("Fixed seed", value=False, key=f"{state_key}_fixed_seed")
+        seed  = st.number_input("Seed", value=42, step=1, label_visibility="collapsed", key=f"{state_key}_seed") if fixed else None
 
-    if st.button("▶ Run", type="primary"):
+    if st.button("▶ Run", type="primary", key=f"{state_key}_run_btn"):
         rng    = random.Random(seed)
         sample = rng.sample(records, min(n, len(records)))
         prog   = st.progress(0.0, text="Loading…")
@@ -901,10 +1326,10 @@ def _render_evaluate_tab(selected_key: str) -> None:
                                  "error": str(exc)})
 
         prog.empty()
-        st.session_state["eval_rows"]   = rows
-        st.session_state["inspect_idx"] = None
+        st.session_state[f"{state_key}_rows"]   = rows
+        st.session_state[f"{state_key}_inspect"] = None
 
-    rows = st.session_state.get("eval_rows")
+    rows = st.session_state.get(f"{state_key}_rows")
     if not rows:
         return
 
@@ -959,6 +1384,7 @@ def _render_evaluate_tab(selected_key: str) -> None:
                 file_name="eval_results.json",
                 mime="application/json",
                 use_container_width=True,
+                key=f"{state_key}_dl_btn",
             )
         with c_pat:
             patterns = Counter(_failure_pattern(r) for r in rows)
@@ -975,7 +1401,8 @@ def _render_evaluate_tab(selected_key: str) -> None:
     # ── inspection table ─────────────────────────────────────────────────────
     st.markdown("**Predictions** — expand to trace layer-wise reasoning")
     inspect_model = all_models[0] if len(all_models) == 1 else st.selectbox(
-        "Show predictions for", all_models, label_visibility="collapsed"
+        "Show predictions for", all_models, label_visibility="collapsed",
+        key=f"{state_key}_inspect_model",
     )
     mrows = [r for r in rows if r["model"] == inspect_model]
 
@@ -1011,87 +1438,70 @@ def main() -> None:
         page_title="Epistemic FactKG",
         page_icon="🧠",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="collapsed",
     )
     st.markdown(_CSS, unsafe_allow_html=True)
-
-    selected_key = _render_sidebar()
     _init_state()
 
-    st.markdown("# Epistemic Claim Verifier")
-    st.caption("Fact-checking grounded in the Pramana epistemic framework.")
+    st.markdown(
+        '<div class="page-header">'
+        '<span class="page-title">Epistemic Claim Verifier</span>'
+        '<span class="page-badge">Pramana · Neuro-Symbolic</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption("Evidence Confidence · Source Trust · Inference Strength · Symbolic override @ 0.35")
 
-    tab_verify, tab_eval = st.tabs(["Verify Claim", "Evaluate"])
+    from tabs import verify as tab_verify_mod
+    from tabs import evaluate as tab_evaluate_mod
+    from tabs import reports as tab_reports_mod
+    from tabs import data as tab_data_mod
+    from tabs import registry as tab_registry_mod
+    from tabs import reference as tab_reference_mod
 
-    # ── Verify ────────────────────────────────────────────────────────────────
-    with tab_verify:
-        c_claim, c_btn = st.columns([5, 1])
-        with c_claim:
-            claim = st.text_area(
-                "Claim",
-                value=st.session_state.get("last_claim", ""),
-                height=80,
-                placeholder="e.g.  The Eiffel Tower is in Berlin.",
-                key="claim_input",
-            )
-        with c_btn:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            verify = st.button("Verify", type="primary", use_container_width=True,
-                               disabled=not claim.strip())
-            if st.button("Random", use_container_width=True):
-                _load_random_example()
-                st.rerun()
-            if st.session_state.get("_random_true_label"):
-                st.caption(f"True: **{st.session_state._random_true_label}**")
+    # ── 5-tab layout ────────────────────────────────────────────────────────────
+    # Verify      — live claim verification (primary action)
+    # Evaluate    — batch evaluation, single model OR all models (Compare mode)
+    # Reports     — training history, per-model eval metrics, plots
+    # Dataset     — data statistics, schema, claim browser
+    # Knowledge   — source trust registry + formula reference + assumptions
+    tab_v, tab_e, tab_r, tab_d, tab_k = st.tabs(
+        ["🔍 Verify", "📊 Evaluate", "📈 Reports", "🗄 Dataset", "📚 Knowledge"]
+    )
 
+    with tab_v:
+        tab_verify_mod.render()
+
+    with tab_e:
+        # Radio toggle: single model vs all-model compare
+        mode = st.radio(
+            "Mode", ["Single Model", "Compare All Models"],
+            horizontal=True, label_visibility="collapsed", key="eval_mode_toggle"
+        )
         st.markdown("---")
-        _render_evidence_cards()
+        if mode == "Single Model":
+            tab_evaluate_mod.render_evaluate_tab()
+        else:
+            st.caption("Run all 4 models on the same random sample and compare side-by-side.")
+            tab_evaluate_mod.render_compare_tab()
 
-        if verify and claim.strip():
-            filled = [ev for ev in st.session_state.evidence_list if ev["text"].strip()] \
-                     or st.session_state.evidence_list
+    with tab_r:
+        st.markdown("### Model Reports")
+        st.caption("Metrics, plots, and training history from the last pipeline run.")
+        tab_reports_mod.render()
 
-            if selected_key == _ALL_KEY:
-                results: dict[str, dict | str] = {}
-                with st.spinner("Running all models…"):
-                    for mk in list(_MODELS.keys()):
-                        pred = _get_predictor(mk)
-                        if isinstance(pred, str):
-                            results[mk] = pred
-                        else:
-                            try:
-                                results[mk] = pred.predict(claim.strip(), filled)
-                            except Exception as exc:
-                                results[mk] = str(exc)
-                st.markdown("---")
-                st.markdown("**All Models**")
-                _render_compare_results(results)
-            else:
-                pred = _get_predictor(selected_key)
-                if isinstance(pred, str):
-                    st.error(pred)
-                else:
-                    with st.spinner("Running…"):
-                        try:
-                            result = pred.predict(claim.strip(), filled)
-                        except Exception as exc:
-                            st.error(str(exc))
-                            return
-                    st.markdown("---")
-                    _render_verdict_card(result)
-                    t_arch, t_table, t_debug = st.tabs(["Architecture Flow", "Layer Table", "Debug"])
-                    with t_arch:
-                        _render_arch_flow(result, selected_key)
-                    with t_table:
-                        _render_layerwise(result, selected_key)
-                    with t_debug:
-                        _render_debug_view(result, claim.strip())
+    with tab_d:
+        tab_data_mod.render()
 
-    # ── Evaluate ──────────────────────────────────────────────────────────────
-    with tab_eval:
-        st.markdown("### Evaluate on test set")
-        _render_evaluate_tab(selected_key)
+    with tab_k:
+        # Sub-tabs: Registry view + Formula reference + Assumptions
+        k_reg, k_ref = st.tabs(["🗂 Source Registry", "📖 Reference & Assumptions"])
+        with k_reg:
+            tab_registry_mod.render()
+        with k_ref:
+            tab_reference_mod.render()
 
 
 if __name__ == "__main__":
     main()
+

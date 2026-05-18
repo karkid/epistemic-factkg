@@ -195,6 +195,7 @@ class EpistemicPredictor:
             "refute_score": float(out.get("refute_score", 0.0)),
             "has_ec": self.model_name != "baseline",
             "evidence_breakdown": breakdown,
+            "hetero_data": graph.data,  # HeteroData — used for pyvis graph viz
         }
 
     def predict_from_record(self, record: dict) -> dict:
