@@ -110,12 +110,15 @@ class NLIHybridHGNN(HybridHGNN):
         sup = float(ec[0])
         ref = float(ec[1])
 
-        if ref > sup and ref > _EC_DECISIVE:
+        if sup > _EC_DECISIVE and ref > _EC_DECISIVE:
+            # Both sides strong — conflicting evidence, VerdictHead decides.
+            verdict = _int_to_verdict[int(out["verdict_logits"].argmax(dim=-1).item())]
+        elif ref > sup and ref > _EC_DECISIVE:
             verdict = "refuted"
         elif sup > ref and sup > _EC_DECISIVE:
             verdict = "supported"
         else:
-            # EC is ambiguous — let the trained VerdictHead decide.
+            # EC weak on both sides — VerdictHead decides.
             verdict = _int_to_verdict[int(out["verdict_logits"].argmax(dim=-1).item())]
 
         return {
