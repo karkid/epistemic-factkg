@@ -1,9 +1,51 @@
 """Reference tab — EC formula, decision logic, Pramana, source trust, models, registry, assumptions."""
 from __future__ import annotations
 
+from collections import defaultdict
+
 import streamlit as st
 
 from _loaders import load_registry
+
+
+def _st_scale_markdown() -> str:
+    """Build Source Trust Scale table dynamically from the live registry.
+
+    Groups by source_type, shows ST range and entry count.  Ordered by
+    descending max ST so the table reads high-trust → low-trust.
+    Falls back to a hardcoded table if the registry is unavailable.
+    """
+    records = load_registry()
+    if not records:
+        return (
+            "| Source Type | ST | Entries |\n|-------------|----|---------|\n"
+            "| simulation | 1.00 | 1 |\n"
+            "| sensor | 0.90 | 1 |\n"
+            "| scientific_paper | 0.80 – 0.90 | — |\n"
+            "| government | 0.85 – 0.92 | — |\n"
+            "| knowledge_graph | 0.80 – 0.85 | — |\n"
+            "| fact_checker | 0.82 | — |\n"
+            "| news_media | 0.62 – 0.85 | — |\n"
+            "| testimony | 0.65 | — |\n"
+            "| ngo_or_org | 0.60 | — |\n"
+            "| web_text | 0.55 – 0.60 | — |\n"
+            "| llm_generated | 0.50 | — |\n"
+            "| web_archive | 0.40 | — |\n"
+            "| unknown | 0.40 | — |\n"
+            "| social_media | 0.30 – 0.40 | — |\n"
+            "\n*Registry unavailable — showing static defaults.*"
+        )
+
+    by_type: dict[str, list[float]] = defaultdict(list)
+    for r in records:
+        by_type[r.get("source_type") or "unknown"].append(r.get("source_trust", 0.0))
+
+    lines = "| Source Type | ST | Entries |\n|-------------|----|---------|\n"
+    for st_type, sts in sorted(by_type.items(), key=lambda x: -max(x[1])):
+        lo, hi = min(sts), max(sts)
+        st_str = f"{lo:.2f}" if lo == hi else f"{lo:.2f} – {hi:.2f}"
+        lines += f"| `{st_type}` | {st_str} | {len(sts)} |\n"
+    return lines.rstrip()
 
 
 def render() -> None:
@@ -45,14 +87,7 @@ def _render_formulas() -> None:
         )
 
         st.markdown("### Source Trust Scale")
-        st.markdown(
-            "| Source Type | Default ST |\n|-------------|------------|\n"
-            "| academic | 0.95 |\n"
-            "| government | 0.90 |\n"
-            "| news | 0.75 |\n"
-            "| unknown | 0.60 |\n"
-            "| social_media | 0.40 |"
-        )
+        st.markdown(_st_scale_markdown())
 
         st.markdown("### Evidence Weight (EW) by Type")
         st.markdown(
@@ -157,9 +192,9 @@ def _render_assumptions() -> None:
             "Source Trust (ST)",
             [
                 "ST is assigned statically from the registry; it does not adapt per-claim.",
-                "Unknown sources receive ST = 0.60 (conservative neutral prior).",
+                "Unknown sources receive ST = 0.40 (same as the hard fallback `DEFAULT_SOURCE_TRUST`).",
                 "Web archives (.web.archive.org) resolve to the original domain's ST.",
-                "Social-media sources (twitter, reddit, …) are capped at ST ≤ 0.50.",
+                "Social-media sources (twitter, reddit, …) are capped at ST ≤ 0.40.",
             ],
         ),
         (

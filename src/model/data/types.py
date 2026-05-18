@@ -94,12 +94,15 @@ SOURCE_TYPE_TO_INT: dict[str, int] = {
     "academic": 1,
     "government": 2,
     "social_media": 3,
-    "simulation": 4,
+    "sensor": 4,      # real-world direct measurement (slot previously held by simulation)
     "unknown": 5,
 }
 NUM_SOURCE_TYPE = len(SOURCE_TYPE_TO_INT)  # 6
 
-# Maps registry source_type values → the 6 encoder categories
+# Maps registry source_type values → the 6 encoder categories.
+# "simulation" is dropped as a distinct category: modality=simulation_state (slot 0
+# in MODALITY_TO_INT) already uniquely identifies AI2THOR evidence, so the source_type
+# slot was redundant.  AI2THOR evidence now encodes as "unknown" (slot 5).
 _REGISTRY_TYPE_TO_CATEGORY: dict[str, str] = {
     "news_media": "news_media",
     "fact_checker": "news_media",
@@ -108,8 +111,8 @@ _REGISTRY_TYPE_TO_CATEGORY: dict[str, str] = {
     "scientific_paper": "academic",
     "knowledge_graph": "academic",
     "social_media": "social_media",
-    "simulation": "simulation",
-    # Previously unmapped — fall to unknown encoder slot rather than silent mismatch
+    "sensor": "sensor",           # physical sensor / IoT → slot 4
+    "simulation": "unknown",      # modality=simulation_state already distinguishes AI2THOR
     "web_archive": "unknown",
     "llm_generated": "unknown",
     "ngo_or_org": "unknown",
