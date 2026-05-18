@@ -20,7 +20,6 @@ def uv(*args: str) -> None:
 
 TRAINING_JSONL = "out/data/training/epistemic_factkg_training.jsonl"
 SPLITS_DIR     = "out/data/splits"
-GRAPH_DATASET  = "out/model/graphs/graph_dataset.pt"
 
 
 def main() -> None:
@@ -48,22 +47,20 @@ def main() -> None:
         if step == "list":
             uv("src.pipeline.model.orchestrate", "list")
         elif step in ("", "all"):
-            if not Path(GRAPH_DATASET).exists():
-                just("graph")
             uv("src.pipeline.model.orchestrate", "run",
                "--models", models,
                "--jsonl", TRAINING_JSONL,
-               "--splits-dir", SPLITS_DIR,
-               "--graph", GRAPH_DATASET)
+               "--splits-dir", SPLITS_DIR)
         elif step == "rebuild":
-            just("graph")
+            for cache in Path("out/model/graphs").glob("split_cache_*.pkl"):
+                cache.unlink()
+                print(f"Removed graph cache: {cache}")
             uv("src.pipeline.model.orchestrate", "run",
                "--models", models,
                "--jsonl", TRAINING_JSONL,
-               "--splits-dir", SPLITS_DIR,
-               "--graph", GRAPH_DATASET)
+               "--splits-dir", SPLITS_DIR)
         elif step == "build":
-            just("graph")
+            just("graph")  # explicit pre-build only, not needed for training
         elif step == "train":
             uv("src.pipeline.model.orchestrate", "train",
                "--models", models,
@@ -77,7 +74,7 @@ def main() -> None:
         elif step == "compare":
             uv("src.pipeline.model.orchestrate", "compare", "--models", models)
         else:
-            print(f"Unknown model step '{step}'. Available: list  build  train  eval  compare", file=sys.stderr)
+            print(f"Unknown model step '{step}'. Available: list  rebuild  build  train  eval  compare", file=sys.stderr)
             sys.exit(1)
 
     else:

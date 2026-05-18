@@ -213,17 +213,17 @@ def main() -> None:
     verdict_trues: list[int] = []
     source_labels: list[str] = []
 
-    skipped = 0
+    skipped_ids: list[str] = []
     with torch.no_grad():
         for record in test_records:
             try:
                 g = builder.build(record)
             except Exception:
-                skipped += 1
+                skipped_ids.append(record.get("id", "unknown"))
                 continue
 
             if g is None:
-                skipped += 1
+                skipped_ids.append(record.get("id", "unknown"))
                 continue
 
             data = g.data.to(device)
@@ -280,7 +280,8 @@ def main() -> None:
         "macro_f1": round(compute_macro_f1(vp_t, vy_t, NUM_VERDICT), 4),
         "weighted_f1": round(compute_weighted_f1(vp_t, vy_t, NUM_VERDICT), 4),
         "n_claims": len(verdict_preds),
-        "skipped": skipped,
+        "skipped": len(skipped_ids),
+        "skipped_ids": skipped_ids,
         "per_class": {_INT_TO_VERDICT[k]: v for k, v in verdict_per_class_raw.items()},
         "confusion": compute_confusion_matrix(vp_t, vy_t, NUM_VERDICT),
         "per_source": compute_per_group_accuracy(vp_t, vy_t, source_labels),
@@ -350,8 +351,13 @@ def main() -> None:
         f"| Accuracy | {verdict_metrics['accuracy']:.4f} |\n"
         f"| Macro F1 | {verdict_metrics['macro_f1']:.4f} |\n"
         f"| Weighted F1 | {verdict_metrics['weighted_f1']:.4f} |\n"
-        f"| N Claims | {verdict_metrics['n_claims']} |\n"
-        f"| Skipped | {verdict_metrics['skipped']} |\n\n"
+        f"| N Claims | {verdict_metrics['n_claims']} |\n\n"
+        f"## Data Coverage\n\n"
+        f"| Split | Total | Evaluated | Skipped |\n"
+        f"|-------|-------|-----------|---------|\n"
+        f"| val | {verdict_metrics['n_claims'] + verdict_metrics['skipped']} "
+        f"| {verdict_metrics['n_claims']} | {verdict_metrics['skipped']} |\n\n"
+        f"_Full list of skipped claim IDs available in `verdict_metrics.json`._\n\n"
         f"### Per-Class Breakdown\n\n"
         f"| Class | Precision | Recall | F1 | N |\n|-------|-----------|--------|----|---|\n"
         f"{_pc_rows(verdict_metrics['per_class'])}\n\n"

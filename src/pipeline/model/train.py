@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pickle
 import sys
 from pathlib import Path
 
@@ -79,23 +80,26 @@ def _build_graphs(
     builder: ClaimGraphBuilder,
     split_name: str,
     verbose: bool,
-) -> list:
+) -> tuple[list, list[str]]:
     graphs = []
-    skipped = 0
-    subset = [records[i] for i in indices if i < len(records)]
-    for rec in subset:
+    skipped_ids: list[str] = []
+    for idx in indices:
+        if idx >= len(records):
+            skipped_ids.append(str(idx))
+            continue
         try:
-            g = builder.build(rec)
+            g = builder.build(records[idx])
         except Exception:
-            skipped += 1
+            skipped_ids.append(records[idx].get("id", str(idx)))
             continue
         if g is None:
-            skipped += 1
+            skipped_ids.append(records[idx].get("id", str(idx)))
             continue
+        g.data.claim_idx = torch.tensor([idx], dtype=torch.long)
         graphs.append(g.data)
     if verbose:
-        print(f"  {split_name}: {len(graphs)} graphs  ({skipped} skipped)")
-    return graphs
+        print(f"  {split_name}: {len(graphs)} graphs  ({len(skipped_ids)} skipped)")
+    return graphs, skipped_ids
 
 
 def main() -> None:
@@ -120,16 +124,61 @@ def main() -> None:
         json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
-    if args.verbose:
-        print("Building graphs...")
-    featurizer = Featurizer(cache_path=args.embed_cache, device=args.device)
-    registry = load_source_trust_registry(args.registry)
     is_nli = MODELS.get(args.model) is NLIHybridHGNN
-    builder = ClaimGraphBuilder(registry, featurizer, use_nli=is_nli)
 
-    train_graphs = _build_graphs(records, train_indices, builder, "train", args.verbose)
-    val_graphs = _build_graphs(records, val_indices, builder, "val", args.verbose)
-    featurizer.save_cache()
+    # ── Graph cache: skip JSONL rebuild when cache is newer than JSONL + splits ─
+    cache_dir = Path("out/model/graphs")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    graph_cache_path = cache_dir / f"split_cache_{args.model}.pkl"
+
+    _split_files = [splits_dir / f"{s}_indices.json" for s in ("train", "val")]
+    _split_mtime = max(
+        f.stat().st_mtime for f in _split_files if f.exists()
+    )
+    cache_valid = (
+        graph_cache_path.exists()
+        and graph_cache_path.stat().st_mtime >= jsonl_path.stat().st_mtime
+        and graph_cache_path.stat().st_mtime >= _split_mtime
+    )
+
+    if cache_valid:
+        if args.verbose:
+            print(f"Loading graphs from cache: {graph_cache_path}")
+        with open(graph_cache_path, "rb") as _f:
+            _cached = pickle.load(_f)
+        train_graphs = _cached["train"]
+        val_graphs = _cached["val"]
+        train_skipped_ids = _cached.get("train_skipped_ids", [])
+        val_skipped_ids = _cached.get("val_skipped_ids", [])
+    else:
+        if not graph_cache_path.exists():
+            reason = "cache missing"
+        elif graph_cache_path.stat().st_mtime < jsonl_path.stat().st_mtime:
+            reason = "JSONL newer than cache"
+        else:
+            reason = "splits newer than cache"
+        if args.verbose:
+            print(f"Building graphs... ({reason})")
+        featurizer = Featurizer(cache_path=args.embed_cache, device=args.device)
+        registry = load_source_trust_registry(args.registry)
+        builder = ClaimGraphBuilder(registry, featurizer, use_nli=is_nli)
+
+        train_graphs, train_skipped_ids = _build_graphs(records, train_indices, builder, "train", args.verbose)
+        val_graphs, val_skipped_ids = _build_graphs(records, val_indices, builder, "val", args.verbose)
+        featurizer.save_cache()
+
+        with open(graph_cache_path, "wb") as _f:
+            pickle.dump(
+                {
+                    "train": train_graphs,
+                    "val": val_graphs,
+                    "train_skipped_ids": train_skipped_ids,
+                    "val_skipped_ids": val_skipped_ids,
+                },
+                _f,
+            )
+        if args.verbose:
+            print(f"Graph cache saved: {graph_cache_path}")
 
     train_loader = DataLoader(train_graphs, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_graphs, batch_size=args.batch_size, shuffle=False)
@@ -199,7 +248,20 @@ def main() -> None:
     ckpt_dir = Path(args.checkpoint_dir)
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / "training_history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
+    report = {
+        "data_coverage": {
+            "train_total": len(train_indices),
+            "train_graphs": len(train_graphs),
+            "train_skipped": len(train_skipped_ids),
+            "train_skipped_ids": train_skipped_ids,
+            "val_total": len(val_indices),
+            "val_graphs": len(val_graphs),
+            "val_skipped": len(val_skipped_ids),
+            "val_skipped_ids": val_skipped_ids,
+        },
+        "history": history,
+    }
+    (report_dir / "training_history.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"Best model -> {ckpt_dir}/best_model.pt")
 
 

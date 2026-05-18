@@ -194,25 +194,6 @@ def cmd_run(args: argparse.Namespace) -> None:
     models = _resolve_models(args.models)
     print(f"Running full pipeline for: {models}")
 
-    # Shared graph build — skip if already exists
-    if not Path(args.graph).exists():
-        print("\nBuilding shared graph dataset...")
-        _run(
-            [
-                "uv",
-                "run",
-                "python",
-                "-m",
-                "src.pipeline.model.build_graphs",
-                "--input",
-                args.jsonl,
-                "--output",
-                args.graph,
-            ]
-        )
-    else:
-        print(f"Graph dataset exists at {args.graph} — skipping rebuild.")
-
     # Train + eval per model
     train_args = argparse.Namespace(
         models=",".join(models),
@@ -288,11 +269,6 @@ def main() -> None:
     _add_models(p_run)
     _add_data(p_run)
     _add_train_hp(p_run)
-    p_run.add_argument(
-        "--graph",
-        default="out/model/graphs/graph_dataset.pt",
-        help="Path to shared graph dataset .pt (built if missing)",
-    )
 
     args = ap.parse_args()
     {
