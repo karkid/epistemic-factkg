@@ -200,7 +200,7 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         description="One direct observational item confirming the claim (simulator ground truth).",
         evidence_specs=[
             EvidenceSpec(
-                "supports", "ai2thor_simulation", ["perception"], 1.0, "strong"
+                "supports", "sensor_perception", ["perception"], 1.0, "strong"
             ),
         ],
     ),
@@ -233,7 +233,7 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         description="One sensor-confirmed absence item supporting a negative claim.",
         evidence_specs=[
             EvidenceSpec(
-                "absent", "ai2thor_simulation", ["non_apprehension"], 0.8, "absent"
+                "absent", "sensor_perception", ["non_apprehension"], 0.8, "absent"
             ),
         ],
     ),
@@ -242,7 +242,7 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         description="Confirmed absence of something expected — refuting a positive claim.",
         evidence_specs=[
             EvidenceSpec(
-                "refutes", "ai2thor_simulation", ["non_apprehension"], 0.8, "strong"
+                "refutes", "sensor_perception", ["non_apprehension"], 0.8, "strong"
             ),
         ],
     ),

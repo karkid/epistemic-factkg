@@ -188,7 +188,7 @@ class AI2ThorConverter(DatasetConverter):
                     "modality": ev.get("modality", "simulation_state"),
                     "stance": stance,
                     "evidence_types": evidence_types,
-                    "source_id": "ai2thor_simulation",
+                    "source_id": "sensor_perception",
                     "inference_strength": 1.0,
                     "source_url": ev.get("source_url"),
                 }
@@ -307,7 +307,7 @@ class AI2ThorConverter(DatasetConverter):
                     "modality": "simulation_state",
                     "stance": stance,
                     "evidence_types": evidence_types,
-                    "source_id": "ai2thor_simulation",
+                    "source_id": "sensor_perception",
                     "inference_strength": 1.0,
                     "source_url": evidence_urls[0] if evidence_urls else None,
                 }

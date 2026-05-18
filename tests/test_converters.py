@@ -121,10 +121,10 @@ class TestAI2ThorConverter:
                     f"{r['id']}: missing inference_strength"
                 )
 
-    def test_evidence_source_id_is_ai2thor_simulation(self, ai2thor_converted):
+    def test_evidence_source_id_is_sensor_perception(self, ai2thor_converted):
         for r in ai2thor_converted:
             for ev in r.get("evidence") or []:
-                assert ev["source_id"] == "ai2thor_simulation", (
+                assert ev["source_id"] == "sensor_perception", (
                     f"{r['id']}: unexpected source_id {ev['source_id']!r}"
                 )
 

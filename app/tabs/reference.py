@@ -31,8 +31,8 @@ def _st_scale_markdown() -> str:
             "| web_text | 0.55 – 0.60 | — |\n"
             "| llm_generated | 0.50 | — |\n"
             "| web_archive | 0.40 | — |\n"
-            "| unknown | 0.40 | — |\n"
-            "| social_media | 0.30 – 0.40 | — |\n"
+            "| social_media | 0.30 – 0.35 | — |\n"
+            "| unknown | 0.30 | — |\n"
             "\n*Registry unavailable — showing static defaults.*"
         )
 
@@ -192,9 +192,9 @@ def _render_assumptions() -> None:
             "Source Trust (ST)",
             [
                 "ST is assigned statically from the registry; it does not adapt per-claim.",
-                "Unknown sources receive ST = 0.40 (same as the hard fallback `DEFAULT_SOURCE_TRUST`).",
+                "Unknown sources receive ST = 0.30 (same as the hard fallback `DEFAULT_SOURCE_TRUST`). Unknown web sources rank below social media because at least social-media platforms are identifiable.",
                 "Web archives (.web.archive.org) resolve to the original domain's ST.",
-                "Social-media sources (twitter, reddit, …) are capped at ST ≤ 0.40.",
+                "Social-media sources (twitter, reddit, …) are capped at ST ≤ 0.35.",
             ],
         ),
         (

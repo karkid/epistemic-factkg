@@ -108,7 +108,7 @@ Queries the RDF graph to produce supported and refuted claims. Claims are typed 
 Each source adapter applies per-evidence epistemic labeling — setting `evidence_types`, `source_id`, `inference_strength`, and computing `confidence_weight` via the EC formula — then calls `convert_one()` to produce a unified v3.0 record. `pramana_primary` no longer exists; evidence types are per-evidence and multi-label.
 
 Key per-adapter behavior:
-- **AI2THOR**: `evidence[].evidence_types` = `["perception"]` or `["non_apprehension"]` based on claim type; `source_id = "ai2thor_simulation"`; `inference_strength = 1.0`; `claim_triples` and `evidence[].triples` populated from RDF
+- **AI2THOR**: `evidence[].evidence_types` = `["perception"]` or `["non_apprehension"]` based on claim type; `source_id = "sensor_perception"`; `inference_strength = 1.0`; `claim_triples` and `evidence[].triples` populated from RDF
 - **AVeriTeC**: `evidence_types` from modality + answer-type heuristics; `source_id` resolved from `source_url` domain; `inference_strength` from answer type (extractive=0.8, abstractive=0.6); `claim_triples = null`
 - **Synthetic**: evidence fields already set by template; `triple_source = "ai2thor_simulation"` for perception/non_apprehension records with real triples; `provenance.dataset = "synthetic"`
 

@@ -85,38 +85,25 @@ PRAMANA_SHORT = {
     "audio":     "Pratyaksha",
     "web_table": "Upamana",
 }
+# The 6 one-hot encoder categories from SOURCE_TYPE_TO_INT in src/model/data/types.py.
+# Keep in sync with that dict.  Do NOT expand to raw registry source_types here —
+# the predictor maps source_id → encoder category at inference time.
 SOURCE_TYPES = [
-    "simulation",
-    "sensor",
-    "scientific_paper",
-    "government",
-    "knowledge_graph",
-    "fact_checker",
     "news_media",
-    "testimony",
-    "ngo_or_org",
-    "web_text",
-    "llm_generated",
-    "web_archive",
+    "academic",
+    "government",
     "social_media",
+    "sensor",
     "unknown",
 ]
 SOURCE_LABELS = {
-    "simulation":     "Simulation (AI2THOR)",
-    "sensor":         "Sensor / Perception",
-    "scientific_paper": "Scientific Paper",
-    "government":     "Government",
-    "knowledge_graph": "Knowledge Graph (Wikipedia…)",
-    "fact_checker":   "Fact Checker",
-    "news_media":     "News Media",
-    "testimony":      "Testimony / Annotator",
-    "ngo_or_org":     "NGO / .org",
-    "web_text":       "General Web Text",
-    "llm_generated":  "LLM Synthetic",
-    "web_archive":    "Web Archive",
-    "social_media":   "Social Media",
-    "unknown":        "Unknown",
-    # Legacy aliases kept so old session state falls back gracefully
-    "news":     "News Media",
-    "academic": "Scientific Paper",
+    "news_media":   "News Media",
+    "academic":     "Academic / Knowledge Graph",
+    "government":   "Government",
+    "social_media": "Social Media",
+    "sensor":       "Sensor / Perception",
+    "unknown":      "Unknown",
+    # Legacy aliases — keep so old session state / serialised records fall back gracefully
+    "news":       "News Media",
+    "simulation": "Simulation (AI2THOR)",
 }

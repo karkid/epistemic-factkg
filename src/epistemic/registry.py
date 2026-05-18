@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 # Fallback ST when source_id is not in registry
-DEFAULT_SOURCE_TRUST: float = 0.40
+DEFAULT_SOURCE_TRUST: float = 0.30
 
 # Known social-media domains for TLD heuristic fallback
 _SOCIAL_MEDIA_DOMAINS: frozenset[str] = frozenset(

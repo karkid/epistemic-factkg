@@ -124,15 +124,15 @@ IS measures how many inferential steps separate the evidence from the claim conc
 
 `source_id` is the registry key that resolves to `source_trust` ($ST$) via `data/registry/source_trust_registry.jsonl`.
 
-**Format:** `{domain}_{modality}` — e.g., `bbc_web_text`, `wikipedia_knowledge_graph`, `ai2thor_simulation`.
+**Format:** `{domain}_{modality}` — e.g., `bbc_web_text`, `wikipedia_knowledge_graph`, `sensor_perception`.
 
-**Fallback:** unresolvable `source_id` → `DEFAULT_SOURCE_TRUST = 0.40`.
+**Fallback:** unresolvable `source_id` → `DEFAULT_SOURCE_TRUST = 0.30`.
 
 **Source-type default tiers** (applied when no domain-specific entry exists):
 
 | Source type | Default $ST$ | Basis |
 |---|---|---|
-| `simulation` (AI2THOR) | 1.0 | Closed-world ground truth |
+| `sensor` (AI2THOR / IoT) | 0.95 | Direct perception / closed-world measurement |
 | `scientific_paper` | 0.90 | Peer-review process |
 | `government` | 0.85 | Official records |
 | `knowledge_graph` (Wikipedia) | 0.80 | Community-reviewed, cited |
@@ -141,7 +141,7 @@ IS measures how many inferential steps separate the evidence from the claim conc
 | `web_text` (general) | 0.55 | Unverified web source |
 | `llm_generated` | 0.50 | Synthetic, no real-world grounding |
 | `social_media` | 0.35 | Self-published, unverified |
-| `unknown` | 0.40 | Fallback |
+| `unknown` | 0.30 | Fallback — unknown source ranks below known-bad |
 
 Domain-specific overrides use MBFC ratings. Each override is documented with `trust_metadata.methodology_ref = "MBFC:{slug}"` in the registry record.
 
