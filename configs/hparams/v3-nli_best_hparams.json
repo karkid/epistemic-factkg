@@ -1,0 +1,11 @@
+{
+  "hidden_dim": 512,
+  "heads": 4,
+  "dropout": 0.4,
+  "lr": 0.0003329126578403332,
+  "weight_decay": 8.923810773199948e-05,
+  "is_loss_weight": 2.789964346739313,
+  "_best_val_loss": 0.7915,
+  "_n_trials": 30,
+  "_model": "v3-nli"
+}

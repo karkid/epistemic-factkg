@@ -1,0 +1,11 @@
+{
+  "hidden_dim": 256,
+  "heads": 2,
+  "dropout": 0.1,
+  "lr": 0.0031956818477253328,
+  "weight_decay": 0.0031478261278935203,
+  "is_loss_weight": 0.583863218635727,
+  "_best_val_loss": 1.0889,
+  "_n_trials": 30,
+  "_model": "v1-hgnn"
+}

@@ -176,7 +176,7 @@ def main() -> None:
                 try:
                     g = builder.build(records[idx])
                     if g is not None:
-                        graphs.append(g)
+                        graphs.append(g.data)
                 except Exception:
                     pass
             print(f"{split}: {len(graphs)} graphs")

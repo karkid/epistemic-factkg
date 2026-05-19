@@ -1,0 +1,11 @@
+{
+  "hidden_dim": 256,
+  "heads": 4,
+  "dropout": 0.2,
+  "lr": 0.0032528454574847366,
+  "weight_decay": 0.0014127843546488758,
+  "is_loss_weight": 3.5643025072340424,
+  "_best_val_loss": 0.9214,
+  "_n_trials": 30,
+  "_model": "baseline"
+}
