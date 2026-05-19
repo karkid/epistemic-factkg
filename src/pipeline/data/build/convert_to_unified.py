@@ -18,11 +18,20 @@ import argparse
 from pathlib import Path
 
 from src.adapters.ai2thor.converter import AI2ThorConverter
+from src.adapters.ai2thor.validator import AI2ThorValidator
 from src.adapters.averitec.converter import AveritecConverter
+from src.adapters.averitec.validator import AveritecValidator
+from src.adapters.synthetic.validator import SyntheticDataValidator
 from src.epistemic.registry import load_source_trust_registry
+from src.epistemic.schema import CLAIM_SCHEMA
 
 _DEFAULT_CONFIG = "configs/config.yaml"
 _DEFAULT_REGISTRY = "data/registry/source_trust_registry.jsonl"
+
+_DATASET_VALIDATORS = {
+    "ai2thor": AI2ThorValidator(),
+    "averitec": AveritecValidator(),
+}
 
 
 def _make_converters(registry_path: str | None = None) -> dict:
@@ -57,16 +66,95 @@ def convert_to_unified(
 
 
 def _passthrough_jsonl(in_path: str, out_path: str) -> int:
-    """Copy synthetic JSONL records verbatim — already in v3.0 format."""
+    """Copy synthetic JSONL records to out_path, validating each against CLAIM_SCHEMA.
+
+    Invalid records are logged and skipped so they do not corrupt downstream steps.
+    """
     import json
+    from jsonschema import Draft7Validator
+
+    validator = Draft7Validator(CLAIM_SCHEMA)
     count = 0
+    skipped = 0
+
     with open(in_path, encoding="utf-8") as fin, open(out_path, "w", encoding="utf-8") as fout:
-        for line in fin:
+        for i, line in enumerate(fin, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                print(f"  [SKIP] synthetic line {i}: JSON parse error: {exc}", flush=True)
+                skipped += 1
+                continue
+
+            errors = list(validator.iter_errors(record))
+            if errors:
+                rec_id = record.get("id", f"synthetic-line-{i}")
+                for err in errors:
+                    field = ".".join(str(p) for p in err.absolute_path) or "(root)"
+                    print(f"  [SKIP] {rec_id}: schema error at {field!r}: {err.message}", flush=True)
+                skipped += 1
+                continue
+
+            fout.write(json.dumps(record, ensure_ascii=False) + "\n")
+            count += 1
+
+    if skipped:
+        print(
+            f"  [synthetic] {count} records written, "
+            f"{skipped} skipped (schema invalid) — fix the generator or source data.",
+            flush=True,
+        )
+    return count
+
+
+def _validate_intermediate(
+    dataset: str,
+    jsonl_path: str,
+    registry: dict | None = None,
+) -> bool:
+    """Run dataset-specific validation on an intermediate JSONL file.
+
+    Returns True if no errors were found, False otherwise.
+    Prints a per-record summary with any issues found.
+    """
+    import json
+
+    records: list[dict] = []
+    with open(jsonl_path, encoding="utf-8") as f:
+        for line in f:
             line = line.strip()
             if line:
-                fout.write(line + "\n")
-                count += 1
-    return count
+                records.append(json.loads(line))
+
+    if dataset == "synthetic":
+        sv = SyntheticDataValidator(registry=registry or {})
+        report = sv.validate_batch(records)
+        print(f"  [validate:synthetic] {report.summary()}", flush=True)
+        return report.passes
+
+    dv = _DATASET_VALIDATORS.get(dataset)
+    if dv is None:
+        return True
+
+    issue_count = 0
+    for rec in records:
+        msgs = dv.check(rec)
+        if msgs:
+            rec_id = rec.get("id", "?")
+            for msg in msgs:
+                print(f"  [validate:{dataset}] {rec_id}: {msg}", flush=True)
+            issue_count += 1
+
+    total = len(records)
+    status = "PASS" if issue_count == 0 else "FAIL"
+    print(
+        f"  [validate:{dataset}] {total} records, {issue_count} with issues — {status}",
+        flush=True,
+    )
+    return issue_count == 0
 
 
 def _infer_split(path: Path) -> str | None:
@@ -83,7 +171,16 @@ def _infer_split(path: Path) -> str | None:
 def run(args) -> int:
     """Called by the build dispatcher; args must have: registry, output,
     averitec, ai2thor, synthetic, intermediate_dir."""
-    converters = _make_converters(args.registry)
+    import tempfile
+    import os
+    from src.epistemic.registry import load_source_trust_registry as _load_registry
+
+    registry: dict = {}
+    rp = Path(getattr(args, "registry", None) or _DEFAULT_REGISTRY)
+    if rp.exists():
+        registry = _load_registry(rp)
+
+    converters = _make_converters(getattr(args, "registry", None))
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,10 +199,8 @@ def run(args) -> int:
         print("No inputs provided.")
         return 1
 
-    import tempfile
-    import os
-
     total_records = 0
+    validation_failures = 0
     tmp_files = []
 
     for dataset, in_file in inputs:
@@ -115,18 +210,24 @@ def run(args) -> int:
         split = _infer_split(in_path)
         if dataset == "averitec" and split is None:
             split = "train"
+
         if intermediate_dir:
             inter_path = intermediate_dir / f"{dataset}_{in_path.stem}.jsonl"
             n = convert_to_unified(dataset, str(in_path), str(inter_path), split=split, converters=converters)
             print(f"[{dataset}] {in_path.name} -> {inter_path.name}  ({n} records, split={split})")
             tmp_files.append(str(inter_path))
+            ok = _validate_intermediate(dataset, str(inter_path), registry=registry)
         else:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as tf:
                 tmp_path = tf.name
             n = convert_to_unified(dataset, str(in_path), tmp_path, split=split, converters=converters)
             print(f"[{dataset}] {in_path.name}  ({n} records, split={split})")
             tmp_files.append(tmp_path)
+            ok = _validate_intermediate(dataset, tmp_path, registry=registry)
+
         total_records += n
+        if not ok:
+            validation_failures += 1
 
     with open(out_path, "w", encoding="utf-8") as fout:
         for tmp in tmp_files:
@@ -143,6 +244,12 @@ def run(args) -> int:
                 pass
 
     print(f"\nMerged {total_records} records -> {out_path}")
+    if validation_failures:
+        print(
+            f"WARNING: {validation_failures} dataset(s) had validation issues — "
+            "see [validate:*] lines above.",
+            flush=True,
+        )
     return 0
 
 

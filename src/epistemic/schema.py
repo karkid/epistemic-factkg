@@ -7,7 +7,7 @@ from src.epistemic.enums import EvidenceType, Verdict, EvidenceStance, Reasoning
 
 _EVIDENCE_TYPE_VALUES = [p.value for p in EvidenceType]
 _VERDICT_VALUES = [v.value for v in Verdict]
-_STANCE_VALUES = [s.value for s in EvidenceStance] + [None]
+_STANCE_VALUES = [s.value for s in EvidenceStance]
 _STRATEGY_VALUES = [s.value for s in ReasoningStrategy] + [None]
 
 CLAIM_SCHEMA = {
@@ -34,8 +34,8 @@ CLAIM_SCHEMA = {
             "additionalProperties": False,
             "properties": {
                 "label": {
-                    "type": ["string", "null"],
-                    "enum": _VERDICT_VALUES + [None],
+                    "type": "string",
+                    "enum": _VERDICT_VALUES,
                 },
                 "justification": {"type": ["string", "null"]},
                 "derivation_method": {
@@ -55,7 +55,7 @@ CLAIM_SCHEMA = {
                 },
                 "assignment_method": {
                     "type": "string",
-                    "enum": ["heuristic", "rule_based", "annotated", "llm_generated"],
+                    "enum": ["heuristic", "rule_based", "annotated", "llm_generated", "simulator"],
                 },
             },
         },
@@ -107,8 +107,8 @@ CLAIM_SCHEMA = {
                 ],
                 "additionalProperties": False,
                 "properties": {
-                    "evidence_id": {"type": "string"},
-                    "text": {"type": ["string", "null"]},
+                    "evidence_id": {"type": "string", "minLength": 1},
+                    "text": {"type": "string", "minLength": 1},
                     "triples": {
                         "type": ["array", "null"],
                         "items": {
@@ -125,7 +125,7 @@ CLAIM_SCHEMA = {
                     "modality": {
                         "type": "string",
                         "enum": [
-                            "simulation_state",
+                            "sensor",
                             "web_text",
                             "pdf",
                             "web_table",
@@ -138,14 +138,14 @@ CLAIM_SCHEMA = {
                         ],
                     },
                     "stance": {
-                        "type": ["string", "null"],
+                        "type": "string",
                         "enum": _STANCE_VALUES,
                     },
                     "evidence_types": {
                         "type": "array",
                         "items": {"type": "string", "enum": _EVIDENCE_TYPE_VALUES},
                     },
-                    "source_id": {"type": "string"},
+                    "source_id": {"type": "string", "minLength": 1},
                     "inference_strength": {
                         "type": "number",
                         "minimum": 0.0,
@@ -175,6 +175,8 @@ CLAIM_SCHEMA = {
             "properties": {
                 "schema_version": {"type": "string", "const": "3.0"},
                 "created_utc": {"type": "string"},
+                "template_type": {"type": ["string", "null"]},
+                "is_shortcut_breaking": {"type": ["boolean", "null"]},
             },
         },
     },

@@ -1,6 +1,6 @@
 # ADR-011: Per-Evidence Labeling Rules
 
-**Status:** Accepted
+**Status:** Accepted (AI2THOR section superseded by ADR-028)
 **Merges:** ADR-011 (AI2THOR rules + AVeriTeC rules)
 **Related:** ADR-001 (Pramana weights), ADR-009 (source trust registry), ADR-010 (per-evidence modeling)
 
@@ -13,6 +13,8 @@ Schema v3.0 assigns `evidence_types`, `source_id`, and `inference_strength` per 
 ---
 
 ## AI2THOR Rules
+
+> **Note:** This section is superseded by ADR-028. The table below reflects the current rules.
 
 AI2THOR exposes two structural dimensions per claim:
 - `reasoning.strategy` — the verification mechanism per evidence item
@@ -29,15 +31,17 @@ AI2THOR exposes two structural dimensions per claim:
 | `spatial_reasoning` | `["perception", "comparison_analogy"]` | Sensor reads positions; verifying spatial relation requires comparison |
 | `action_testing` | `["perception", "inference"]` | Affordance tested by attempting action; outcome is inferred |
 | fallback (no strategy, has triples) | `["perception"]` | |
-| fallback (no strategy, no triples) | `["non_apprehension"]` | |
+| fallback (no strategy, no triples) | `["perception", "non_apprehension"]` | Absence implied; perception required to observe it |
 
 ### Fixed fields for all AI2THOR evidence items
 
 | Field | Value |
 |---|---|
-| `source_id` | `"ai2thor_simulation"` |
+| `source_id` | `"sensor_perception"` |
 | `inference_strength` | `1.0` — simulator state is directly read; zero inference steps |
-| `modality` | `"simulation_state"` |
+| `modality` | `"sensor"` |
+| `assignment_method` | `"simulator"` |
+| `stance` | `"supports"` or `"refutes"` — mirrors verdict; no `absent` stance (ADR-028) |
 
 ### Absence claims: `claim_triples = null`
 

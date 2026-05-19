@@ -33,6 +33,13 @@ def uv(*args: str) -> None:
 def main() -> None:
     rebuild = len(sys.argv) > 1 and sys.argv[1].lower() == "true"
 
+    if not rebuild and not Path(AI2THOR_CLAIMS).exists():
+        print(
+            f"{AI2THOR_CLAIMS} not found — triggering full rebuild automatically.",
+            file=sys.stderr,
+        )
+        rebuild = True
+
     rebuild_flags: list[str] = []
     if rebuild:
         rebuild_flags = [
@@ -41,13 +48,6 @@ def main() -> None:
             "--out-rdf", KG_TTL,
             "--ai2thor-dir", AI2THOR_DIR,
         ]
-    elif not Path(AI2THOR_CLAIMS).exists():
-        print(
-            f"Error: {AI2THOR_CLAIMS} not found. "
-            "Run 'just build rebuild=true' to generate it.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     if not Path(SYNTHETIC_JSONL).exists():
         print("--- generating synthetic claims ---")

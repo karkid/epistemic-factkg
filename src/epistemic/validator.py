@@ -232,13 +232,42 @@ class AdvancedClaimValidator:
                 )
 
         for ev in claim.get("evidence") or []:
-            if ev.get("stance") == "absent" and (ev.get("triples") or []):
+            ev_types = ev.get("evidence_types") or []
+            ev_id = ev.get("evidence_id", "?")
+            is_non_apprehension = "non_apprehension" in ev_types
+            ev_stance = ev.get("stance")
+            ev_modality = ev.get("modality", "")
+
+            if (
+                is_non_apprehension
+                and ev_stance == "supports"
+                and (ev.get("triples") or [])
+            ):
                 result.add_issue(
                     "semantic",
                     "warning",
-                    f"evidence {ev.get('evidence_id')}: stance=absent but triples is non-empty",
+                    f"evidence {ev_id}: non_apprehension supports stance but triples is non-empty",
                     "evidence[].triples",
-                    suggestion="absent stance should have triples=[]",
+                    suggestion="supported absence claims should have triples=[]",
+                )
+
+            # evidence.text must not be whitespace-only
+            raw_text = ev.get("text", "")
+            if isinstance(raw_text, str) and raw_text and not raw_text.strip():
+                result.add_issue(
+                    "semantic",
+                    "error",
+                    f"evidence {ev_id}: text is whitespace-only",
+                    "evidence[].text",
+                )
+
+            # non-unanswerable evidence must carry at least one evidence_type
+            if ev_modality != "unanswerable" and not ev_types:
+                result.add_issue(
+                    "semantic",
+                    "error",
+                    f"evidence {ev_id}: evidence_types is empty for non-unanswerable evidence",
+                    "evidence[].evidence_types",
                 )
 
     def _validate_quality(self, claim: dict, result: ClaimValidationResult):
@@ -335,27 +364,39 @@ class AdvancedClaimValidator:
                 "verdict.label",
             )
 
+        # evidence_types_all must equal the sorted union of per-evidence evidence_types
+        computed_union = sorted({
+            t
+            for e in evidence
+            for t in (e.get("evidence_types") or [])
+        })
+        if computed_union != sorted(evidence_types_all):
+            result.add_issue(
+                "consistency",
+                "error",
+                f"evidence_types_all {evidence_types_all!r} does not match union of per-evidence types {computed_union!r}",
+                "epistemic.evidence_types_all",
+            )
+
         stances = [e.get("stance") for e in evidence if e.get("stance")]
-        if (
-            label == Verdict.SUPPORTED
-            and stances
-            and all(s == EvidenceStance.REFUTES for s in stances)
+        # verdict=supported requires at least one supports stance
+        if label == Verdict.SUPPORTED.value and stances and not any(
+            s == EvidenceStance.SUPPORTS.value for s in stances
         ):
             result.add_issue(
                 "consistency",
                 "error",
-                "All evidence stances are 'refutes' but verdict is 'supported'",
+                "verdict is 'supported' but no evidence item has stance='supports'",
                 "evidence[].stance",
             )
-        if (
-            label == Verdict.REFUTED
-            and stances
-            and all(s == EvidenceStance.SUPPORTS for s in stances)
+        # verdict=refuted requires at least one refutes stance
+        if label == Verdict.REFUTED.value and stances and not any(
+            s == EvidenceStance.REFUTES.value for s in stances
         ):
             result.add_issue(
                 "consistency",
                 "error",
-                "All evidence stances are 'supports' but verdict is 'refuted'",
+                "verdict is 'refuted' but no evidence item has stance='refutes'",
                 "evidence[].stance",
             )
         if label == Verdict.CONFLICTING_EVIDENCE and stances:
@@ -378,12 +419,13 @@ class AdvancedClaimValidator:
             )
 
         if is_absence:
-            has_absent = any(e.get("stance") == EvidenceStance.ABSENT for e in evidence)
-            if not has_absent:
+            decisive_stances = {EvidenceStance.SUPPORTS.value, EvidenceStance.REFUTES.value}
+            has_decisive = any(e.get("stance") in decisive_stances for e in evidence)
+            if not has_decisive:
                 result.add_issue(
                     "consistency",
                     "error",
-                    "non_apprehension evidence type requires at least one evidence item with stance=absent",
+                    "non_apprehension evidence type requires at least one evidence item with stance=supports or stance=refutes",
                     "evidence[].stance",
                 )
 

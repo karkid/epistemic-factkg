@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (partially superseded by ADR-028: absent stance removed, aggregation updated)
 
 ## Context
 
@@ -50,7 +50,7 @@ and source credibility jointly limit confidence — weak source trust cannot be 
 high epistemic type weight alone.
 
 - $ST_i$ — source trustworthiness, resolved from registry via `source_id`
-- $EW_i$ — epistemic-type weight: `combine_pramana_weights(evidence_types)` — diminishing-returns
+- $EW_i$ — epistemic-type weight: `combine_evidence_weights(evidence_types)` — diminishing-returns
   combination over the item's evidence types (ADR-001)
 - $IS_i$ — inference strength rubric (see below)
 
@@ -73,12 +73,12 @@ abstractive answer still gets IS = 0.6; $ST_i$ captures source quality separatel
 
 ### Aggregation
 
-$$SupportScore = 1 - \prod_{i \in \text{supports or absent}}(1 - EC_i)$$
+$$SupportScore = 1 - \prod_{i \in \text{supports}}(1 - EC_i)$$
 $$RefuteScore = 1 - \prod_{i \in \text{refutes}}(1 - EC_i)$$
 
 Evidence with `not_enough_evidence` or `conflicting_evidence` stance is excluded from both
-aggregations. `absent` stance (sensor-confirmed absence, AI2THOR only) contributes to the support
-pool.
+aggregations. Absence (non_apprehension) claims carry `supports` stance directly (ADR-028) —
+no special case needed in the aggregation.
 
 ### Verdict derivation thresholds
 
@@ -117,7 +117,7 @@ All formula functions, constants, and registry utilities live in
 | Symbol | Purpose |
 |---|---|
 | `compute_evidence_confidence(st, ew, is_)` | EC_i formula |
-| `combine_pramana_weights(types)` | EW_i (diminishing returns, ADR-001) |
+| `combine_evidence_weights(types)` | EW_i (diminishing returns, ADR-001) |
 | `aggregate_scores(evidence_items, registry)` | (support_score, refute_score) |
 | `derive_verdict(support_score, refute_score)` | Verdict label |
 | `SUPPORT_THRESHOLD = 0.75` | |

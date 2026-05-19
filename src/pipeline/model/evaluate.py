@@ -35,6 +35,7 @@ from src.model.models import MODELS
 from src.model.models.nlihybridhgnn import NLIHybridHGNN
 from src.model.config import GraphConfig
 from src.model.data.types import NUM_STANCE, NUM_VERDICT, VERDICT_TO_INT
+from src.pipeline.model.hparam_search import load_best_hparams
 
 _INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}
 _INT_TO_STANCE = {0: "supports", 1: "refutes", 2: "neutral"}
@@ -170,9 +171,9 @@ def main() -> None:
         required=True,
         help="Directory to write stance/IS/verdict JSON files",
     )
-    ap.add_argument("--hidden-dim", type=int, default=256)
-    ap.add_argument("--heads", type=int, default=4)
-    ap.add_argument("--dropout", type=float, default=0.3)
+    ap.add_argument("--hidden-dim", type=int, default=None, help="Override hidden dim (default: from best_hparams or 256)")
+    ap.add_argument("--heads", type=int, default=None, help="Override attention heads (default: from best_hparams or 4)")
+    ap.add_argument("--dropout", type=float, default=None, help="Override dropout (default: from best_hparams or 0.3)")
     ap.add_argument("--device", default=None, help="cuda or cpu (default: auto-detect)")
     args = ap.parse_args()
     args.device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -187,10 +188,19 @@ def main() -> None:
             f"Unknown model '{args.model}'. Available: {list(MODELS)}", file=sys.stderr
         )
         sys.exit(1)
+
+    best = load_best_hparams(args.model)
+    if best:
+        print(f"Loaded best hparams from configs/hparams/{args.model}_best_hparams.json")
+    hidden_dim = args.hidden_dim or (best.get("hidden_dim") if best else None) or 256
+    heads     = args.heads     or (best.get("heads")      if best else None) or 4
+    dropout   = args.dropout   or (best.get("dropout")    if best else None) or 0.3
+    print(f"Model arch: hidden_dim={hidden_dim}  heads={heads}  dropout={dropout}")
+
     is_nli = MODELS.get(args.model) is NLIHybridHGNN
     graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
     model = MODELS[args.model](
-        graph_cfg, args.hidden_dim, args.heads, args.dropout
+        graph_cfg, hidden_dim, heads, dropout
     )
     model.load_state_dict(
         torch.load(args.checkpoint, map_location=device, weights_only=False)
@@ -326,10 +336,12 @@ def main() -> None:
     plots_dir = output_dir / "plots"
     _write_eval_plots(stance_metrics, verdict_metrics, plots_dir)
 
+    hparams_src = f"configs/hparams/{args.model}_best_hparams.json" if best else "defaults"
     eval_md = (
         f"# Evaluation Summary\n\n"
         f"**Model:** {args.model_name}  \n"
-        f"**Generated:** {_now}\n\n"
+        f"**Generated:** {_now}  \n"
+        f"**Hparams:** hidden_dim={hidden_dim}, heads={heads}, dropout={dropout} (source: {hparams_src})\n\n"
         f"---\n\n"
         f"## Stance Classification\n\n"
         f"| Metric | Value |\n|--------|-------|\n"

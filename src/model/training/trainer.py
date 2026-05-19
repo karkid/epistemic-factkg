@@ -152,7 +152,9 @@ class Trainer:
                     f"loss {tr.loss:.4f} "
                     f"(s={tr.stance_loss:.3f} is={tr.is_loss:.3f} v={tr.verdict_loss:.3f}) "
                     f"s_acc {tr.stance_acc:.3f} v_acc {tr.verdict_acc:.3f} | "
-                    f"val loss {val.loss:.4f} s_acc {val.stance_acc:.3f} v_acc {val.verdict_acc:.3f}"
+                    f"val loss {val.loss:.4f} "
+                    f"(s={val.stance_loss:.3f} is={val.is_loss:.3f} v={val.verdict_loss:.3f}) "
+                    f"s_acc {val.stance_acc:.3f} v_acc {val.verdict_acc:.3f}"
                 )
 
             if val.loss < self._best_val_loss:

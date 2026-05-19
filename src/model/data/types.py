@@ -36,13 +36,10 @@ NUM_VERDICT = len(VERDICT_TO_INT)  # 3
 
 
 # ── Stance (H1 supervision labels) ───────────────────────────────────────────
-# absent maps to supports: sensor-confirmed absence is positive evidence for
-# claims about missing objects (contributes to support score in EC aggregation).
 # not_enough_evidence and conflicting_evidence map to neutral.
 
 STANCE_TO_INT: dict[str, int] = {
     "supports": 0,
-    "absent": 0,
     "refutes": 1,
     "not_enough_evidence": 2,
     "conflicting_evidence": 2,
@@ -78,7 +75,7 @@ NUM_REASONING_STRATEGY = len(REASONING_STRATEGY_TO_INT)  # 6
 # ── Modality (one-hot, evidence node) ────────────────────────────────────────
 
 MODALITY_TO_INT: dict[str, int] = {
-    "simulation_state": 0,
+    "sensor": 0,
     "web_text": 1,
     "video": 2,
     "audio": 3,
@@ -100,9 +97,6 @@ SOURCE_TYPE_TO_INT: dict[str, int] = {
 NUM_SOURCE_TYPE = len(SOURCE_TYPE_TO_INT)  # 6
 
 # Maps registry source_type values → the 6 encoder categories.
-# "simulation" is dropped as a distinct category: modality=simulation_state (slot 0
-# in MODALITY_TO_INT) already uniquely identifies AI2THOR evidence, so the source_type
-# slot was redundant.  AI2THOR evidence now encodes as "unknown" (slot 5).
 _REGISTRY_TYPE_TO_CATEGORY: dict[str, str] = {
     "news_media": "news_media",
     "fact_checker": "news_media",
@@ -112,7 +106,7 @@ _REGISTRY_TYPE_TO_CATEGORY: dict[str, str] = {
     "knowledge_graph": "academic",
     "social_media": "social_media",
     "sensor": "sensor",           # physical sensor / IoT → slot 4
-    "simulation": "unknown",      # modality=simulation_state already distinguishes AI2THOR
+    "simulation": "sensor",       # AI2THOR simulation maps to sensor category
     "web_archive": "unknown",
     "llm_generated": "unknown",
     "ngo_or_org": "unknown",

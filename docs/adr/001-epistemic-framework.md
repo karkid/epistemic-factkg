@@ -1,6 +1,6 @@
 # ADR-001: Pramana Epistemic Framework
 
-**Status:** Accepted
+**Status:** Accepted (partially superseded by ADR-028 for stance rules)
 **Merges:** ADR-001 (Pramana categories), ADR-005 (non_apprehension vs NEE), ADR-006 (combination formula), ADR-008 (weight values)
 
 ---
@@ -38,7 +38,7 @@ When an evidence item has multiple `evidence_types`, combine weights via probabi
 EW = 1 - Π(1 - wᵢ)
 ```
 
-This models "probability at least one source is correct" under source independence. The strongest type always dominates; additional types add diminishing marginal gain. Implemented in `src/core/claims/labels.py:combine_pramana_weights()`.
+This models "probability at least one source is correct" under source independence. The strongest type always dominates; additional types add diminishing marginal gain. Implemented in `src/epistemic/formula.py:combine_evidence_weights()`.
 
 Examples:
 - `["perception", "inference"]` → `1 - (1-0.95)(1-0.55)` = **0.9775**
@@ -54,10 +54,10 @@ Two superficially similar concepts must stay distinct at every schema level:
 |---|---|---|
 | Meaning | Sensor-confirmed absence of an entity/state | Insufficient textual sources to verify claim |
 | Source | AI2THOR only (closed-world) | AVeriTeC (open-world) |
-| `evidence[].stance` | `"absent"` | `"not_enough_evidence"` |
+| `evidence[].stance` | `"supports"` (absence confirmed) or `"refutes"` (object found) | `"not_enough_evidence"` |
 | Weight | 0.75 — closed-world absence is a positive epistemic act | 0.75 via EW lookup |
 
-`non_apprehension` is never assigned to AVeriTeC records — web text cannot confirm closed-world absence. `evidence[].stance = "absent"` is AI2THOR-only. Merging these would corrupt stance labels and misrepresent the epistemic situation.
+`non_apprehension` is never assigned to AVeriTeC records — web text cannot confirm closed-world absence. Absence claims use `supports`/`refutes` stance like all other claims (see ADR-028). Merging `non_apprehension` with NEE would corrupt stance labels and misrepresent the epistemic situation.
 
 ---
 

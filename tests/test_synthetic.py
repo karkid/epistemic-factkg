@@ -261,7 +261,7 @@ class TestLocalTextClient:
         client = LocalTextClient()
         specs = [
             EvidenceSpec(
-                "absent", "ai2thor_simulation", ["non_apprehension"], 0.8, "absent"
+                "supports", "ai2thor_simulation", ["non_apprehension"], 0.8, "strong"
             )
         ]
         result = client.generate(specs, "non_apprehension_absent")

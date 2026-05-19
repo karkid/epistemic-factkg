@@ -274,6 +274,7 @@ class ClaimGenerator:
         created_utc: Optional[str] = None,
         source_type: Optional[EvidenceType] = None,
         evidence_extract: Optional[str] = None,
+        reasoning_strategy: Optional[str] = None,
     ):
         return ClaimInstance.make_instance(
             rec_id=rec_id,
@@ -294,6 +295,7 @@ class ClaimGenerator:
             notes=notes,
             created_utc=created_utc,
             evidence_extract=evidence_extract,
+            reasoning_strategy=reasoning_strategy,
         )
 
     def generate_absence(
@@ -363,6 +365,7 @@ class ClaimGenerator:
                 evidence_urls=[],
                 source_type=EvidenceType.NON_APPREHENSION,
                 evidence_extract=f"Sensor didn't find {obj_type} in the scene.",
+                reasoning_strategy="absence_detection",
             )
 
             if not self._is_new_claim(instance):
@@ -410,6 +413,7 @@ class ClaimGenerator:
                 evidence_urls=[],
                 source_type=EvidenceType.NON_APPREHENSION,
                 evidence_extract=f"There is a {obj_type} in this scene.",
+                reasoning_strategy="absence_detection",
             )
 
             if not self._is_new_claim(instance):

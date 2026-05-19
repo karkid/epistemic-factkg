@@ -163,15 +163,13 @@ _TEXT_POOLS: dict[str, dict[str, list[str]]] = {
             "Direct visual inspection confirms {brand}'s {product} clearly shows the described feature during normal operation.",
             "Physical examination of the {brand} {product} unit verified the observation with no ambiguity.",
             "On-site inspection at the {city} facility confirmed the described visual characteristic was present.",
+            "A systematic search of the {city} facility found no instance of the described feature on any {brand} {product} unit.",
+            "Comprehensive inspection confirmed the complete absence of the described characteristic from all {brand} {product} units examined.",
         ],
         "weak": [
             "A partial view reportedly suggests the {brand} {product} may display the described feature, though the angle was obstructed.",
             "An observer allegedly noted the characteristic on the {brand} {product}, but lighting conditions were poor.",
             "Photographic evidence from an unverified source purportedly shows the described feature on a {brand} {product}.",
-        ],
-        "absent": [
-            "A systematic search of the {city} facility found no instance of the described feature on any {brand} {product} unit.",
-            "Comprehensive inspection confirmed the complete absence of the described characteristic from all {brand} {product} units examined.",
         ],
     },
     "inference": {
@@ -201,8 +199,6 @@ _TEXT_POOLS: dict[str, dict[str, list[str]]] = {
         "strong": [
             "A systematic {metric}-point inspection of the {city} {inst} found no instance matching the described characteristic.",
             "Comprehensive testing across all {brand} {product} batches confirmed the complete absence of {subst}.",
-        ],
-        "absent": [
             "No evidence of the described element was found in any of the {metric} samples tested across {city} facilities.",
             "A thorough search confirmed the described item is absent from the {city} {inst} inventory.",
         ],

@@ -105,7 +105,7 @@ class TestAI2ThorConverter:
             assert r["provenance"]["dataset"] == "ai2thor"
 
     def test_evidence_stance_is_valid(self, ai2thor_converted):
-        valid = {s.value for s in EvidenceStance} | {None}
+        valid = {s.value for s in EvidenceStance}
         for r in ai2thor_converted:
             for ev in r.get("evidence") or []:
                 assert ev.get("stance") in valid, (
@@ -167,12 +167,13 @@ class TestAI2ThorConverter:
         ]
         assert len(absence) >= 1, "No absence claims in fixture"
         for r in absence:
-            # Absence claims must have stance=absent and no evidence triples
+            # Absence claims use supports/refutes like all other claims (ADR-028)
             for ev in r.get("evidence") or []:
-                assert ev.get("stance") == EvidenceStance.ABSENT.value, (
-                    f"{r['id']}: non_apprehension but stance={ev.get('stance')!r}"
-                )
-                assert ev.get("triples") == [], (
+                assert ev.get("stance") in (
+                    EvidenceStance.SUPPORTS.value,
+                    EvidenceStance.REFUTES.value,
+                ), f"{r['id']}: non_apprehension but stance={ev.get('stance')!r}"
+                assert not ev.get("triples"), (
                     f"{r['id']}: absence claim has non-empty triples"
                 )
             # claim_triples must be None for absence
@@ -291,7 +292,7 @@ class TestAveritecConverter:
                     f"{r['id']}: refuted but no refutes stance"
                 )
 
-    def test_conflicting_and_nee_stances_are_null(self, averitec_converted):
+    def test_conflicting_and_nee_stances_are_not_enough_evidence(self, averitec_converted):
         ambiguous = {
             Verdict.CONFLICTING_EVIDENCE.value,
             Verdict.NOT_ENOUGH_EVIDENCE.value,
@@ -299,8 +300,8 @@ class TestAveritecConverter:
         for r in averitec_converted:
             if r["verdict"]["label"] in ambiguous:
                 stances = [e.get("stance") for e in r.get("evidence") or []]
-                assert all(s is None for s in stances), (
-                    f"{r['id']}: ambiguous verdict should have null stances, got {stances}"
+                assert all(s == EvidenceStance.NOT_ENOUGH_EVIDENCE.value for s in stances), (
+                    f"{r['id']}: ambiguous verdict should have not_enough_evidence stances, got {stances}"
                 )
 
     def test_evidence_is_non_empty_list(self, averitec_converted):

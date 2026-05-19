@@ -20,7 +20,7 @@ _RELIABILITY_GUIDE: dict[str, str] = {
     "strong": "direct, specific, verifiable — no hedging language",
     "weak": "vague, uncertain — use 'reportedly', 'allegedly', 'sources suggest', 'possibly'",
     "hedged": "exists but is ambiguous — partial coverage or internally uncertain",
-    "absent": "confirmed absence — 'no X was found', 'absence confirmed', 'none detected'",
+    "not_enough_evidence": "insufficient evidence — 'inconclusive', 'could not be confirmed', 'evidence is lacking'",
 }
 
 _EVIDENCE_TYPE_GUIDE: dict[str, str] = {

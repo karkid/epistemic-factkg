@@ -58,7 +58,7 @@ class TestAI2ThorValidator:
         bad = {
             "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
             "evidence": [
-                {"stance": EvidenceStance.ABSENT.value, "triples": [["s", "p", "o"]]}
+                {"stance": EvidenceStance.SUPPORTS.value, "triples": [["s", "p", "o"]]}
             ],
             "claim_triples": None,
             "reasoning": {"structural": "absence"},
@@ -66,16 +66,16 @@ class TestAI2ThorValidator:
         msgs = val.check(bad)
         assert any("non-empty evidence triples" in m for m in msgs)
 
-    def test_non_apprehension_without_absent_stance_is_flagged(self):
+    def test_non_apprehension_with_neutral_stance_is_flagged(self):
         val = AI2ThorValidator()
         bad = {
             "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
-            "evidence": [{"stance": EvidenceStance.SUPPORTS.value, "triples": []}],
+            "evidence": [{"stance": EvidenceStance.NOT_ENOUGH_EVIDENCE.value, "triples": []}],
             "claim_triples": None,
-            "reasoning": {"structural": "one_hop"},
+            "reasoning": {"structural": "absence"},
         }
         msgs = val.check(bad)
-        assert any("expected stance=absent" in m for m in msgs)
+        assert any("expected supports/refutes" in m for m in msgs)
 
     def test_perception_record_missing_claim_triples_is_flagged(self):
         val = AI2ThorValidator()
@@ -95,7 +95,7 @@ class TestAI2ThorValidator:
         val = AI2ThorValidator()
         ok = {
             "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
-            "evidence": [{"stance": EvidenceStance.ABSENT.value, "triples": []}],
+            "evidence": [{"stance": EvidenceStance.SUPPORTS.value, "triples": []}],
             "claim_triples": None,
             "reasoning": {"structural": "absence"},
         }
@@ -255,7 +255,7 @@ class TestAveritecValidator:
         bad = {
             "epistemic": {"evidence_types_all": [EvidenceType.NON_APPREHENSION.value]},
             "verdict": {"label": Verdict.SUPPORTED.value},
-            "evidence": [{"stance": EvidenceStance.ABSENT.value, "text": "some text"}],
+            "evidence": [{"stance": EvidenceStance.SUPPORTS.value, "text": "some text"}],
             "claim_triples": None,
         }
         msgs = val.check(bad)

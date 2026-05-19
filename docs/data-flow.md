@@ -88,7 +88,7 @@ See [ADR-010](adr/010-rdf-as-kg-intermediate-format.md) for why RDF/Turtle was c
 
 **Output:** `data/raw/ai2thor/claims_all.jsonl`
 
-Queries the RDF graph to produce supported and refuted claims. Claims are typed by reasoning structure (`one_hop`, `conjunction`, `negation`, `absence`) and annotated with the source triples. Each record is in AI2-THOR's raw internal format at this stage — not yet in unified schema.
+Queries the RDF graph to produce supported and refuted claims. Claims are typed by reasoning structure (`one_hop`, `conjunction`, `negation`, `absence`) and annotated with the source triples. Each record is output directly in unified schema v3.0 — `modality: "sensor"`, `assignment_method: "simulator"`, `evidence_types` from strategy, no intermediate format.
 
 ---
 
@@ -105,10 +105,10 @@ Queries the RDF graph to produce supported and refuted claims. Claims are typed 
 
 **Output:** `out/unified/epistemic_factkg.jsonl`
 
-Each source adapter applies per-evidence epistemic labeling — setting `evidence_types`, `source_id`, `inference_strength`, and computing `confidence_weight` via the EC formula — then calls `convert_one()` to produce a unified v3.0 record. `pramana_primary` no longer exists; evidence types are per-evidence and multi-label.
+Each source adapter applies per-evidence epistemic labeling — setting `evidence_types`, `source_id`, `inference_strength` — then calls `convert_one()` to produce a unified v3.0 record. Evidence types are per-evidence and multi-label; `pramana_primary` no longer exists.
 
 Key per-adapter behavior:
-- **AI2THOR**: `evidence[].evidence_types` = `["perception"]` or `["non_apprehension"]` based on claim type; `source_id = "sensor_perception"`; `inference_strength = 1.0`; `claim_triples` and `evidence[].triples` populated from RDF
+- **AI2THOR**: Generator outputs v3.0 directly. `evidence[].evidence_types` is set from `reasoning.strategy`: `direct_observation` → `["perception"]`; `absence_detection` → `["perception", "non_apprehension"]`; `spatial_reasoning` → `["perception", "comparison_analogy"]`; `action_testing` → `["perception", "inference"]`. `source_id = "sensor_perception"`, `inference_strength = 1.0`, `modality = "sensor"`, `assignment_method = "simulator"`. `claim_triples` and `evidence[].triples` populated from RDF.
 - **AVeriTeC**: `evidence_types` from modality + answer-type heuristics; `source_id` resolved from `source_url` domain; `inference_strength` from answer type (extractive=0.8, abstractive=0.6); `claim_triples = null`
 - **Synthetic**: evidence fields already set by template; `triple_source = "ai2thor_simulation"` for perception/non_apprehension records with real triples; `provenance.dataset = "synthetic"`
 
@@ -116,7 +116,7 @@ The **EC formula** is applied in all converters:
 
 $$EC_i = 1 - (1 - ST_i)^{EW_i \times IS_i}$$
 
-where $ST_i$ is looked up from `source_trust_registry.jsonl`, $EW_i = \text{combine\_pramana\_weights(evidence\_types)}$, and $IS_i$ is `inference_strength`.
+where $ST_i$ is looked up from `source_trust_registry.jsonl`, $EW_i = \text{combine\_evidence\_weights(evidence\_types)}$, and $IS_i$ is `inference_strength`.
 
 Verdict aggregation uses product-of-complements over supporting and refuting evidence items:
 
@@ -141,7 +141,7 @@ See [ADR-019](adr/019-per-evidence-epistemic-modeling.md) for per-evidence epist
   },
   "epistemic": {
     "evidence_types_all": ["testimony", "inference"],
-    "assignment_method": "rule_based"
+    "assignment_method": "simulator|heuristic|annotated|llm_generated"
   },
   "claim_triples": [["subject", "predicate", "object"]],
   "reasoning": { "structural": "one_hop|conjunction|...", "strategy": "..." },
@@ -150,20 +150,19 @@ See [ADR-019](adr/019-per-evidence-epistemic-modeling.md) for per-evidence epist
     "text": "...",
     "triples": null,
     "triple_source": "ground_truth|ai2thor_simulation|extracted|null",
-    "modality": "simulation_state|web_text|pdf|...",
-    "stance": "supports|refutes|absent|not_enough_evidence|conflicting_evidence",
+    "modality": "sensor|web_text|pdf|...",
+    "stance": "supports|refutes|not_enough_evidence|conflicting_evidence",
     "source_url": null,
     "evidence_types": ["testimony"],
     "source_id": "bbc_web_text",
-    "inference_strength": 0.8,
-    "confidence_weight": 0.72
+    "inference_strength": 0.8
   }],
   "provenance": { "dataset": "ai2thor|averitec|synthetic", "split": null, "context_id": "..." },
   "meta": { "schema_version": "3.0", "created_utc": "..." }
 }
 ```
 
-Full schema definition: `data/schema/unified_schema.json`
+Full schema definition: `src/epistemic/schema.py` (`CLAIM_SCHEMA`)
 
 ---
 
@@ -176,9 +175,9 @@ Full schema definition: `data/schema/unified_schema.json`
 **Output:** `out/report/validation.json`
 
 Runs three layers of validation:
-1. **Schema validation** — JSON Schema Draft-07 against `data/schema/unified_schema.json`
-2. **Dataset-level semantic checks** — adapter-specific validators check field consistency (e.g., AI2-THOR claims must have non-null triples; all evidence items must have `evidence_types`, `source_id`, `inference_strength`, `confidence_weight`)
-3. **Epistemic checks** — shortcut fraction ≥ 35% in synthetic records; `confidence_weight` values are in `[0, 1]`; `evidence_types_all` matches union of per-evidence types
+1. **Schema validation** — JSON Schema Draft-07 against `CLAIM_SCHEMA` in `src/epistemic/schema.py`
+2. **Dataset-level semantic checks** — adapter-specific validators check field consistency (e.g., AI2-THOR claims must have non-null triples; all evidence items must have `evidence_types`, `source_id`, `inference_strength`)
+3. **Epistemic checks** — shortcut fraction ≥ 35% in synthetic records; `evidence_types_all` matches union of per-evidence types; stance values are within the valid enum
 
 ---
 

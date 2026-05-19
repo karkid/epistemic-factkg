@@ -160,12 +160,14 @@ def _medium_to_modality(
     return "other"
 
 
-def _verdict_to_stance(label: Verdict) -> EvidenceStance | None:
+def _verdict_to_stance(label: Verdict) -> EvidenceStance:
     if label == Verdict.SUPPORTED:
         return EvidenceStance.SUPPORTS
     if label == Verdict.REFUTED:
         return EvidenceStance.REFUTES
-    return None
+    # NEE and conflicting: per-item stance is not_enough_evidence since AVeriTeC
+    # does not provide per-answer stance; conflicting verdict emerges from aggregation
+    return EvidenceStance.NOT_ENOUGH_EVIDENCE
 
 
 def _infer_evidence_types_basic(
@@ -278,6 +280,11 @@ class AveritecConverter(DatasetConverter):
                     modality, ans_type, ans_text
                 )
 
+                item_stance = (
+                    EvidenceStance.NOT_ENOUGH_EVIDENCE.value
+                    if modality == "unanswerable"
+                    else (stance.value if stance else EvidenceStance.NOT_ENOUGH_EVIDENCE.value)
+                )
                 items.append(
                     {
                         "evidence_id": evidence_id,
@@ -285,7 +292,7 @@ class AveritecConverter(DatasetConverter):
                         "triples": [],
                         "triple_source": None,
                         "modality": modality,
-                        "stance": stance.value if stance else None,
+                        "stance": item_stance,
                         "source_id": source_id,
                         "evidence_types": evidence_types,
                         "inference_strength": is_,
@@ -329,21 +336,8 @@ class AveritecConverter(DatasetConverter):
             {k: v for k, v in e.items() if not k.startswith("_")} for e in evidence_raw
         ]
 
-        if not evidence_out:
-            evidence_out = [
-                {
-                    "evidence_id": f"{oid}-e0",
-                    "text": None,
-                    "triples": [],
-                    "triple_source": None,
-                    "modality": "other",
-                    "stance": None,
-                    "source_id": "unknown_web",
-                    "evidence_types": [],
-                    "inference_strength": 0.0,
-                    "source_url": None,
-                }
-            ]
+        # No fallback — records with no evidence have evidence=[] which fails
+        # schema validation (minItems: 1) and are caught and removed by the validator.
 
         evidence_types_all = sorted(
             {t for e in evidence_out for t in e.get("evidence_types", [])}
@@ -360,7 +354,7 @@ class AveritecConverter(DatasetConverter):
             },
             "epistemic": {
                 "evidence_types_all": evidence_types_all,
-                "assignment_method": "rule_based",
+                "assignment_method": "heuristic",
             },
             "claim_triples": None,
             "reasoning": {

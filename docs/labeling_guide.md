@@ -6,10 +6,10 @@ The four fields that must be set on every `evidence[]` item are:
 
 | Field | Set by | How |
 |---|---|---|
-| `evidence_types` | Converter | Modality + content heuristics (below) |
-| `source_id` | Converter | URL domain lookup → registry key |
-| `inference_strength` | Converter | Answer-type rubric (below) |
-| `confidence_weight` | Converter | EC formula: $1 - (1-ST)^{EW \times IS}$ |
+| `evidence_types` | Converter / Generator | Strategy (AI2THOR) or modality + content heuristics (AVeriTeC) |
+| `source_id` | Converter / Generator | `"sensor_perception"` for AI2THOR; URL domain lookup for AVeriTeC |
+| `inference_strength` | Converter / Generator | `1.0` for AI2THOR; answer-type rubric for AVeriTeC |
+| `modality` | Converter / Generator | `"sensor"` for AI2THOR; source medium for AVeriTeC |
 
 `stance` is set by the source adapter (AI2THOR: from simulation result; AVeriTeC: from answer content; Synthetic: from template spec).
 
@@ -21,14 +21,16 @@ The four fields that must be set on every `evidence[]` item are:
 
 ### AI2THOR (automated, no ambiguity)
 
-| Claim structure | `evidence_types` |
-|---|---|
-| `one_hop`, `conjunction`, `negation` | `["perception"]` |
-| `absence` | `["non_apprehension"]` |
-| Spatial relation (near/far/distance) | `["perception", "comparison_analogy"]` |
-| Action-based (tried and verified result) | `["perception", "inference"]` |
+Assignment is driven by `reasoning.strategy`, set during generation in `ClaimGenerator`.
 
-These are set deterministically in `AI2ThorConverter` from `claim_type`.
+| Strategy | `evidence_types` |
+|---|---|
+| `direct_observation` | `["perception"]` |
+| `absence_detection` | `["perception", "non_apprehension"]` |
+| `spatial_reasoning` | `["perception", "comparison_analogy"]` |
+| `action_testing` | `["perception", "inference"]` |
+
+Perception is always present — the sensor must observe the scene to detect anything, including absence. These are set deterministically by `ClaimInstance.get_schema_layout()` via `strategy.py`.
 
 ### AVeriTeC (heuristic — modality-first, content overrides on top)
 
@@ -72,16 +74,15 @@ A low-trust source that clearly supports the claim → `stance = supports`, but 
 
 **Decision tree (apply in order):**
 
-1. Sensor-confirmed absence in a closed-world environment? → `absent`
-   *(AI2THOR `non_apprehension` only; not applicable to text sources)*
+1. Evidence directly and unambiguously confirms the claim, no hedging? → `supports`
+   *(Includes AI2THOR absence claims where the sensor confirmed the object is absent — the absence supports the claim)*
 
-2. Evidence directly and unambiguously confirms the claim, no hedging? → `supports`
+2. Evidence directly and unambiguously contradicts the claim, no hedging? → `refutes`
+   *(Includes AI2THOR absence claims where the object IS found — it contradicts the absence claim)*
 
-3. Evidence directly and unambiguously contradicts the claim, no hedging? → `refutes`
+3. A single evidence item internally contradicts itself (asserts both X and not-X)? → `conflicting_evidence`
 
-4. A single evidence item internally contradicts itself (asserts both X and not-X)? → `conflicting_evidence`
-
-5. Evidence is hedged, partial, or ambiguous? → `not_enough_evidence`
+4. Evidence is hedged, partial, or ambiguous? → `not_enough_evidence`
    - Hedging triggers: *"reportedly"*, *"allegedly"*, *"may indicate"*, *"possibly"*, *"sources suggest"*, *"is believed to"*, *"could suggest"*
    - Partial: answer covers only part of the claim's assertion
    - Unanswerable: AVeriTeC `answer_type = unanswerable`

@@ -15,7 +15,7 @@ class EvidenceSpec:
     source_id: str  # registry key → source trust
     evidence_types: list[str]
     inference_strength: float
-    reliability: str  # "strong" | "weak" | "hedged" | "absent"
+    reliability: str  # "strong" | "weak" | "hedged"
 
 
 class SyntheticTextClient(ABC):

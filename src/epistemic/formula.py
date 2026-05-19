@@ -61,8 +61,6 @@ def combine_evidence_weights(
     return round(1.0 - complement, 4)
 
 
-# Backward-compatible alias — remove once all adapters use combine_evidence_weights
-combine_pramana_weights = combine_evidence_weights
 
 
 def compute_evidence_confidence(st: float, ew: float, is_: float) -> float:
@@ -88,8 +86,8 @@ def aggregate_scores(
     """Compute (support_score, refute_score) from a list of evidence item dicts.
 
     Evidence items with stance 'not_enough_evidence' or 'conflicting_evidence'
-    are excluded from both aggregations. 'absent' stance counts as supporting
-    for non_apprehension claims (sensor-confirmed absence verifies the claim).
+    are excluded from both aggregations. Absence (non_apprehension) claims carry
+    'supports' stance directly, so they contribute to support score naturally.
 
     Args:
         evidence_items: List of evidence dicts (schema v3.0).
@@ -119,7 +117,7 @@ def aggregate_scores(
         is_ = ev.get("inference_strength", 0.6)
         ec = compute_evidence_confidence(st, ew, is_)
 
-        if stance in (EvidenceStance.SUPPORTS, EvidenceStance.ABSENT):
+        if stance == EvidenceStance.SUPPORTS:
             support_complements.append(1.0 - ec)
         elif stance == EvidenceStance.REFUTES:
             refute_complements.append(1.0 - ec)

@@ -3,11 +3,19 @@ from __future__ import annotations
 from src.ports.validator import DatasetValidator
 from src.epistemic.enums import EvidenceStance, EvidenceType
 
-
+# All evidence types producible by AI2THOR strategy mapping:
+#   direct_observation  → [perception]
+#   absence_detection   → [perception, non_apprehension]
+#   spatial_reasoning   → [perception, comparison_analogy]
+#   action_testing      → [perception, inference]
 _VALID_AI2THOR_EVIDENCE_TYPES = {
     EvidenceType.PERCEPTION.value,
     EvidenceType.NON_APPREHENSION.value,
+    EvidenceType.COMPARISON_ANALOGY.value,
+    EvidenceType.INFERENCE.value,
 }
+
+_DECISIVE_STANCES = {EvidenceStance.SUPPORTS.value, EvidenceStance.REFUTES.value}
 
 
 class AI2ThorValidator(DatasetValidator):
@@ -33,20 +41,19 @@ class AI2ThorValidator(DatasetValidator):
         )
         is_absence = EvidenceType.NON_APPREHENSION.value in evidence_types_all
 
-        # Absence claims must have no evidence triples — the missing object IS the evidence
-        if stance == EvidenceStance.ABSENT.value and ev_triples:
+        # Non-apprehension (absence) supported claims must have no evidence triples
+        if is_absence and EvidenceStance.SUPPORTS.value == stance and ev_triples:
             msgs.append(
-                "AI2THOR absence claim (stance=absent) has non-empty evidence triples."
+                "AI2THOR supported absence claim has non-empty evidence triples."
             )
 
-        # non_apprehension evidence type must always pair with stance=absent
-        if is_absence and stance != EvidenceStance.ABSENT.value:
+        # Non-apprehension claims must carry a decisive stance (supports or refutes)
+        if is_absence and stance not in _DECISIVE_STANCES:
             msgs.append(
-                f"AI2THOR non_apprehension claim expected stance=absent, got {stance!r}."
+                f"AI2THOR non_apprehension claim expected supports/refutes stance, got {stance!r}."
             )
 
         structural = (record.get("reasoning") or {}).get("structural")
-        # Absence claims legitimately have no claim_triples
         if (
             not is_absence
             and structural != "absence"
@@ -57,9 +64,30 @@ class AI2ThorValidator(DatasetValidator):
         if record.get("reasoning") is None:
             msgs.append("AI2THOR record missing reasoning block.")
 
-        # Only perception / non_apprehension are valid for simulator-sourced records
         for et in evidence_types_all:
             if et not in _VALID_AI2THOR_EVIDENCE_TYPES:
                 msgs.append(f"AI2THOR record has unexpected evidence_type: {et!r}.")
+
+        # Per-item strict field checks
+        assignment_method = (record.get("epistemic") or {}).get("assignment_method")
+        if assignment_method != "simulator":
+            msgs.append(
+                f"AI2THOR record has assignment_method={assignment_method!r}, expected 'simulator'."
+            )
+
+        for item in evidence:
+            eid = item.get("evidence_id", "?")
+            if item.get("modality") != "sensor":
+                msgs.append(
+                    f"AI2THOR evidence {eid}: modality={item.get('modality')!r}, expected 'sensor'."
+                )
+            if item.get("source_id") != "sensor_perception":
+                msgs.append(
+                    f"AI2THOR evidence {eid}: source_id={item.get('source_id')!r}, expected 'sensor_perception'."
+                )
+            if item.get("inference_strength") != 1.0:
+                msgs.append(
+                    f"AI2THOR evidence {eid}: inference_strength={item.get('inference_strength')!r}, expected 1.0."
+                )
 
         return msgs

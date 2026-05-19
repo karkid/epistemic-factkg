@@ -237,7 +237,7 @@ class GroundedClient(SyntheticTextClient):
         stance = spec.stance
         reliability = spec.reliability
 
-        if stance in ("supports", "absent"):
+        if stance == "supports":
             base = seed.get("supporting_evidence", "")
             if reliability == "weak":
                 base = _apply_weak(base)

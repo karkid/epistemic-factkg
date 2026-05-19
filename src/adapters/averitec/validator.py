@@ -72,4 +72,24 @@ class AveritecValidator(DatasetValidator):
                 "AVeriTeC record has no textual evidence content (all evidence.text is null)."
             )
 
+        assignment_method = (record.get("epistemic") or {}).get("assignment_method")
+        if assignment_method != "heuristic":
+            msgs.append(
+                f"AVeriTeC record has assignment_method={assignment_method!r}, expected 'heuristic'."
+            )
+
+        _decisive = {EvidenceStance.SUPPORTS.value, EvidenceStance.REFUTES.value}
+        for item in evidence:
+            eid = item.get("evidence_id", "?")
+            # sensor modality is AI2THOR-only — web records must not use it
+            if item.get("modality") == "sensor":
+                msgs.append(
+                    f"AVeriTeC evidence {eid}: modality='sensor' is invalid for web-sourced evidence."
+                )
+            # items with a decisive stance must have at least one evidence_type
+            if item.get("stance") in _decisive and not item.get("evidence_types"):
+                msgs.append(
+                    f"AVeriTeC evidence {eid}: stance={item.get('stance')!r} but evidence_types is empty."
+                )
+
         return msgs

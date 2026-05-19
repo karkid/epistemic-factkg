@@ -233,7 +233,7 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         description="One sensor-confirmed absence item supporting a negative claim.",
         evidence_specs=[
             EvidenceSpec(
-                "absent", "sensor_perception", ["non_apprehension"], 0.8, "absent"
+                "supports", "sensor_perception", ["non_apprehension"], 0.8, "strong"
             ),
         ],
     ),
@@ -250,14 +250,14 @@ _TEMPLATES: dict[str, _TemplateConfig] = {
         name="non_apprehension_weak_nee",
         description=(
             "Weak absence evidence from an unverified source — insufficient to confirm "
-            "the absence, resulting in not_enough_evidence despite absent stance."
+            "the absence, resulting in not_enough_evidence."
         ),
         evidence_specs=[
             EvidenceSpec(
-                "absent", "general_web_text", ["non_apprehension"], 0.6, "weak"
+                "not_enough_evidence", "general_web_text", ["non_apprehension"], 0.6, "weak"
             ),
         ],
-        is_shortcut_breaking=True,  # absent stance but verdict = NEE
+        is_shortcut_breaking=True,  # weak nee stance despite non_apprehension type
     ),
 }
 
@@ -387,20 +387,22 @@ def _build_record(
         # Small Gaussian jitter on IS so synthetic values don't cluster on
         # fixed template constants (e.g. always exactly 0.8).  σ=0.05 keeps
         # verdict boundaries stable while adding realistic variation.
-        is_val = float(
-            max(0.1, min(1.0, spec.inference_strength + random.gauss(0.0, 0.05)))
+        is_val = round(
+            max(0.1, min(1.0, spec.inference_strength + random.gauss(0.0, 0.05))), 4
         )
         st = get_source_trust(spec.source_id, registry)
         ew = combine_evidence_weights(spec.evidence_types)
         ec = compute_evidence_confidence(st, ew, is_val)
 
+        source_entry = registry.get(spec.source_id, {})
+        modality = source_entry.get("modality", "web_text")
         evidence_items.append(
             {
                 "evidence_id": ev_id,
                 "text": text,
                 "triples": triples,
-                "triple_source": "ai2thor_simulation" if triples else None,
-                "modality": "web_text",
+                "triple_source": "ground_truth" if triples else None,
+                "modality": modality,
                 "stance": spec.stance,
                 "evidence_types": list(spec.evidence_types),
                 "source_id": spec.source_id,
@@ -433,7 +435,7 @@ def _build_record(
         },
         "epistemic": {
             "evidence_types_all": evidence_types_all,
-            "assignment_method": "synthetic_template",
+            "assignment_method": "llm_generated",
         },
         "claim_triples": None,
         "reasoning": {"strategy": _to_strategy(template.name)},

@@ -12,7 +12,7 @@ from __future__ import annotations
 import torch
 
 
-_SUPPORT_STANCE = 0  # STANCE_TO_INT["supports"] == STANCE_TO_INT["absent"]
+_SUPPORT_STANCE = 0  # STANCE_TO_INT["supports"]
 _REFUTE_STANCE = 1
 
 

@@ -15,7 +15,6 @@ class Verdict(StrEnum):
 class EvidenceStance(StrEnum):
     SUPPORTS = "supports"
     REFUTES = "refutes"
-    ABSENT = "absent"
     NOT_ENOUGH_EVIDENCE = "not_enough_evidence"
     CONFLICTING_EVIDENCE = "conflicting_evidence"
 

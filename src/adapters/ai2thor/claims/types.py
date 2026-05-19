@@ -18,6 +18,7 @@ class Evidence:
     evidence_source_type: str
     evidence_urls: List[str]  # default to empty list at construction
     evidence_extract: Optional[str] = None
+    reasoning_strategy: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,53 +68,61 @@ class ClaimInstance:
     meta: Meta
 
     def get_schema_layout(self) -> Dict[str, Any]:
-        from src.epistemic.formula import CONFIDENCE_WEIGHTS
-
-        pramana = self.evidence.evidence_source_type
-        try:
-            weight = CONFIDENCE_WEIGHTS.get(EvidenceType(pramana), 0.70)
-        except ValueError:
-            weight = 0.70
+        from src.adapters.ai2thor.claims.strategy import (
+            _infer_evidence_types,
+            _label_to_stance,
+            _to_strategy,
+        )
 
         structural = self.reasoning.structural
-        structural_v2 = structural.replace("-", "_") if structural else None
+        structural_norm = structural.replace("-", "_") if structural else None
 
-        evidence_triples = [(t.s, t.p, t.o) for t in self.evidence.evidence_triples]
-        claim_triples = [(t.s, t.p, t.o) for t in self.claim.claim_triples]
+        evidence_triples = [[str(t.s), str(t.p), str(t.o)] for t in self.evidence.evidence_triples]
+        claim_triples = [[str(t.s), str(t.p), str(t.o)] for t in self.claim.claim_triples]
+
+        strategy = self.evidence.reasoning_strategy
+        evidence_types = _infer_evidence_types(strategy, bool(evidence_triples))
+        evidence_types_all = sorted(set(evidence_types))
+
+        try:
+            verdict_enum = Verdict(self.label)
+        except ValueError:
+            verdict_enum = None
+
+        stance = _label_to_stance(verdict_enum)
+        text = self.evidence.evidence_extract or self.claim.text
 
         return {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "id": self.rec_id,
             "claim": self.claim.text,
             "verdict": {
                 "label": self.label,
                 "justification": self.evidence.evidence_extract,
+                "derivation_method": "annotated",
             },
             "epistemic": {
-                "pramana_primary": pramana,
-                "pramana_all": [pramana],
-                "confidence_weight": weight,
-                "assignment_method": "rule_based",
+                "evidence_types_all": evidence_types_all,
+                "assignment_method": "simulator",
             },
             "claim_triples": claim_triples if claim_triples else None,
             "reasoning": {
-                "structural": structural_v2,
-                "strategy": None,
+                "structural": structural_norm,
+                "strategy": _to_strategy(strategy),
             }
-            if structural_v2
+            if structural_norm
             else None,
             "evidence": [
                 {
                     "evidence_id": f"{self.rec_id}-e0",
-                    "text": self.evidence.evidence_extract,
+                    "text": text,
                     "triples": evidence_triples if evidence_triples else [],
                     "triple_source": "ground_truth",
-                    "modality": "simulation_state",
-                    "stance": (
-                        EvidenceStance.SUPPORTS.value
-                        if self.label == Verdict.SUPPORTED.value
-                        else EvidenceStance.REFUTES.value
-                    ),
+                    "modality": "sensor",
+                    "stance": stance,
+                    "evidence_types": evidence_types,
+                    "source_id": "sensor_perception",
+                    "inference_strength": 1.0,
                     "source_url": self.evidence.evidence_urls[0]
                     if self.evidence.evidence_urls
                     else None,
@@ -125,7 +134,7 @@ class ClaimInstance:
                 "context_id": self.context.context_id,
             },
             "meta": {
-                "schema_version": "2.0",
+                "schema_version": "3.0",
                 "created_utc": self.meta.created_utc,
             },
         }
@@ -153,13 +162,24 @@ class ClaimInstance:
         notes: Optional[str] = None,
         created_utc: Optional[str] = None,
         evidence_extract: Optional[str] = None,
+        reasoning_strategy: Optional[str] = None,
     ) -> "ClaimInstance":
+        from src.adapters.ai2thor.claims.strategy import _classify_strategy
+
         # defaults
         if evidence_urls is None:
             evidence_urls = []
 
         if created_utc is None:
             created_utc = utc_now_iso()
+
+        if reasoning_strategy is None:
+            ev_triples_list = list(evidence_triples)
+            ct_list = list(claim_triples)
+            raw_pred = str(ct_list[0].p) if ct_list else "unknown"
+            # Extract short predicate name from URI (e.g. ".../ontopOf" → "ontopOf")
+            short_pred = raw_pred.split("/")[-1].split("#")[-1]
+            reasoning_strategy = _classify_strategy(short_pred, ev_triples_list)
 
         claim = Claim(text=claim_text, claim_triples=list(claim_triples))
         reasoning = Reasoning(structural=structural_reasoning)
@@ -169,6 +189,7 @@ class ClaimInstance:
             evidence_source_type=evidence_source_type,
             evidence_urls=evidence_urls,
             evidence_extract=evidence_extract,
+            reasoning_strategy=reasoning_strategy,
         )
         context = Context(
             context_id=context_id,

@@ -6,30 +6,17 @@ from src.ports.converter import DatasetConverter
 from src.epistemic.enums import (
     EvidenceStance,
     EvidenceType,
-    ReasoningStrategy,
     Verdict,
+)
+from src.adapters.ai2thor.claims.strategy import (
+    _classify_strategy,
+    _infer_evidence_types,
+    _label_to_stance,
+    _to_strategy,
 )
 from src.utils.time import utc_now_iso
 
 
-_SPATIAL_PREDS = {"inside", "ontopof", "near", "in", "on"}
-_AFFORDANCE_PREDS = {"breakable", "pickupable", "openable", "istoggleable"}
-
-_STRATEGY_MAP: dict[str, str] = {
-    "direct_observation": ReasoningStrategy.DIRECT_OBSERVATION,
-    "absence_detection": ReasoningStrategy.ABSENCE_DETECTION,
-    "spatial_reasoning": ReasoningStrategy.SPATIAL_COMPARISON,
-    "action_testing": ReasoningStrategy.MULTI_HOP_INFERENCE,
-}
-
-
-def _to_strategy(raw: str | None) -> str:
-    return _STRATEGY_MAP.get(raw or "", ReasoningStrategy.DIRECT_OBSERVATION)
-
-
-# Map raw label strings from the AI2THOR claim generator to Verdict enum.
-# The generator emits "support"/"supported" for true claims and
-# "refute"/"refuted" for corrupted/false claims — both spellings are normalised.
 _LABEL_MAP: dict[str, Verdict] = {
     "support": Verdict.SUPPORTED,
     "supported": Verdict.SUPPORTED,
@@ -61,17 +48,6 @@ def _convert_triples(raw: list) -> list[list[str]]:
     return out
 
 
-def _classify_strategy(predicate: str, ev_triples: list) -> str | None:
-    pred = predicate.lower()
-    if not ev_triples:
-        return "absence_detection"
-    if pred in _SPATIAL_PREDS:
-        return "spatial_reasoning"
-    if pred in _AFFORDANCE_PREDS:
-        return "action_testing"
-    return "direct_observation"
-
-
 def _make_justification(
     label: Verdict | None, predicate: str, claim_triples: list, ev_triples: list
 ) -> str | None:
@@ -82,7 +58,7 @@ def _make_justification(
         if label == Verdict.SUPPORTED:
             return f"Sensor shows temperature={observed}, matching claim."
         return f"Sensor shows temperature={observed}, contradicting claimed value ({claimed})."
-    if pred in _SPATIAL_PREDS:
+    if pred in {"inside", "ontopof", "near", "in", "on"}:
         verb = "confirms" if label == Verdict.SUPPORTED else "contradicts"
         return f"Sensor {verb} spatial relation ({predicate})."
     if not ev_triples:
@@ -91,60 +67,14 @@ def _make_justification(
     return f"Sensor observation {verb} the claim."
 
 
-def _label_to_stance(label: Verdict | None) -> str | None:
-    """Derive evidence stance from verdict for AI2THOR records.
-
-    Heuristic: AI2THOR claims have a single decisive evidence item whose
-    stance mirrors the verdict directly.  For absence claims the stance is
-    always 'absent' regardless of the verdict label (absence IS the evidence).
-    """
-    if label == Verdict.SUPPORTED:
-        return EvidenceStance.SUPPORTS.value
-    if label == Verdict.REFUTED:
-        return EvidenceStance.REFUTES.value
-    return None
-
-
-_STRATEGY_EVIDENCE_TYPES: dict[str, list[str]] = {
-    "direct_observation": [EvidenceType.PERCEPTION.value],
-    "absence_detection": [
-        EvidenceType.PERCEPTION.value,
-        EvidenceType.NON_APPREHENSION.value,
-    ],
-    "spatial_reasoning": [
-        EvidenceType.PERCEPTION.value,
-        EvidenceType.COMPARISON_ANALOGY.value,
-    ],
-    "action_testing": [EvidenceType.PERCEPTION.value, EvidenceType.INFERENCE.value],
-}
-
-
-def _infer_evidence_types(strategy: str | None, has_ev_triples: bool) -> list[str]:
-    """Return evidence_types for a single AI2THOR evidence item based on strategy.
-
-    Strategy mapping (labeling guide):
-      direct_observation  → [perception]
-      absence_detection   → [perception, non_apprehension]
-      spatial_reasoning   → [perception, comparison_analogy]
-      action_testing      → [perception, inference]
-
-    Fallback: has triples → [perception]; no triples → [non_apprehension].
-    """
-    if strategy in _STRATEGY_EVIDENCE_TYPES:
-        return _STRATEGY_EVIDENCE_TYPES[strategy]
-    return (
-        [EvidenceType.PERCEPTION.value]
-        if has_ev_triples
-        else [EvidenceType.NON_APPREHENSION.value]
-    )
-
-
 class AI2ThorConverter(DatasetConverter):
     """Converts AI2THOR JSONL records to unified v3.0 JSONL.
 
     Handles two source formats:
+    - v3.0 list format: evidence already has all v3.0 fields (from updated generator).
+      Pass-through: only normalises URIs, labels, and stance values.
     - Legacy dict format: evidence is a dict with evidence_triples, evidence_source, etc.
-    - v2.0 list format: evidence is already a list of v2.0 evidence objects (from ClaimGenerator).
+      Full mapping: derives strategy, evidence_types, stance from scratch.
     """
 
     @property
@@ -154,11 +84,11 @@ class AI2ThorConverter(DatasetConverter):
     def convert_one(self, raw_record: dict, rec_id: str) -> dict:
         evidence = raw_record.get("evidence") or {}
         if isinstance(evidence, list):
-            return self._from_v2(raw_record, rec_id, evidence)
+            return self._from_v3(raw_record, rec_id, evidence)
         return self._from_legacy(raw_record, rec_id, evidence)
 
-    def _from_v2(self, raw: dict, rec_id: str, evidence: list) -> dict:
-        """Pass-through for records already in v2.0 format — just decode URIs."""
+    def _from_v3(self, raw: dict, rec_id: str, evidence: list) -> dict:
+        """Pass-through for records already in v3.0 format — decode URIs and normalise labels."""
         oid = raw.get("id") or rec_id
         label = _normalize_label(
             raw.get("label") or (raw.get("verdict") or {}).get("label")
@@ -171,25 +101,30 @@ class AI2ThorConverter(DatasetConverter):
         ev_out = []
         for ev in evidence:
             decoded_triples = _convert_triples(ev.get("triples") or [])
-            ev_strategy = ev.get("strategy") or _classify_strategy(
-                predicate, decoded_triples
-            )
-            evidence_types = _infer_evidence_types(ev_strategy, bool(decoded_triples))
             raw_stance = ev.get("stance")
-            stance = (
-                raw_stance if raw_stance in {s.value for s in EvidenceStance} else None
+            if raw_stance in {s.value for s in EvidenceStance}:
+                stance = raw_stance
+            elif raw_stance == "absent":
+                # Legacy v2.0 used "absent" for confirmed-absence claims; migrate to
+                # supports/refutes based on the verdict (ADR-028)
+                stance = _label_to_stance(label)
+            else:
+                stance = _label_to_stance(label)
+            # Preserve generator-set evidence_types; fall back to strategy inference
+            evidence_types = ev.get("evidence_types") or _infer_evidence_types(
+                _classify_strategy(predicate, decoded_triples), bool(decoded_triples)
             )
             ev_out.append(
                 {
                     "evidence_id": ev.get("evidence_id", f"{oid}-e0"),
-                    "text": ev.get("text"),
+                    "text": ev.get("text") or "",
                     "triples": decoded_triples,
                     "triple_source": ev.get("triple_source", "ground_truth"),
-                    "modality": ev.get("modality", "simulation_state"),
+                    "modality": "sensor",
                     "stance": stance,
                     "evidence_types": evidence_types,
-                    "source_id": "sensor_perception",
-                    "inference_strength": 1.0,
+                    "source_id": ev.get("source_id", "sensor_perception"),
+                    "inference_strength": ev.get("inference_strength", 1.0),
                     "source_url": ev.get("source_url"),
                 }
             )
@@ -227,11 +162,11 @@ class AI2ThorConverter(DatasetConverter):
             "verdict": {
                 "label": label.value if label else None,
                 "justification": justification,
-                "derivation_method": "annotated",
+                "derivation_method": verdict.get("derivation_method", "annotated"),
             },
             "epistemic": {
                 "evidence_types_all": evidence_types_all,
-                "assignment_method": "rule_based",
+                "assignment_method": "simulator",
             },
             "claim_triples": claim_triples if claim_triples else None,
             "reasoning": {"structural": structural, "strategy": strategy},
@@ -259,7 +194,7 @@ class AI2ThorConverter(DatasetConverter):
 
         raw_ev_triples = evidence.get("evidence_triples") or []
         evidence_urls = evidence.get("evidence_urls") or []
-        evidence_extract = evidence.get("extract") or None
+        evidence_extract = evidence.get("extract") or ""
 
         claim_triples = _convert_triples(raw_claim_triples)
         ev_triples = _convert_triples(raw_ev_triples)
@@ -276,12 +211,7 @@ class AI2ThorConverter(DatasetConverter):
         if structural:
             structural = structural.replace("-", "_")
 
-        # Absence claims (non_apprehension) use the ABSENT stance — the absence
-        # of evidence triples IS the evidence.  All other stances mirror the verdict.
-        if EvidenceType.NON_APPREHENSION.value in evidence_types:
-            stance = EvidenceStance.ABSENT.value
-        else:
-            stance = _label_to_stance(label)
+        stance = _label_to_stance(label)
 
         return {
             "schema_version": "3.0",
@@ -294,7 +224,7 @@ class AI2ThorConverter(DatasetConverter):
             },
             "epistemic": {
                 "evidence_types_all": evidence_types,
-                "assignment_method": "rule_based",
+                "assignment_method": "simulator",
             },
             "claim_triples": claim_triples if claim_triples else None,
             "reasoning": {"structural": structural, "strategy": strategy},
@@ -304,7 +234,7 @@ class AI2ThorConverter(DatasetConverter):
                     "text": evidence_extract,
                     "triples": ev_triples,
                     "triple_source": "ground_truth",
-                    "modality": "simulation_state",
+                    "modality": "sensor",
                     "stance": stance,
                     "evidence_types": evidence_types,
                     "source_id": "sensor_perception",
