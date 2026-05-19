@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from src.epistemic.enums import Modality
+from src.model.data.types import VERDICT_TO_INT, STANCE_TO_INT
+
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -14,7 +17,7 @@ REPORTS_ROOT    = Path("out/reports/model")
 GRAPH_CACHE_DIR = Path("out/model/graphs")
 DATA_REPORT_DIR = Path("out/reports/data")
 REGISTRY_PATH   = Path("data/registry/source_trust_registry.jsonl")
-SCHEMA_PATH     = Path("data/schema/unified_schema.json")
+SCHEMA_PATH     = None  # schema lives in src/epistemic/schema.py:CLAIM_SCHEMA (no JSON file)
 UNIFIED_JSONL   = Path("out/data/unified/epistemic_factkg.jsonl")
 
 
@@ -55,35 +58,51 @@ MODEL_DESCRIPTIONS: dict[str, str] = {
 
 
 # ── Verdict & stance metadata ─────────────────────────────────────────────────
+# VERDICT_LABELS and INT_TO_VERDICT derive from VERDICT_TO_INT (model's 3-class output).
+# Adding a verdict class to the model automatically updates display everywhere.
+
+VERDICT_LABELS = list(VERDICT_TO_INT.keys())        # ["supported", "refuted", "not_enough_evidence"]
+INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}   # {0: "supported", 1: "refuted", 2: "not_enough_evidence"}
+
+# Model stance head predicts 3 classes; class 2 groups NEE + conflicting as "neutral" for display.
+INT_TO_STANCE = {i: label for label, i in STANCE_TO_INT.items() if i not in {2}}
+INT_TO_STANCE[2] = "neutral"
 
 VERDICT_META: dict[str, tuple[str, str, str]] = {
     "supported":           ("✓", "SUPPORTED",           "#1d6340"),
     "refuted":             ("✗", "REFUTED",              "#9b2226"),
     "not_enough_evidence": ("~", "NOT ENOUGH EVIDENCE",  "#7f4f24"),
 }
-VERDICT_LABELS  = ["supported", "refuted", "not_enough_evidence"]
 VERDICT_CSS     = {"supported": "sup", "refuted": "ref", "not_enough_evidence": "nei"}
 STANCE_CHIP_CLS = {"supports": "chip-green", "refutes": "chip-red", "neutral": "chip-gray"}
 
 
 # ── Modality / source metadata ────────────────────────────────────────────────
 
-MODALITIES = ["web_text", "pdf", "image", "video", "audio", "web_table"]
+MODALITIES = [m.value for m in Modality]
 MODALITY_LABELS = {
-    "web_text":  "Web Text",
-    "pdf":       "PDF",
-    "image":     "Image",
-    "video":     "Video",
-    "audio":     "Audio",
-    "web_table": "Table",
+    Modality.WEB_TEXT:           "Web Text",
+    Modality.PDF:                "PDF",
+    Modality.IMAGE:              "Image",
+    Modality.VIDEO:              "Video",
+    Modality.AUDIO:              "Audio",
+    Modality.WEB_TABLE:          "Table",
+    Modality.SENSOR:             "Sensor",
+    Modality.ANNOTATOR_KNOWLEDGE:"Annotator Knowledge",
+    Modality.UNANSWERABLE:       "Unanswerable",
+    Modality.OTHER:              "Other",
 }
 PRAMANA_SHORT = {
-    "web_text":  "Shabda",
-    "pdf":       "Shabda",
-    "image":     "Pratyaksha",
-    "video":     "Pratyaksha",
-    "audio":     "Pratyaksha",
-    "web_table": "Upamana",
+    Modality.WEB_TEXT:           "Shabda",
+    Modality.PDF:                "Shabda",
+    Modality.IMAGE:              "Pratyaksha",
+    Modality.VIDEO:              "Pratyaksha",
+    Modality.AUDIO:              "Pratyaksha",
+    Modality.SENSOR:             "Pratyaksha",
+    Modality.WEB_TABLE:          "Upamana",
+    Modality.ANNOTATOR_KNOWLEDGE:"Shabda",
+    Modality.UNANSWERABLE:       "—",
+    Modality.OTHER:              "Shabda",
 }
 # The 6 one-hot encoder categories from SOURCE_TYPE_TO_INT in src/model/data/types.py.
 # Keep in sync with that dict.  Do NOT expand to raw registry source_types here —

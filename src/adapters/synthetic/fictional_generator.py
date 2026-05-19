@@ -78,8 +78,22 @@ _STRATEGY_MAP: dict[str, str] = {
 }
 
 
+_STRUCTURAL_MAP: dict[str, str] = {
+    "non_apprehension_absent":   "absence",
+    "non_apprehension_refuted":  "absence",
+    "non_apprehension_weak_nee": "absence",
+    "inference_nee":             "multi_hop",
+    "conjunction":               "conjunction",
+    "negation":                  "negation",
+}
+
+
 def _to_strategy(template_name: str) -> str:
     return _STRATEGY_MAP.get(template_name, ReasoningStrategy.TESTIMONIAL_LOOKUP)
+
+
+def _to_structural(template_name: str) -> str:
+    return _STRUCTURAL_MAP.get(template_name, "one_hop")
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +452,7 @@ def _build_record(
             "assignment_method": "llm_generated",
         },
         "claim_triples": None,
-        "reasoning": {"strategy": _to_strategy(template.name)},
+        "reasoning": {"structural": _to_structural(template.name), "strategy": _to_strategy(template.name)},
         "evidence": evidence_out,
         "provenance": {
             "dataset": "synthetic",

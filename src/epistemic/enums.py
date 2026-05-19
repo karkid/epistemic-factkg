@@ -38,6 +38,19 @@ class EvidenceType(StrEnum):
     POSTULATION_DERIVATION = "postulation_derivation"
 
 
+class Modality(StrEnum):
+    SENSOR = "sensor"
+    WEB_TEXT = "web_text"
+    PDF = "pdf"
+    WEB_TABLE = "web_table"
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    ANNOTATOR_KNOWLEDGE = "annotator_knowledge"
+    UNANSWERABLE = "unanswerable"
+    OTHER = "other"
+
+
 class ReasoningStrategy(StrEnum):
     """Unified reasoning strategy taxonomy across all three sources.
 

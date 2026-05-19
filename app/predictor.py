@@ -17,12 +17,10 @@ from src.epistemic.registry import (
 from src.model.config import GraphConfig
 from src.model.data.builder import ClaimGraphBuilder
 from src.model.data.featurizer import Featurizer
-from src.model.data.types import VERDICT_TO_INT, NodeType
+from src.model.data.types import NodeType
 from src.model.models import MODELS
 from src.model.models.nlihybridhgnn import NLIHybridHGNN
-
-_INT_TO_VERDICT = {v: k for k, v in VERDICT_TO_INT.items()}
-_INT_TO_STANCE = {0: "supports", 1: "refutes", 2: "neutral"}
+from _constants import INT_TO_VERDICT as _INT_TO_VERDICT, INT_TO_STANCE as _INT_TO_STANCE
 
 _SOURCE_ID_TYPE_MAP: list[tuple[str, str]] = [
     ("academic", "academic"),
@@ -57,7 +55,7 @@ _SOURCE_TYPE_DEFAULTS: dict[str, tuple[str, float]] = {
     "unknown":      ("unknown_unknown",         0.30),
     # Legacy aliases — kept for predict_from_record() internal path only
     "news":         ("general_web_text",       0.60),
-    "simulation":   ("ai2thor_simulation",     1.0),
+    "simulation":   ("sensor_perception",      1.0),
 }
 
 _PRAMANA_LABEL: dict[str, str] = {
@@ -66,12 +64,13 @@ _PRAMANA_LABEL: dict[str, str] = {
     "image": "Perception (Pratyaksha)",
     "video": "Perception (Pratyaksha)",
     "audio": "Perception (Pratyaksha)",
+    "sensor": "Perception (Pratyaksha)",
     "web_table": "Comparison (Upamana)",
 }
 
 
 def _infer_types(modality: str) -> list[str]:
-    if modality in ("image", "video", "audio"):
+    if modality in ("image", "video", "audio", "sensor"):
         return ["perception"]
     if modality == "web_table":
         return ["comparison_analogy", "testimony"]
@@ -86,15 +85,32 @@ def _is_from_trust(trust: float) -> float:
     return round(min(0.8, max(0.1, trust)), 4)
 
 
+def _infer_hparams(state: dict) -> tuple[int, int]:
+    """Infer (hidden_dim, heads) from checkpoint state_dict.
+
+    att_src shape is [1, heads, head_dim]; hidden_dim = heads * head_dim.
+    Works for both EpistemicHGNN and NLIHybridHGNN regardless of training config.
+    """
+    for key, val in state.items():
+        if "att_src" in key:
+            heads = int(val.shape[1])
+            head_dim = int(val.shape[2])
+            return heads * head_dim, heads
+    raise ValueError(f"Cannot infer hidden_dim/heads: no 'att_src' key in checkpoint")
+
+
 class EpistemicPredictor:
     """Loads a trained checkpoint and runs inference on free-text claim + evidence."""
 
     def __init__(self, model_name: str = "v2-hgnn") -> None:
         self.model_name = model_name
-        checkpoint = Path(f"out/model/{model_name}/checkpoints/best_model.pt")
+        ckpt_dir = Path(f"out/model/{model_name}/checkpoints")
+        acc_ckpt = ckpt_dir / "best_acc_model.pt"
+        loss_ckpt = ckpt_dir / "best_model.pt"
+        checkpoint = acc_ckpt if acc_ckpt.exists() else loss_ckpt
         if not checkpoint.exists():
             raise FileNotFoundError(
-                f"No checkpoint at {checkpoint}. Run: just train {model_name}"
+                f"No checkpoint at {ckpt_dir}. Run: just train {model_name}"
             )
 
         self._registry = load_source_trust_registry(
@@ -109,10 +125,12 @@ class EpistemicPredictor:
 
         model_cls = MODELS[model_name]
         graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
-        self._model = model_cls(graph_cfg, hidden_dim=256, heads=4, dropout=0.3)
-        self._model.load_state_dict(
-            torch.load(str(checkpoint), map_location="cpu", weights_only=False)
-        )
+        ckpt = torch.load(str(checkpoint), map_location="cpu", weights_only=False)
+        state = ckpt.get("model_state_dict", ckpt)
+        ec_threshold = ckpt.get("ec_threshold", 0.35) if isinstance(ckpt, dict) else 0.35
+        hidden_dim, heads = _infer_hparams(state)
+        self._model = model_cls(graph_cfg, hidden_dim=hidden_dim, heads=heads, dropout=0.3, ec_threshold=ec_threshold)
+        self._model.load_state_dict(state)
         self._model.eval()
 
     # ------------------------------------------------------------------

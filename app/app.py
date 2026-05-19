@@ -36,40 +36,13 @@ def _build_model_labels() -> dict[str, str]:
 _MODELS = _build_model_labels()
 _ALL_KEY = "all"
 
-_VERDICT_META = {
-    "supported":           ("✓", "SUPPORTED",           "#1d6340"),
-    "refuted":             ("✗", "REFUTED",              "#9b2226"),
-    "not_enough_evidence": ("~", "NOT ENOUGH EVIDENCE",  "#7f4f24"),
-}
-_VERDICT_LABELS  = ["supported", "refuted", "not_enough_evidence"]
-_VERDICT_CSS     = {"supported": "sup", "refuted": "ref", "not_enough_evidence": "nei"}
-_STANCE_CHIP_CLS = {"supports": "chip-green", "refutes": "chip-red", "neutral": "chip-gray"}
-
-_MODALITIES = ["web_text", "pdf", "image", "video", "audio", "web_table"]
-_MODALITY_LABELS = {
-    "web_text":  "Web Text",
-    "pdf":       "PDF",
-    "image":     "Image",
-    "video":     "Video",
-    "audio":     "Audio",
-    "web_table": "Table",
-}
-_PRAMANA_SHORT = {
-    "web_text":  "Shabda",
-    "pdf":       "Shabda",
-    "image":     "Pratyaksha",
-    "video":     "Pratyaksha",
-    "audio":     "Pratyaksha",
-    "web_table": "Upamana",
-}
-_SOURCE_TYPES  = ["unknown", "news", "academic", "government", "social_media"]
-_SOURCE_LABELS = {
-    "unknown":      "Unknown",
-    "news":         "News",
-    "academic":     "Academic",
-    "government":   "Government",
-    "social_media": "Social Media",
-}
+from _constants import (
+    MODALITIES as _MODALITIES, MODALITY_LABELS as _MODALITY_LABELS,
+    PRAMANA_SHORT as _PRAMANA_SHORT, SOURCE_LABELS as _SOURCE_LABELS,
+    SOURCE_TYPES as _SOURCE_TYPES, VERDICT_META as _VERDICT_META,
+    VERDICT_LABELS as _VERDICT_LABELS, VERDICT_CSS as _VERDICT_CSS,
+    STANCE_CHIP_CLS as _STANCE_CHIP_CLS,
+)
 
 _DATA_JSONL = Path("out/data/training/epistemic_factkg_training.jsonl")
 _TEST_IDX   = Path("out/data/splits/test_indices.json")
@@ -923,7 +896,7 @@ def _build_eval_export(rows: list[dict]) -> str:
                 "source_trust":       ev.get("source_trust"),
                 "evidence_weight":    ev.get("evidence_weight"),
                 "ec_score":           ev.get("ec_score"),
-                "pramana":            ev.get("pramana"),
+                "pramana":            _PRAMANA_SHORT.get(ev.get("modality", "web_text"), "—"),
                 "source_type":        ev.get("source_type"),
                 "nli_probs":          ev.get("nli_probs"),
             }

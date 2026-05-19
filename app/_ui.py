@@ -6,6 +6,7 @@ import streamlit as st
 from _constants import (
     VERDICT_META, VERDICT_LABELS, VERDICT_CSS, STANCE_CHIP_CLS,
     MODALITY_LABELS, PRAMANA_SHORT, SOURCE_LABELS, MODALITIES, SOURCE_TYPES,
+    INT_TO_VERDICT,
 )
 from _state import blank_ev
 
@@ -489,9 +490,7 @@ def render_evidence_cards() -> None:
 
 # ── PyVis interactive graph ───────────────────────────────────────────────────
 
-# Verdict / stance int→label (mirroring src/model/data/types.py)
-_INT_TO_VERDICT = {0: "supported", 1: "refuted", 2: "not_enough_evidence"}
-_INT_TO_STANCE  = {0: "supports",  1: "refutes",  2: "neutral"}
+from _constants import INT_TO_STANCE as _INT_TO_STANCE  # INT_TO_VERDICT already imported above
 
 
 def build_pyvis_html(
@@ -549,7 +548,7 @@ def build_pyvis_html(
 
     # ── CLAIM node ────────────────────────────────────────────────────────────
     verdict_y   = int(claim_store.y[0].item()) if hasattr(claim_store, "y") else -1
-    verdict_lbl = _INT_TO_VERDICT.get(verdict_y, "?")
+    verdict_lbl = INT_TO_VERDICT.get(verdict_y, "?")
     claim_snip  = (claim_text[:60] + "…") if len(claim_text) > 60 else claim_text
     claim_title = (
         f"<b>CLAIM</b><br>"

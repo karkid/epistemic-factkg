@@ -5,7 +5,7 @@ import json
 
 import streamlit as st
 
-from _constants import DATA_REPORT_DIR, SCHEMA_PATH, UNIFIED_JSONL, GRAPH_CACHE_DIR
+from _constants import DATA_REPORT_DIR, UNIFIED_JSONL, GRAPH_CACHE_DIR, INT_TO_VERDICT
 from _loaders import load_dataset_stats, load_all_records_list, load_graph_cache, build_graph_id_map
 from _state import load_record_into_state
 
@@ -144,17 +144,15 @@ def _render_stats(stats: dict) -> None:
 # ── Schema viewer section ─────────────────────────────────────────────────────
 
 def _render_schema() -> None:
-    if not SCHEMA_PATH.exists():
-        st.info(f"Schema not found: `{SCHEMA_PATH}`")
-        return
     try:
-        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        from src.epistemic.schema import CLAIM_SCHEMA
+        schema = CLAIM_SCHEMA
     except Exception as e:
         st.error(f"Could not load schema: {e}")
         return
 
-    st.markdown(f"**{schema.get('title', 'Schema')}**  v{schema.get('properties', {}).get('schema_version', {}).get('const', '?')}")
-    st.caption(schema.get("description", ""))
+    st.markdown(f"**Epistemic FactKG Schema**  v{schema.get('properties', {}).get('schema_version', {}).get('const', '?')}")
+    st.caption("Unified v3.0 record schema — single source of truth in src/epistemic/schema.py")
 
     required = schema.get("required", [])
     props    = schema.get("properties", {})
@@ -202,8 +200,8 @@ def _render_claim_search() -> None:
             source_q = st.selectbox("Source dataset", sources, key="ds_source_q")
         with c5:
             structures = [""] + sorted({
-                r.get("epistemic", {}).get("reasoning_structural", "") or ""
-                for r in all_records if r.get("epistemic")
+                (r.get("reasoning") or {}).get("structural") or ""
+                for r in all_records
             } - {""})
             struct_q = st.selectbox("Reasoning structure", structures, key="ds_struct_q")
         with c6:
@@ -227,7 +225,7 @@ def _render_claim_search() -> None:
         filtered = [r for r in filtered if r.get("provenance", {}).get("dataset") == source_q]
     if struct_q:
         filtered = [r for r in filtered
-                    if (r.get("epistemic") or {}).get("reasoning_structural") == struct_q]
+                    if (r.get("reasoning") or {}).get("structural") == struct_q]
 
     st.caption(f"Found {len(filtered):,} matching records — showing first {max_results}")
     shown = filtered[:max_results]
@@ -253,16 +251,16 @@ def _render_claim_search() -> None:
                     st.caption(f"Justification: {just[:200]}")
                 # Epistemic properties
                 ep = rec.get("epistemic") or {}
-                if ep:
-                    ep_parts = []
-                    if ep.get("reasoning_structural"):
-                        ep_parts.append(f"structure: `{ep['reasoning_structural']}`")
-                    if ep.get("epistemic_operator"):
-                        ep_parts.append(f"operator: `{ep['epistemic_operator']}`")
-                    if ep.get("modal_qualifier"):
-                        ep_parts.append(f"modal: `{ep['modal_qualifier']}`")
-                    if ep_parts:
-                        st.caption("Epistemic: " + "  ·  ".join(ep_parts))
+                reasoning = rec.get("reasoning") or {}
+                ep_parts = []
+                if reasoning.get("structural"):
+                    ep_parts.append(f"structure: `{reasoning['structural']}`")
+                if reasoning.get("strategy"):
+                    ep_parts.append(f"strategy: `{reasoning['strategy']}`")
+                if ep.get("assignment_method"):
+                    ep_parts.append(f"method: `{ep['assignment_method']}`")
+                if ep_parts:
+                    st.caption("Epistemic: " + "  ·  ".join(ep_parts))
                 # Provenance
                 prov = rec.get("provenance") or {}
                 if prov:
@@ -289,7 +287,7 @@ def _render_claim_search() -> None:
                     if is_score is not None:
                         meta += f" IS={is_score:.2f}"
                     st.markdown(
-                        f"**ev{j+1}** `{ev.get('evidence_type', '?')}` "
+                        f"**ev{j+1}** `{', '.join(ev.get('evidence_types', []) or ['?'])}` "
                         f"· `{ev.get('stance', '?')}`{meta}  \n"
                         f"{(ev.get('text') or '')[:160]}"
                     )
@@ -301,9 +299,6 @@ def _render_claim_search() -> None:
 
 # ── Graph Browser ─────────────────────────────────────────────────────────────
 
-_INT_TO_VERDICT: dict[int, str] = {
-    0: "supported", 1: "refuted", 2: "not_enough_evidence",
-}
 
 
 def _render_graph_browser() -> None:
@@ -359,7 +354,7 @@ def _render_graph_browser() -> None:
     # Verdict label from claim.y
     try:
         claim_y = int(g["claim"].y[0].item())
-        verdict_lbl = _INT_TO_VERDICT.get(claim_y, str(claim_y))
+        verdict_lbl = INT_TO_VERDICT.get(claim_y, str(claim_y))
     except Exception:
         verdict_lbl = "?"
 

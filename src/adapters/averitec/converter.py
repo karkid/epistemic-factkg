@@ -358,9 +358,10 @@ class AveritecConverter(DatasetConverter):
             },
             "claim_triples": None,
             "reasoning": {
+                "structural": "one_hop",
                 "strategy": _to_strategy(
                     raw_record.get("fact_checking_strategies") or []
-                )
+                ),
             },
             "evidence": evidence_out,
             "provenance": {

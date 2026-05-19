@@ -3,9 +3,10 @@
 This schema defines the contract for all records produced by adapters.
 """
 
-from src.epistemic.enums import EvidenceType, Verdict, EvidenceStance, ReasoningStrategy
+from src.epistemic.enums import EvidenceType, Modality, Verdict, EvidenceStance, ReasoningStrategy
 
 _EVIDENCE_TYPE_VALUES = [p.value for p in EvidenceType]
+_MODALITY_VALUES = [m.value for m in Modality]
 _VERDICT_VALUES = [v.value for v in Verdict]
 _STANCE_VALUES = [s.value for s in EvidenceStance]
 _STRATEGY_VALUES = [s.value for s in ReasoningStrategy] + [None]
@@ -124,18 +125,7 @@ CLAIM_SCHEMA = {
                     },
                     "modality": {
                         "type": "string",
-                        "enum": [
-                            "sensor",
-                            "web_text",
-                            "pdf",
-                            "web_table",
-                            "image",
-                            "video",
-                            "audio",
-                            "annotator_knowledge",
-                            "unanswerable",
-                            "other",
-                        ],
+                        "enum": _MODALITY_VALUES,
                     },
                     "stance": {
                         "type": "string",
