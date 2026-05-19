@@ -44,19 +44,23 @@ DEVICE              := env_var_or_default("DEVICE", "")
 [group("Dev")]
 [doc("Install dependencies and set up the environment")]
 init:
-    uv venv && uv sync && uv pip install -e ".[dev,notebook]"
+    uv venv
+    uv sync
+    uv pip install -e ".[dev,notebook]"
 
 
 [group("Dev")]
 [doc("Lint and format check (ruff)")]
 lint:
-    uv run ruff format --check . && uv run ruff check .
+    uv run ruff format --check .
+    uv run ruff check .
 
 
 [group("Dev")]
 [doc("Auto-fix lint and format issues (ruff)")]
 fix:
-    uv run ruff format . && uv run ruff check --fix .
+    uv run ruff format .
+    uv run ruff check --fix .
 
 
 [group("Dev")]
