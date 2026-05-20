@@ -88,6 +88,12 @@ run PIPELINE="" STEP="" MODELS="all":
 # ╚═════════════════════════════════════════════════════════════════════════════╝
 
 [group("Data Pipeline")]
+[doc("Enrich source trust registry from raw AVeriTeC URL scan; called automatically by build (--dry-run to preview)")]
+enrich-registry *args:
+    uv run python scripts/enrich_registry.py {{args}}
+
+
+[group("Data Pipeline")]
 [doc("Build training data: generate synthetic, merge sources, filter, split (rebuild=true re-simulates AI2THOR first)")]
 build rebuild="false":
     uv run python scripts/build_data.py {{rebuild}}

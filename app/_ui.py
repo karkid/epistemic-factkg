@@ -87,7 +87,7 @@ def render_decision_path(result: dict) -> None:
         return
     sup = result["support_score"]
     ref = result["refute_score"]
-    _EC = 0.35
+    _EC = result.get("ec_threshold", 0.35)
     if sup > _EC and ref > _EC:
         st.markdown(
             f'<div class="decision-path dp-conflict">⚡ Conflicting evidence — '
@@ -259,9 +259,10 @@ def render_arch_flow(result: dict, model_key: str) -> None:
             return (f'<div style="background:#e9ecef;border-radius:3px;height:6px;margin:3px 0">'
                     f'<div style="background:var(--{color});height:100%;width:{min(width,100):.1f}%;border-radius:3px"></div></div>')
 
+        _ec_thr = result.get("ec_threshold", 0.35)
         bars = (
-            f'<div style="margin:4px 0">{chip(f"support {sup:.3f}", "chip-green" if sup > 0.35 else "chip-gray")}{_bar("green", sup*100)}</div>'
-            f'<div style="margin:4px 0">{chip(f"refute {ref:.3f}", "chip-red" if ref > 0.35 else "chip-gray")}{_bar("red", ref*100)}</div>'
+            f'<div style="margin:4px 0">{chip(f"support {sup:.3f}", "chip-green" if sup > _ec_thr else "chip-gray")}{_bar("green", sup*100)}</div>'
+            f'<div style="margin:4px 0">{chip(f"refute {ref:.3f}", "chip-red" if ref > _ec_thr else "chip-gray")}{_bar("red", ref*100)}</div>'
         )
         arch_box("ec", "⑥", "EC AGGREGATION", bars)
 
@@ -785,7 +786,7 @@ def build_model_computation_dot(result: dict, model_name: str) -> str:
 
     # ── L6: DECISION ──────────────────────────────────────────────────────────
     if has_ec:
-        thr = 0.35
+        thr = result.get("ec_threshold", 0.35)
         if sup > thr and ref > thr:
             dec_lbl = f"CONFLICTING\\nsup={sup:.3f} > {thr}  AND\\nref={ref:.3f} > {thr}\\n→ fall to VerdictHead"
             dec_fill, dec_fc = "#fef3c7", "#92400e"
@@ -916,12 +917,13 @@ def build_claim_dot(claim: str, result: dict) -> str:
         sup, ref = result.get("support_score", 0.0), result.get("refute_score", 0.0)
         n_sup = sum(1 for ev in bd if ev.get("stance") == "supports")
         n_ref = sum(1 for ev in bd if ev.get("stance") == "refutes")
+        _thr = result.get("ec_threshold", 0.35)
         lines += [
             "  // ── EC AGGREGATE node ──────────────────────────────────────────",
             f'  agg [label="[ EC AGGREGATE ]\\n'
             f'EC_support = {sup:.4f}  (from {n_sup} ev)\\n'
             f'EC_refute  = {ref:.4f}  (from {n_ref} ev)\\n'
-            f'threshold = 0.35",',
+            f'threshold = {_thr}",',
             f'       shape=diamond, fillcolor="#eff6ff", fontcolor="#1d4ed8", penwidth=2]',
         ]
         for i, ev in enumerate(bd):

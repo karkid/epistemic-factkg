@@ -76,13 +76,13 @@ def _render_formulas() -> None:
             "| EC | Epistemic Confidence | [0, 1] |"
         )
 
-        st.markdown("### Decision Logic  `threshold = 0.35`")
+        st.markdown("### Decision Logic  `ec_threshold θ` (per-checkpoint hyperparameter, default 0.35)")
         st.markdown(
             "| Condition | Outcome |\n|-----------|---------|\n"
-            "| sup > 0.35 **and** ref > 0.35 | Conflicting → VerdictHead |\n"
-            "| sup > 0.35 only | Symbolic override → **SUPPORTED** |\n"
-            "| ref > 0.35 only | Symbolic override → **REFUTED** |\n"
-            "| neither > 0.35 | EC weak → VerdictHead |\n"
+            "| sup > θ **and** ref > θ | Conflicting → VerdictHead |\n"
+            "| sup > θ only | Symbolic override → **SUPPORTED** |\n"
+            "| ref > θ only | Symbolic override → **REFUTED** |\n"
+            "| neither > θ | EC weak → VerdictHead |\n"
             "| baseline model | VerdictHead always |"
         )
 
@@ -211,16 +211,16 @@ def _render_assumptions() -> None:
             [
                 "EC_i = 1 − (1 − ST_i)^(EW_i × IS_i)  — multiplicative-complementary form.",
                 "EW (evidence weight) = stance probability from the stance head.",
-                "The decisive threshold is fixed at 0.35 for symbolic override.",
+                "The decisive threshold θ is a per-checkpoint hyperparameter (default 0.35, tuned via Optuna).",
                 "EC aggregate uses product-of-complements: EC_d = 1 − ∏(1 − EC_i) for stance d.",
             ],
         ),
         (
             "Verdict Decision Logic",
             [
-                "If EC_support > 0.35 AND EC_refute > 0.35 → treat as conflicting, fall through to VerdictHead.",
-                "If only EC_support > 0.35 → hard SUPPORTED override.",
-                "If only EC_refute  > 0.35 → hard REFUTED override.",
+                "If EC_support > θ AND EC_refute > θ → treat as conflicting, fall through to VerdictHead.",
+                "If only EC_support > θ → hard SUPPORTED override.",
+                "If only EC_refute  > θ → hard REFUTED override.",
                 "Otherwise → VerdictHead softmax output decides.",
                 "Baseline model always uses VerdictHead (no EC computation).",
             ],

@@ -120,6 +120,22 @@ def load_registry() -> list[dict]:
     ]
 
 
+@st.cache_data(show_spinner=False)
+def source_type_index() -> dict[str, str]:
+    """Return {source_id: encoder_category} built from the registry.
+
+    Registry source_types (e.g. scientific_paper, fact_checker) are mapped to
+    the 6 encoder categories used by SOURCE_TYPE_TO_INT so the result is always
+    a valid SOURCE_TYPES value.
+    """
+    from src.model.data.types import _REGISTRY_TYPE_TO_CATEGORY
+    return {
+        e["source_id"]: _REGISTRY_TYPE_TO_CATEGORY.get(e.get("source_type", "unknown"), "unknown")
+        for e in load_registry()
+        if "source_id" in e
+    }
+
+
 # ── Graph cache (pkl) ────────────────────────────────────────────────────────
 
 @st.cache_resource(show_spinner="Loading graph cache…")

@@ -126,3 +126,34 @@ SOURCE_LABELS = {
     "news":       "News Media",
     "simulation": "Simulation (AI2THOR)",
 }
+
+# Pattern-based source_id → source_type mapping (checked in order; first match wins).
+SOURCE_ID_TYPE_MAP: list[tuple[str, str]] = [
+    ("academic", "academic"),
+    ("wikipedia", "academic"),
+    ("scholar", "academic"),
+    ("pubmed", "academic"),
+    ("arxiv", "academic"),
+    ("news", "news_media"),
+    ("reuters", "news_media"),
+    ("bbc", "news_media"),
+    ("cnn", "news_media"),
+    ("guardian", "news_media"),
+    ("government", "government"),
+    ("_gov", "government"),
+    ("social", "social_media"),
+    ("twitter", "social_media"),
+    ("reddit", "social_media"),
+    ("sensor", "sensor"),
+    ("ai2thor", "sensor"),
+    ("simulation", "sensor"),
+]
+
+
+def source_id_to_type(source_id: str) -> str:
+    """Map a raw source_id string to a SOURCE_TYPES category."""
+    sid = source_id.lower()
+    for pattern, stype in SOURCE_ID_TYPE_MAP:
+        if pattern in sid:
+            return stype
+    return "unknown"

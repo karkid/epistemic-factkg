@@ -204,6 +204,8 @@ def _resolve_evidence_source(source_url: str, modality: str, registry: dict) -> 
         return "annotator_knowledge"
     if not source_url:
         return "unknown_web"
+    if source_url.strip().lower() == "metadata":
+        return "annotator_knowledge"
     try:
         # Unwrap Wayback Machine archives before domain resolution
         m = _ARCHIVE_RE.search(source_url)

@@ -61,6 +61,9 @@ def main() -> None:
             "--output", SYNTHETIC_JSONL,
         )
 
+    print("--- enriching source trust registry ---")
+    run("uv", "run", "python", "scripts/enrich_registry.py")
+
     for d in ["out/data/unified", "out/data/training", "out/data/intermediate"]:
         Path(d).mkdir(parents=True, exist_ok=True)
 

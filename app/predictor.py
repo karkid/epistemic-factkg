@@ -20,28 +20,7 @@ from src.model.data.featurizer import Featurizer
 from src.model.data.types import NodeType
 from src.model.models import MODELS
 from src.model.models.nlihybridhgnn import NLIHybridHGNN
-from _constants import INT_TO_VERDICT as _INT_TO_VERDICT, INT_TO_STANCE as _INT_TO_STANCE
-
-_SOURCE_ID_TYPE_MAP: list[tuple[str, str]] = [
-    ("academic", "academic"),
-    ("wikipedia", "academic"),
-    ("scholar", "academic"),
-    ("pubmed", "academic"),
-    ("arxiv", "academic"),
-    ("news", "news_media"),
-    ("reuters", "news_media"),
-    ("bbc", "news_media"),
-    ("cnn", "news_media"),
-    ("guardian", "news_media"),
-    ("government", "government"),
-    ("_gov", "government"),
-    ("social", "social_media"),
-    ("twitter", "social_media"),
-    ("reddit", "social_media"),
-    ("sensor", "sensor"),
-    ("ai2thor", "simulation"),   # internal only — not shown in UI SOURCE_TYPES
-    ("simulation", "simulation"),
-]
+from _constants import INT_TO_VERDICT as _INT_TO_VERDICT, INT_TO_STANCE as _INT_TO_STANCE, source_id_to_type
 
 _ARCHIVE_RE = re.compile(r"web\.archive\.org/web/\d+[^/]*/(.+)")
 
@@ -125,9 +104,9 @@ class EpistemicPredictor:
         graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
         ckpt = torch.load(str(checkpoint), map_location="cpu", weights_only=False)
         state = ckpt.get("model_state_dict", ckpt)
-        ec_threshold = ckpt.get("ec_threshold", 0.35) if isinstance(ckpt, dict) else 0.35
+        self._ec_threshold = ckpt.get("ec_threshold", 0.35) if isinstance(ckpt, dict) else 0.35
         hidden_dim, heads = _infer_hparams(state)
-        self._model = model_cls(graph_cfg, hidden_dim=hidden_dim, heads=heads, dropout=0.3, ec_threshold=ec_threshold)
+        self._model = model_cls(graph_cfg, hidden_dim=hidden_dim, heads=heads, dropout=0.3, ec_threshold=self._ec_threshold)
         self._model.load_state_dict(state)
         self._model.eval()
 
@@ -215,6 +194,7 @@ class EpistemicPredictor:
             "support_score": float(out.get("support_score", 0.0)),
             "refute_score": float(out.get("refute_score", 0.0)),
             "has_ec": self.model_name != "baseline",
+            "ec_threshold": self._ec_threshold,
             "evidence_breakdown": breakdown,
             "hetero_data": graph.data,  # HeteroData — used for pyvis graph viz
         }
@@ -225,7 +205,8 @@ class EpistemicPredictor:
         evidence_items = [
             {
                 "text": ev["text"],
-                "source_type": self._source_id_to_type(ev.get("source_id", "")),
+                "source_id": ev.get("source_id", ""),   # preserve exact registry trust
+                "source_type": source_id_to_type(ev.get("source_id", "")),
                 "modality": ev.get("modality", "web_text"),
             }
             for ev in raw_ev
@@ -244,10 +225,16 @@ class EpistemicPredictor:
     def _resolve_sources(self, evidence_items: list[dict]) -> list[dict]:
         result = []
         for ev in evidence_items:
-            source_id, trust = self._resolve_source(
-                ev.get("url"), ev.get("source_type", "unknown")
-            )
-            result.append({**ev, "source_id": source_id, "resolved_trust": trust})
+            pre_sid = ev.get("source_id", "")
+            if pre_sid and pre_sid in self._registry:
+                # Original source_id known — use exact registry trust (matches training)
+                trust = get_source_trust(pre_sid, self._registry)
+                result.append({**ev, "source_id": pre_sid, "resolved_trust": trust})
+            else:
+                source_id, trust = self._resolve_source(
+                    ev.get("url"), ev.get("source_type", "unknown")
+                )
+                result.append({**ev, "source_id": source_id, "resolved_trust": trust})
         return result
 
     def _resolve_source(self, url: str | None, source_type: str) -> tuple[str, float]:
@@ -272,13 +259,6 @@ class EpistemicPredictor:
             source_type, ("unknown_web", 0.40)
         )
         return source_id, trust
-
-    def _source_id_to_type(self, source_id: str) -> str:
-        sid = source_id.lower()
-        for pattern, stype in _SOURCE_ID_TYPE_MAP:
-            if pattern in sid:
-                return stype
-        return "unknown"
 
     def _build_record(self, claim: str, resolved_items: list[dict]) -> dict:
         evidence = []

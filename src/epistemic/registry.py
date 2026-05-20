@@ -186,13 +186,17 @@ def _tld_heuristic(domain: str, modality: str) -> str | None:
         ".gov.gh",
         ".gov.ke",
         ".gouv.fr",
+        ".go.ke",
+        ".go.ug",
+        ".go.tz",
+        ".nhs.uk",
     )
     edu_suffixes = (".edu", ".ac.uk", ".ac.in", ".ac.za", ".edu.au")
 
     for s in gov_suffixes:
-        if domain.endswith(s):
+        if domain.endswith(s) or domain == s.lstrip("."):
             return "government_pdf" if modality == "pdf" else "government_web_text"
     for s in edu_suffixes:
-        if domain.endswith(s):
+        if domain.endswith(s) or domain == s.lstrip("."):
             return "academic_pdf" if modality == "pdf" else "general_web_text"
     return None

@@ -5,8 +5,8 @@ import random
 
 import streamlit as st
 
-from _constants import MODELS, ALL_KEY, MODEL_DESCRIPTIONS, MODALITIES, SOURCE_TYPES
-from _loaders import load_test_records, load_all_records_indexed
+from _constants import MODELS, ALL_KEY, MODEL_DESCRIPTIONS, MODALITIES, SOURCE_TYPES, source_id_to_type
+from _loaders import load_test_records, load_all_records_indexed, source_type_index
 
 
 # ── Blank evidence item ───────────────────────────────────────────────────────
@@ -44,7 +44,8 @@ def load_record_into_state(rec: dict) -> None:
     new_evs = [
         {
             "text":        ev.get("text", ""),
-            "source_type": "academic" if "wikipedia" in ev.get("source_id", "") else "unknown",
+            "source_id":   ev.get("source_id", ""),
+            "source_type": source_type_index().get(ev.get("source_id", ""), source_id_to_type(ev.get("source_id", ""))),
             "modality":    ev.get("modality", "web_text"),
         }
         for ev in rec.get("evidence", [])[:4]
