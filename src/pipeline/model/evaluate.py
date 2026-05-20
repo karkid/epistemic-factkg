@@ -192,19 +192,22 @@ def main() -> None:
     best = load_best_hparams(args.model)
     if best:
         print(f"Loaded best hparams from configs/hparams/{args.model}_best_hparams.json")
+
+    ckpt_raw = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    state = ckpt_raw.get("model_state_dict", ckpt_raw) if isinstance(ckpt_raw, dict) else ckpt_raw
+    ec_threshold = ckpt_raw.get("ec_threshold", 0.35) if isinstance(ckpt_raw, dict) else 0.35
+
     hidden_dim = args.hidden_dim or (best.get("hidden_dim") if best else None) or 256
     heads     = args.heads     or (best.get("heads")      if best else None) or 4
     dropout   = args.dropout   or (best.get("dropout")    if best else None) or 0.3
-    print(f"Model arch: hidden_dim={hidden_dim}  heads={heads}  dropout={dropout}")
+    print(f"Model arch: hidden_dim={hidden_dim}  heads={heads}  dropout={dropout}  ec_threshold={ec_threshold}")
 
     is_nli = MODELS.get(args.model) is NLIHybridHGNN
     graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
     model = MODELS[args.model](
-        graph_cfg, hidden_dim, heads, dropout
+        graph_cfg, hidden_dim, heads, dropout, ec_threshold
     )
-    model.load_state_dict(
-        torch.load(args.checkpoint, map_location=device, weights_only=False)
-    )
+    model.load_state_dict(state)
     model.to(device).eval()
 
     # ── Load test records ─────────────────────────────────────────────────────

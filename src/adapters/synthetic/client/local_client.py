@@ -199,8 +199,8 @@ _TEXT_POOLS: dict[str, dict[str, list[str]]] = {
         "strong": [
             "A systematic {metric}-point inspection of the {city} {inst} found no instance matching the described characteristic.",
             "Comprehensive testing across all {brand} {product} batches confirmed the complete absence of {subst}.",
-            "No evidence of the described element was found in any of the {metric} samples tested across {city} facilities.",
-            "A thorough search confirmed the described item is absent from the {city} {inst} inventory.",
+            "No evidence of {subst} was found in any of the {metric} samples tested across {city} facilities.",
+            "A thorough search confirmed {subst} is absent from the {city} {inst} inventory.",
         ],
         "weak": [
             "A partial survey of {brand} products in {city} found no obvious instances, though not all units were examined.",

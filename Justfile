@@ -170,7 +170,7 @@ train model=MODEL_NAME:
         --epochs 100 \
         --lr 3e-4 \
         --batch-size 32 \
-        --device {{DEVICE}} \
+        $([ -n "{{DEVICE}}" ] && echo "--device {{DEVICE}}") \
         --verbose
 
 
@@ -185,7 +185,7 @@ eval model=MODEL_NAME:
         --jsonl {{TRAINING_JSONL}} \
         --splits-dir {{SPLITS_DIR}} \
         --output out/reports/model/{{model}}/eval \
-        --device {{DEVICE}}
+        $([ -n "{{DEVICE}}" ] && echo "--device {{DEVICE}}")
 
 
 [group("Model Pipeline")]

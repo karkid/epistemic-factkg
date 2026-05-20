@@ -39,6 +39,7 @@ non_apprehension_absent     1 ai2thor non_app IS=0.8   supported       no
 from __future__ import annotations
 
 import random
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -58,6 +59,11 @@ from src.epistemic.registry import get_source_trust
 from src.utils.time import utc_now_iso
 
 MIN_SHORTCUT_FRACTION = 0.35
+
+_VAGUE_PLACEHOLDER = re.compile(
+    r"\bthe described (element|substance|compound|entity|object|material|item)\b",
+    re.IGNORECASE,
+)
 
 _STRATEGY_MAP: dict[str, str] = {
     "high_trust_supported": ReasoningStrategy.TESTIMONIAL_LOOKUP,
@@ -354,7 +360,11 @@ class FictionalClaimGenerator:
         result = self._client.generate(template.evidence_specs, template.name)
         if result is None:
             return None
-        return _build_record(result, template, self._registry)
+        record = _build_record(result, template, self._registry)
+        for ev in record.get("evidence", []):
+            if _VAGUE_PLACEHOLDER.search(ev.get("text") or ""):
+                return None
+        return record
 
 
 # ---------------------------------------------------------------------------

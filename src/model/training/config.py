@@ -31,3 +31,4 @@ class TrainConfig:
     checkpoint_dir: str = "out/model/checkpoints"
     report_dir: str = "out/reports/model"
     patience: int = 5
+    ec_threshold: float = 0.35

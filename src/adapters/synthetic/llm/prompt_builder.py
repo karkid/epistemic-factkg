@@ -58,6 +58,15 @@ def build_prompt(specs: list[EvidenceSpec], template_name: str) -> str:
     specs_block = "\n".join(spec_lines)
     example_texts = ", ".join([f'"Evidence text {i}."' for i in range(1, n + 1)])
 
+    has_non_apprehension = any(
+        "non_apprehension" in (s.evidence_types or []) for s in specs
+    )
+    non_app_rule = (
+        "\n- For non_apprehension evidence: name the SPECIFIC substance, item, or entity"
+        " from the claim — NEVER write 'the described element', 'the described item',"
+        " 'the described substance', or any other generic placeholder"
+    ) if has_non_apprehension else ""
+
     return f"""\
 Generate a fictional everyday claim and {n} evidence item(s).
 
@@ -71,7 +80,7 @@ both must reference the same specific claim assertion
 - Claim must be a complete declarative sentence ending with a period
 - Each evidence text must be 1–3 sentences
 - Use fictional entities only (no real brands, cities, people)
-- Do NOT include markdown, "Example:", or anything outside the JSON
+- Do NOT include markdown, "Example:", or anything outside the JSON{non_app_rule}
 
 Output ONLY valid JSON:
 {{

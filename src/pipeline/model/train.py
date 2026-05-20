@@ -48,6 +48,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--hidden-dim", type=int, default=256)
     ap.add_argument("--heads", type=int, default=4)
     ap.add_argument("--dropout", type=float, default=0.3)
+    ap.add_argument("--ec-threshold", type=float, default=0.35)
     ap.add_argument(
         "--is-loss-weight", type=float, default=0.5, help="λ₁ for IS regression loss"
     )
@@ -229,7 +230,7 @@ def main() -> None:
         sys.exit(1)
     graph_cfg = GraphConfig.v2() if is_nli else GraphConfig.v1()
     model = MODELS[args.model](
-        graph_cfg, args.hidden_dim, args.heads, args.dropout
+        graph_cfg, args.hidden_dim, args.heads, args.dropout, args.ec_threshold
     )
     config = TrainConfig(
         epochs=args.epochs,
@@ -242,6 +243,7 @@ def main() -> None:
         verdict_loss_weight=args.verdict_loss_weight,
         device=args.device,
         checkpoint_dir=args.checkpoint_dir,
+        ec_threshold=args.ec_threshold,
     )
     trainer = Trainer(
         model,
@@ -275,7 +277,7 @@ def main() -> None:
         "history": history,
     }
     (report_dir / "training_history.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(f"Best model -> {ckpt_dir}/best_model.pt")
+    print(f"Best model (val_acc) -> {ckpt_dir}/best_model.pt")
 
 
 if __name__ == "__main__":

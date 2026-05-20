@@ -105,12 +105,10 @@ class EpistemicPredictor:
     def __init__(self, model_name: str = "v2-hgnn") -> None:
         self.model_name = model_name
         ckpt_dir = Path(f"out/model/{model_name}/checkpoints")
-        acc_ckpt = ckpt_dir / "best_acc_model.pt"
-        loss_ckpt = ckpt_dir / "best_model.pt"
-        checkpoint = acc_ckpt if acc_ckpt.exists() else loss_ckpt
+        checkpoint = ckpt_dir / "best_model.pt"
         if not checkpoint.exists():
             raise FileNotFoundError(
-                f"No checkpoint at {ckpt_dir}. Run: just train {model_name}"
+                f"No checkpoint at {checkpoint}. Run: just train {model_name}"
             )
 
         self._registry = load_source_trust_registry(

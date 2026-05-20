@@ -82,12 +82,13 @@ def run_search(
     def objective(trial: optuna.Trial) -> float:
         hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
         heads = trial.suggest_categorical("heads", [2, 4])
-        dropout = trial.suggest_float("dropout", 0.1, 0.5, step=0.1)
+        dropout = trial.suggest_float("dropout", 0.2, 0.5, step=0.1)
+        ec_threshold = trial.suggest_float("ec_threshold", 0.20, 0.60, step=0.05)
 
-        model = model_cls(graph_cfg, hidden_dim, heads, dropout)
+        model = model_cls(graph_cfg, hidden_dim, heads, dropout, ec_threshold)
         cfg = TrainConfig(
             lr=trial.suggest_float("lr", 1e-4, 1e-2, log=True),
-            weight_decay=trial.suggest_float("weight_decay", 1e-5, 1e-2, log=True),
+            weight_decay=trial.suggest_float("weight_decay", 1e-4, 1e-2, log=True),
             dropout=dropout,
             hidden_dim=hidden_dim,
             heads=heads,
@@ -95,6 +96,7 @@ def run_search(
             verdict_loss_weight=1.0,
             epochs=20,
             patience=5,
+            ec_threshold=ec_threshold,
         )
         trainer = Trainer(model, cfg, stance_weights, verdict_weights)
         trainer.fit(train_loader, val_loader, verbose=False)

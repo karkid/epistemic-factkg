@@ -193,7 +193,13 @@ class AdvancedClaimValidator:
         reasoning = (claim.get("reasoning") or {}).get("structural")
         text = claim.get("claim", "")
 
-        if reasoning == "one_hop" and len(triples) != 1:
+        # Triple-count rules only apply to datasets that use claim_triples
+        # (ai2thor, synthetic). AVeriTeC records have claim_triples=null by design.
+        has_triples_field = claim.get("claim_triples") is not None
+        dataset = (claim.get("provenance") or {}).get("dataset", "")
+        triples_expected = has_triples_field or dataset == "ai2thor"
+
+        if triples_expected and reasoning == "one_hop" and len(triples) != 1:
             result.add_issue(
                 "semantic",
                 "error",
@@ -201,7 +207,7 @@ class AdvancedClaimValidator:
                 "claim_triples",
             )
 
-        if reasoning == "conjunction" and len(triples) < 2:
+        if triples_expected and reasoning == "conjunction" and len(triples) < 2:
             result.add_issue(
                 "semantic",
                 "error",

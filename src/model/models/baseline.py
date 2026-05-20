@@ -43,6 +43,7 @@ class BaselineHGNN(nn.Module):
         hidden_dim: int = 256,
         heads: int = 4,
         dropout: float = 0.1,
+        ec_threshold: float = 0.35,  # unused — baseline has no EC path
     ) -> None:
         super().__init__()
         cfg = graph_config or GraphConfig.v1()

@@ -53,10 +53,11 @@ class Trainer:
             model.parameters(), lr=config.lr, weight_decay=config.weight_decay
         )
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", patience=12, factor=0.5
+            self.optimizer, mode="min", patience=2, factor=0.5
         )
 
         self._best_val_loss = float("inf")
+        self._best_val_acc = 0.0
         self._epochs_no_improve = 0
         ckpt_dir = Path(config.checkpoint_dir)
         ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -157,10 +158,18 @@ class Trainer:
                     f"s_acc {val.stance_acc:.3f} v_acc {val.verdict_acc:.3f}"
                 )
 
+            ckpt_payload = {
+                "model_state_dict": self.model.state_dict(),
+                "ec_threshold": self.config.ec_threshold,
+            }
+            # Checkpoint on acc; early stopping on loss — deliberately independent.
+            if val.verdict_acc >= self._best_val_acc:
+                self._best_val_acc = val.verdict_acc
+                torch.save(ckpt_payload, self._ckpt_path)
+
             if val.loss < self._best_val_loss:
                 self._best_val_loss = val.loss
                 self._epochs_no_improve = 0
-                torch.save(self.model.state_dict(), self._ckpt_path)
             else:
                 self._epochs_no_improve += 1
                 if self._epochs_no_improve >= self.config.patience:
@@ -171,9 +180,9 @@ class Trainer:
         return history
 
     def load_best(self) -> None:
-        self.model.load_state_dict(
-            torch.load(self._ckpt_path, map_location=self.device)
-        )
+        ckpt = torch.load(self._ckpt_path, map_location=self.device, weights_only=False)
+        state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
+        self.model.load_state_dict(state)
 
     @torch.no_grad()
     def evaluate(self, loader: DataLoader) -> EpochResult:

@@ -44,6 +44,7 @@ class HybridHGNN(nn.Module):
         hidden_dim: int = 256,
         heads: int = 4,
         dropout: float = 0.1,
+        ec_threshold: float = 0.35,
     ) -> None:
         super().__init__()
         cfg = graph_config or GraphConfig.v1()
@@ -52,6 +53,7 @@ class HybridHGNN(nn.Module):
         self.is_head = ISHead(hidden_dim)
         self.verdict_head = HybridVerdictHead(hidden_dim)
         self.aggregator = SymbolicAggregator()
+        self.ec_threshold = ec_threshold
 
     def forward(self, data: HeteroData) -> dict[str, torch.Tensor]:
         """Training forward pass.
@@ -87,7 +89,7 @@ class HybridHGNN(nn.Module):
         Uses soft EC scores from forward (same path as training) for thresholds,
         eliminating the train-inference gap from hard-argmax EC computation.
         """
-        _EC_DECISIVE = 0.35
+        _EC_DECISIVE = self.ec_threshold
 
         out = self.forward(data)
         stance_pred = out["stance_logits"].argmax(dim=-1)

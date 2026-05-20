@@ -40,9 +40,10 @@ class NLIHybridHGNN(HybridHGNN):
         hidden_dim: int = 256,
         heads: int = 4,
         dropout: float = 0.1,
+        ec_threshold: float = 0.35,
     ) -> None:
         cfg = graph_config or GraphConfig.v2()
-        super().__init__(cfg, hidden_dim, heads, dropout)
+        super().__init__(cfg, hidden_dim, heads, dropout, ec_threshold)
 
     def _soft_verdict_logits(
         self,
@@ -94,7 +95,7 @@ class NLIHybridHGNN(HybridHGNN):
         Uses soft NLI-derived EC scores from forward (same path as training)
         for threshold checks — no train-inference gap.
         """
-        _EC_DECISIVE = 0.35
+        _EC_DECISIVE = self.ec_threshold
 
         from src.model.data.types import VERDICT_TO_INT
         _int_to_verdict = {v: k for k, v in VERDICT_TO_INT.items()}
