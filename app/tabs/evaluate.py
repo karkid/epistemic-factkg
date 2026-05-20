@@ -5,7 +5,7 @@ import random
 from collections import Counter
 
 import streamlit as st
-import streamlit.components.v1 as components
+import base64
 
 from _constants import MODELS, ALL_KEY, VERDICT_LABELS, VERDICT_META
 from _loaders import load_test_records, get_predictor
@@ -193,7 +193,7 @@ def render_evaluate(selected_key: str, *, state_key: str = "eval") -> None:
         c_dl, c_pat = st.columns([2, 5])
         with c_dl:
             st.download_button("⬇ Download JSON", json_data, file_name="eval_results.json",
-                               mime="application/json", use_container_width=True,
+                               mime="application/json", width='stretch',
                                key=f"{state_key}_dl_btn")
         with c_pat:
             patterns = Counter(_failure_pattern(r) for r in rows)
@@ -245,20 +245,19 @@ def render_evaluate(selected_key: str, *, state_key: str = "eval") -> None:
                             "**Blue** = CLAIM · **green** = supports · "
                             "**red** = refutes · **gray** = neutral"
                         )
-                        components.html(
-                            build_pyvis_html(hd, row["claim"], ev_texts),
-                            height=520, scrolling=False,
-                        )
+                        _html = build_pyvis_html(hd, row["claim"], ev_texts)
+                        _b64 = base64.b64encode(_html.encode("utf-8")).decode("ascii")
+                        st.iframe(f"data:text/html;base64,{_b64}", height=520)
                     else:
                         dot_src = build_claim_dot(row["claim"], row["result"])
                         try:
-                            st.graphviz_chart(dot_src, use_container_width=True)
+                            st.graphviz_chart(dot_src, width='stretch')
                         except Exception:
                             st.code(dot_src, language=None)
                 with t_flow:
                     dot_src = build_model_computation_dot(row["result"], inspect_model)
                     try:
-                        st.graphviz_chart(dot_src, use_container_width=True)
+                        st.graphviz_chart(dot_src, width='stretch')
                     except Exception:
                         st.code(dot_src, language=None)
                     with st.expander("DOT source", expanded=False):

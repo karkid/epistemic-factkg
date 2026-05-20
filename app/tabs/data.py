@@ -72,7 +72,7 @@ def _render_stats(stats: dict) -> None:
                  "%": f"{v['pct']:.1f}"}
                 for t, v in tv.items()
             ]
-            st.dataframe(pd.DataFrame(rows).set_index("Type"), use_container_width=True)
+            st.dataframe(pd.DataFrame(rows).set_index("Type"), width='stretch')
 
     with t_mod:
         mod_d = dists.get("evidence_modality", {})
@@ -104,7 +104,7 @@ def _render_stats(stats: dict) -> None:
             st.markdown("#### Report Plots")
             cols = st.columns(min(len(plot_files), 3))
             for i, p in enumerate(plot_files):
-                cols[i % 3].image(str(p), caption=p.stem.replace("_", " "), use_container_width=True)
+                cols[i % 3].image(str(p), caption=p.stem.replace("_", " "), width='stretch')
 
     # ── GNN readiness ─────────────────────────────────────────────────────────
     struct_d2 = dists.get("reasoning_structural", {})
@@ -160,12 +160,14 @@ def _render_schema() -> None:
     rows = []
     for field, defn in props.items():
         ftype  = defn.get("type", "—")
+        if isinstance(ftype, list):
+            ftype = " | ".join(ftype)
         fdesc  = defn.get("description", "")[:120]
         freq   = "✓" if field in required else ""
         rows.append({"Field": field, "Type": ftype, "Required": freq, "Description": fdesc})
 
     import pandas as pd
-    st.dataframe(pd.DataFrame(rows).set_index("Field"), use_container_width=True, height=420)
+    st.dataframe(pd.DataFrame(rows).set_index("Field"), width='stretch', height=420)
 
     with st.expander("Raw JSON Schema"):
         st.json(schema)
@@ -269,7 +271,7 @@ def _render_claim_search() -> None:
                         prov_parts.append(f"orig_id: `{prov['original_id']}`")
                     st.caption("Provenance: " + "  ·  ".join(prov_parts))
             with c_r:
-                if st.button("Load in Verify", key=f"load_{claim_id}", use_container_width=True):
+                if st.button("Load in Verify", key=f"load_{claim_id}", width='stretch'):
                     load_record_into_state(rec)
                     st.success("Loaded — switch to Verify tab")
                 st.caption(f"{n_ev} evidence items")
@@ -303,7 +305,7 @@ def _render_claim_search() -> None:
 
 def _render_graph_browser() -> None:
     """Browse HeteroData graphs from the pkl split cache."""
-    import streamlit.components.v1 as components
+    import base64
     from _constants import MODELS
     from _ui import build_pyvis_html
 
@@ -388,7 +390,8 @@ def _render_graph_browser() -> None:
         st.markdown(f"> {claim_text}")
 
     html = build_pyvis_html(g, claim_text=claim_text, height="520px")
-    components.html(html, height=540, scrolling=False)
+    html_b64 = base64.b64encode(html.encode("utf-8")).decode("ascii")
+    st.iframe(f"data:text/html;base64,{html_b64}", height=540)
 
     with st.expander("Raw HeteroData repr", expanded=False):
         st.code(str(g), language=None)

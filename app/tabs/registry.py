@@ -91,7 +91,7 @@ def render() -> None:
     st.dataframe(
         df.style.background_gradient(subset=["trust", "prior_trust", "default_IS"],
                                      cmap="RdYlGn", vmin=0, vmax=1),
-        use_container_width=True,
+        width='stretch',
         height=min(600, 38 * len(rows) + 40),
     )
 

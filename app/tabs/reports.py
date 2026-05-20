@@ -85,7 +85,7 @@ def _render_model_report(model_key: str) -> None:
         cols = st.columns(len(imgs))
         for col, (img_path, caption) in zip(cols, imgs):
             if img_path.exists():
-                col.image(str(img_path), caption=caption, use_container_width=True)
+                col.image(str(img_path), caption=caption, width='stretch')
             else:
                 col.caption(f"_{caption} — not generated yet_")
 
@@ -98,7 +98,7 @@ def _render_model_report(model_key: str) -> None:
         ]
         if rows:
             import pandas as pd
-            st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+            st.dataframe(pd.DataFrame(rows).set_index("Class"), width='stretch')
 
         conf = vm.get("confusion")
         if conf:
@@ -106,7 +106,7 @@ def _render_model_report(model_key: str) -> None:
             labels = list(vm.get("per_class", {}).keys()) or [str(i) for i in range(len(conf))]
             import pandas as pd  # noqa: F811
             st.dataframe(
-                pd.DataFrame(conf, index=labels, columns=labels), use_container_width=True
+                pd.DataFrame(conf, index=labels, columns=labels), width='stretch'
             )
 
         per_src = vm.get("per_source")
@@ -118,7 +118,7 @@ def _render_model_report(model_key: str) -> None:
                     [{"Source": s, "Accuracy": m["accuracy"], "N": m["support"]}
                      for s, m in per_src.items()]
                 ).set_index("Source"),
-                use_container_width=True,
+                width='stretch',
             )
 
     with t_stance:
@@ -134,7 +134,7 @@ def _render_model_report(model_key: str) -> None:
             ]
             if rows:
                 import pandas as pd
-                st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+                st.dataframe(pd.DataFrame(rows).set_index("Class"), width='stretch')
         else:
             st.caption("stance_metrics.json not found.")
 
@@ -188,7 +188,7 @@ def _render_model_report(model_key: str) -> None:
                     })
             st.dataframe(
                 pd.DataFrame(rows_skipped),
-                use_container_width=True,
+                width='stretch',
                 height=min(400, 36 * len(rows_skipped) + 38),
             )
         else:
@@ -271,7 +271,7 @@ def _render_comparison_reports() -> None:
 
             st.dataframe(
                 df_agg.style.apply(_style_row, axis=1),
-                use_container_width=True, hide_index=True,
+                width='stretch', hide_index=True,
             )
 
     # ── Per-source verdict accuracy ────────────────────────────────────────────
@@ -296,7 +296,7 @@ def _render_comparison_reports() -> None:
 
         st.dataframe(
             df_src.style.apply(_style_src_row, axis=1),
-            use_container_width=True, hide_index=True,
+            width='stretch', hide_index=True,
         )
 
     # Raw markdown fallback

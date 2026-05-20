@@ -450,7 +450,7 @@ def render_compare_results(results: dict[str, dict | str]) -> None:
 def render_evidence_cards() -> None:
     c_add, c_hint = st.columns([1, 5])
     with c_add:
-        if st.button("＋ Add", use_container_width=True):
+        if st.button("＋ Add", width='stretch'):
             st.session_state.evidence_list.append(blank_ev())
             st.rerun()
     with c_hint:

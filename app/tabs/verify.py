@@ -42,9 +42,9 @@ def render() -> None:
             label_visibility="collapsed",
         )
     with c_btn:
-        verify = st.button("Verify", type="primary", use_container_width=True,
+        verify = st.button("Verify", type="primary", width='stretch',
                            disabled=not claim.strip())
-        if st.button("Random", use_container_width=True):
+        if st.button("Random", width='stretch'):
             load_random_example()
             st.rerun()
         if st.session_state.get("_random_true_label"):
@@ -61,7 +61,7 @@ def render() -> None:
         )
     with c_go:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if st.button("Load →", key="load_by_id_btn", use_container_width=True) and search_id.strip():
+        if st.button("Load →", key="load_by_id_btn", width='stretch') and search_id.strip():
             if load_by_id(search_id.strip()):
                 st.rerun()
             else:
@@ -134,7 +134,7 @@ def _render_gnn_flow(claim: str, result: dict, model_name: str) -> None:
     )
     dot_src = build_model_computation_dot(result, model_name)
     try:
-        st.graphviz_chart(dot_src, use_container_width=True)
+        st.graphviz_chart(dot_src, width='stretch')
     except Exception:
         st.code(dot_src, language=None)
 
@@ -144,7 +144,7 @@ def _render_gnn_flow(claim: str, result: dict, model_name: str) -> None:
 
 def _render_graph(claim: str, result: dict) -> None:
     """Interactive pyvis graph of the actual HeteroData used for inference."""
-    import streamlit.components.v1 as components
+    import base64
 
     hetero_data = result.get("hetero_data")
     ev_texts = [ev.get("text", "") for ev in result.get("evidence_breakdown", [])]
@@ -159,19 +159,20 @@ def _render_graph(claim: str, result: dict) -> None:
             r"**Gray dashed** = co\_evidence (EV↔EV)"
         )
         html = build_pyvis_html(hetero_data, claim, ev_texts)
-        components.html(html, height=560, scrolling=False)
+        html_b64 = base64.b64encode(html.encode("utf-8")).decode("ascii")
+        st.iframe(f"data:text/html;base64,{html_b64}", height=560)
     else:
         # Fallback: static DOT graph
         st.caption("pyvis unavailable — showing static DOT graph.")
         dot_src = build_claim_dot(claim, result)
         try:
-            st.graphviz_chart(dot_src, use_container_width=True)
+            st.graphviz_chart(dot_src, width='stretch')
         except Exception:
             st.code(dot_src, language=None)
 
     with st.expander("DOT fallback view", expanded=False):
         dot_src = build_claim_dot(claim, result)
         try:
-            st.graphviz_chart(dot_src, use_container_width=True)
+            st.graphviz_chart(dot_src, width='stretch')
         except Exception:
             st.code(dot_src, language=None)

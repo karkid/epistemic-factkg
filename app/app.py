@@ -261,7 +261,7 @@ def _load_random_example() -> None:
 def _render_evidence_cards() -> None:
     c_add, c_hint = st.columns([1, 5])
     with c_add:
-        if st.button("＋ Add", use_container_width=True):
+        if st.button("＋ Add", width='stretch'):
             st.session_state.evidence_list.append(_blank_ev())
             st.rerun()
     with c_hint:
@@ -1164,7 +1164,7 @@ def _render_model_report(model_key: str) -> None:
         cols = st.columns(len(imgs))
         for col, (img_path, caption) in zip(cols, imgs):
             if img_path.exists():
-                col.image(str(img_path), caption=caption, use_container_width=True)
+                col.image(str(img_path), caption=caption, width='stretch')
             else:
                 col.caption(f"_{caption} — not generated yet_")
 
@@ -1177,7 +1177,7 @@ def _render_model_report(model_key: str) -> None:
         ]
         if rows:
             import pandas as pd
-            st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+            st.dataframe(pd.DataFrame(rows).set_index("Class"), width='stretch')
 
         conf = vm.get("confusion")
         if conf:
@@ -1186,7 +1186,7 @@ def _render_model_report(model_key: str) -> None:
             import pandas as pd
             st.dataframe(
                 pd.DataFrame(conf, index=labels, columns=labels),
-                use_container_width=True,
+                width='stretch',
             )
 
         per_src = vm.get("per_source")
@@ -1198,7 +1198,7 @@ def _render_model_report(model_key: str) -> None:
                     [{"Source": s, "Accuracy": m["accuracy"], "N": m["support"]}
                      for s, m in per_src.items()]
                 ).set_index("Source"),
-                use_container_width=True,
+                width='stretch',
             )
 
     with t_stance:
@@ -1214,7 +1214,7 @@ def _render_model_report(model_key: str) -> None:
             ]
             if rows:
                 import pandas as pd
-                st.dataframe(pd.DataFrame(rows).set_index("Class"), use_container_width=True)
+                st.dataframe(pd.DataFrame(rows).set_index("Class"), width='stretch')
         else:
             st.caption("stance_metrics.json not found.")
 
@@ -1235,7 +1235,7 @@ def _render_model_report(model_key: str) -> None:
             import pandas as pd
             st.dataframe(
                 pd.DataFrame({"Claim ID": skipped_ids}),
-                use_container_width=True,
+                width='stretch',
                 height=min(400, 36 * len(skipped_ids) + 38),
             )
         else:
@@ -1356,7 +1356,7 @@ def _render_evaluate_tab(selected_key: str, *, state_key: str = "eval") -> None:
                 json_data,
                 file_name="eval_results.json",
                 mime="application/json",
-                use_container_width=True,
+                width='stretch',
                 key=f"{state_key}_dl_btn",
             )
         with c_pat:
